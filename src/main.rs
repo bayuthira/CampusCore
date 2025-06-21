@@ -7,6 +7,7 @@ mod routes;
 
 mod models;
 mod repositories;
+mod auth;
 
 use crate::config::CONFIG;
 use crate::db::create_pool;

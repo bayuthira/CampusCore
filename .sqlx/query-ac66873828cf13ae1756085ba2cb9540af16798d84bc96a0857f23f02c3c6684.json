@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            d.id, d.nidn, d.nama_dosen, d.email, d.prodi_id, \n            p.nama_prodi\n        FROM dosen d\n        LEFT JOIN prodi p ON d.prodi_id = p.id\n        ORDER BY d.nama_dosen ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "nidn",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nama_dosen",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "prodi_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "nama_prodi",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "ac66873828cf13ae1756085ba2cb9540af16798d84bc96a0857f23f02c3c6684"
+}

@@ -1,46 +1,88 @@
 // src/routes/mod.rs
-use crate::{db::DbPool, handlers};
+
+// Perbaiki `use` statement agar benar
+use crate::{
+    auth::{auth_middleware, require_role},
+    db::DbPool,
+    handlers,
+};
 use axum::{
     Router,
-    routing::{delete, get, post, put}, // Import 'post'
+    handler::Handler, // <-- Ini penting untuk `.layer()`
+    middleware,
+    routing::{get, post}, // <-- Hanya import yang kita pakai
 };
 
-// Fungsi untuk membuat router aplikasi dengan state DbPool
 pub fn create_router(pool: DbPool) -> Router {
-    Router::new()
-        // Rute untuk health check
+    // Rute publik
+    let public_routes = Router::new()
         .route("/api/health", get(handlers::health_handler::health_check))
-        // Tambahkan rute lain di sini nanti
-        // Rute baru Program Studi
+        .route(
+            "/api/auth/register",
+            post(handlers::auth_handler::register_handler),
+        )
+        .route(
+            "/api/auth/login",
+            post(handlers::auth_handler::login_handler),
+        );
+
+    // Handler untuk membuat prodi, sudah dilapisi middleware otorisasi
+    let create_prodi_handler = handlers::prodi_handler::create_prodi_handler.layer(
+        middleware::from_fn(require_role(vec!["SUPER_ADMIN".to_string()])),
+    );
+
+    // Rute yang butuh login
+    let protected_routes = Router::new()
         .route(
             "/api/prodi",
-            post(handlers::prodi_handler::create_prodi_handler),
+            get(handlers::prodi_handler::get_all_prodi_handler).post(create_prodi_handler), // Gunakan handler yang sudah di-layer
         )
-        .route(
-            "/api/prodi",
-            get(handlers::prodi_handler::get_all_prodi_handler),
-        )
-        // Rute untuk Dosen
+        // Gabungkan semua method untuk /api/dosen
         .route(
             "/api/dosen",
-            post(handlers::dosen_handler::create_dosen_handler),
+            get(handlers::dosen_handler::get_all_dosen_handler)
+                .post(handlers::dosen_handler::create_dosen_handler),
         )
-        .route(
-            "/api/dosen",
-            get(handlers::dosen_handler::get_all_dosen_handler),
-        )
+        // Gabungkan semua method untuk /api/dosen/{id}
         .route(
             "/api/dosen/{id}",
-            get(handlers::dosen_handler::get_dosen_by_id_handler),
+            get(handlers::dosen_handler::get_dosen_by_id_handler)
+                .put(handlers::dosen_handler::update_dosen_handler)
+                .delete(handlers::dosen_handler::delete_dosen_handler),
+        )
+        // --- Rute untuk Mahasiswa ---
+        .route(
+            "/api/mahasiswa",
+            // GET bisa diakses oleh lebih banyak peran (misal: DOSEN juga bisa lihat)
+            get(handlers::mahasiswa_handler::get_all_mahasiswa_handler)
+                .layer(middleware::from_fn(require_role(vec![
+                    "SUPER_ADMIN".to_string(),
+                    "STAF_AKADEMIK".to_string(),
+                    "DOSEN".to_string(),
+                ])))
+                // POST hanya bisa diakses oleh SUPER_ADMIN dan STAF_AKADEMIK
+                .post(handlers::mahasiswa_handler::create_mahasiswa_handler.layer(
+                    middleware::from_fn(require_role(vec![
+                        "SUPER_ADMIN".to_string(),
+                        "STAF_AKADEMIK".to_string(),
+                    ])),
+                )),
         )
         .route(
-            "/api/dosen/{id}",
-            put(handlers::dosen_handler::update_dosen_handler),
+            "/api/mahasiswa/import-csv", // Rute baru kita
+            post(handlers::mahasiswa_handler::import_mahasiswa_from_csv_handler).layer(
+                middleware::from_fn(require_role(vec![
+                    "SUPER_ADMIN".to_string(),
+                    "STAF_AKADEMIK".to_string(),
+                ])),
+            ),
         )
-        .route(
-            "/api/dosen/{id}",
-            delete(handlers::dosen_handler::delete_dosen_handler),
-        )
-        // .route("/api/users", post(...))
-        .with_state(pool) // Menyediakan pool database sebagai state untuk semua handler
+        // Terapkan middleware otentikasi ke SEMUA rute di atas
+        .route_layer(middleware::from_fn(auth_middleware));
+
+    // Gabungkan semua router
+    Router::new()
+        .merge(public_routes)
+        .merge(protected_routes)
+        .with_state(pool)
 }

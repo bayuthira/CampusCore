@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dosen SET nama_dosen = $1, email = $2, prodi_id = $3, updated_at = now() WHERE id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bf0d2dbd0e4c660aacd1acfa9684ae8ac9a87f72d38302ca73e5fdcf3e1b1e03"
+}
