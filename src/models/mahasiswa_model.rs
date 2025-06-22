@@ -41,13 +41,17 @@ pub struct MahasiswaCsvRecord {
 // Struct untuk laporan hasil impor
 #[derive(Debug, Serialize)]
 pub struct ImportResult {
-    // Atribut `rename` dari serde akan mengubah nama field ini di JSON
-    #[serde(rename = "data_valid")]
-    pub data_valid: u32,
+    pub status: String, // Contoh: "SUKSES" atau "GAGAL_DIBATALKAN"
+    pub total_baris_dipindai: u32,
+    pub baris_berhasil_disimpan: u32,
+    pub detail_error: Vec<String>,
+}
 
-    #[serde(rename = "data_tidak_valid")]
-    pub data_tidak_valid: u32,
-
-    #[serde(rename = "rincian_tidak_valid")]
-    pub rincian_tidak_valid: Vec<String>,
+#[derive(Debug, Deserialize)]
+pub struct UpdateMahasiswaPayload {
+    pub nama_mahasiswa: String,
+    pub angkatan: i32,
+    pub email: String,
+    pub prodi_id: Uuid,
+    pub nim: Option<String>,
 }

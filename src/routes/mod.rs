@@ -52,6 +52,16 @@ pub fn create_router(pool: DbPool) -> Router {
         )
         // --- Rute untuk Mahasiswa ---
         .route(
+            "/api/mahasiswa/{id}",
+            get(handlers::mahasiswa_handler::get_mahasiswa_by_id_handler)
+                .put(handlers::mahasiswa_handler::update_mahasiswa_handler)
+                .delete(handlers::mahasiswa_handler::delete_mahasiswa_handler)
+                .layer(middleware::from_fn(require_role(vec![
+                    "SUPER_ADMIN".to_string(),
+                    "STAF_AKADEMIK".to_string(),
+                ]))),
+        )
+        .route(
             "/api/mahasiswa",
             // GET bisa diakses oleh lebih banyak peran (misal: DOSEN juga bisa lihat)
             get(handlers::mahasiswa_handler::get_all_mahasiswa_handler)

@@ -17,6 +17,7 @@ pub enum AppError {
     AnyhowError(anyhow::Error),
     Forbidden,
     MultipartError(MultipartError),
+    DuplicateEntry(String),
 }
 
 // --- MODIFIKASI 2: Menambahkan implementasi `From` untuk error baru ---
@@ -58,34 +59,42 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, error_message) = match &self {
             // --- BLOK INI TIDAK SAYA UBAH SAMA SEKALI, KARENA INI SUDAH BEKERJA UNTUK ANDA ---
-            AppError::SqlxError(sqlx::Error::Database(db_err)) => {
-                if let Some(pg_err) = db_err
-                    .as_ref()
-                    .try_downcast_ref::<sqlx::postgres::PgDatabaseError>()
-                {
-                    match pg_err.code() {
-                        "23505" => (
-                            StatusCode::CONFLICT,
-                            "Data dengan kunci tersebut sudah ada.".to_string(),
-                        ),
-                        _ => (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            format!("Terjadi masalah pada database: {}", pg_err),
-                        ),
-                    }
+            AppError::SqlxError(err) => {
+                // Ubah error sqlx menjadi string untuk dianalisis
+                let err_string = err.to_string();
+
+                // Cek apakah ini adalah error unique constraint
+                if err_string.contains("violates unique constraint") {
+                    // Jika ya, cari tahu constraint mana yang dilanggar
+                    let message = if err_string.contains("users_username_key") {
+                        "Username ini sudah terdaftar.".to_string()
+                    } else if err_string.contains("users_email_key")
+                        || err_string.contains("mahasiswa_email_key")
+                    {
+                        "Email ini sudah terdaftar.".to_string()
+                    } else if err_string.contains("dosen_nidn_key") {
+                        "NIDN ini sudah terdaftar.".to_string()
+                    } else if err_string.contains("mahasiswa_nim_key") {
+                        "NIM ini sudah terdaftar.".to_string()
+                    } else if err_string.contains("prodi_kode_prodi_key") {
+                        "Kode Prodi ini sudah ada.".to_string()
+                    } else {
+                        // Pesan fallback jika constraint tidak dikenali
+                        "Data yang Anda masukkan sudah ada di sistem (nilai duplikat).".to_string()
+                    };
+
+                    // Kembalikan 409 Conflict dengan pesan yang sudah diterjemahkan
+                    (StatusCode::CONFLICT, message)
                 } else {
+                    // Untuk semua error database lainnya
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        "Terjadi masalah tak terduga pada database.".to_string(),
+                        "Terjadi masalah pada database.".to_string(),
                     )
                 }
             }
-            AppError::SqlxError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Terjadi masalah internal sistem.".to_string(),
-            ),
             // --- AKHIR DARI BLOK YANG TIDAK DIUBAH ---
-
+            AppError::DuplicateEntry(message) => (StatusCode::CONFLICT, message.clone()),
             // --- MODIFIKASI 3: Menambahkan cabang `match` untuk error baru ---
             AppError::BcryptError(err) => {
                 eprintln!("--> Bcrypt Error: {:?}", err);

@@ -3,14 +3,16 @@
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::mahasiswa_model::{CreateMahasiswaPayload, MahasiswaDetail,ImportResult},
+    models::mahasiswa_model::{CreateMahasiswaPayload, MahasiswaDetail,ImportResult, UpdateMahasiswaPayload},
     repositories::mahasiswa_repo,
+    auth::TokenClaims,
 };
 use axum::{
-    extract::{State, Json, Multipart},
+    extract::{Path, State, Json, Multipart},
     http::StatusCode,
+    Extension,
 };
-
+use uuid::Uuid;
 
 /// Handler untuk membuat data Mahasiswa baru, sekaligus membuat akun user-nya.
 pub async fn create_mahasiswa_handler(
@@ -50,4 +52,41 @@ pub async fn import_mahasiswa_from_csv_handler(
 
     // Jika tidak ada field 'file'
     Err(anyhow::anyhow!("Request harus menyertakan field 'file' dalam format multipart/form-data").into())
+}
+
+/// Handler untuk mendapatkan detail satu mahasiswa berdasarkan ID
+pub async fn get_mahasiswa_by_id_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>, // Axum akan mengekstrak ID dari URL
+) -> Result<Json<MahasiswaDetail>, AppError> {
+    let mahasiswa = mahasiswa_repo::get_mahasiswa_by_id_repo(&pool, id).await?;
+    Ok(Json(mahasiswa))
+}
+
+pub async fn update_mahasiswa_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+    Extension(claims): Extension<TokenClaims>, // <-- Ambil info user dari token
+    Json(payload): Json<UpdateMahasiswaPayload>,
+) -> Result<Json<MahasiswaDetail>, AppError> {
+    // Cek apakah ada upaya untuk mengubah NIM
+    if let Some(ref _nim) = payload.nim {
+        // Jika ada, periksa apakah user memiliki peran yang diizinkan (misal: SUPER_ADMIN)
+        if !claims.roles.contains(&"SUPER_ADMIN".to_string()) {
+            // Jika tidak, tolak dengan error 403 Forbidden
+            return Err(AppError::Forbidden);
+        }
+    }
+
+    let updated_mahasiswa = mahasiswa_repo::update_mahasiswa_repo(&pool, id, payload).await?;
+    Ok(Json(updated_mahasiswa))
+}
+
+
+pub async fn delete_mahasiswa_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    mahasiswa_repo::delete_mahasiswa_repo(&pool, id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
