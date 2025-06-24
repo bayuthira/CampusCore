@@ -1,3 +1,6 @@
 pub mod prodi_repo;
 pub mod dosen_repo;
 pub mod mahasiswa_repo;
+pub mod matakuliah_repo;
+pub mod tahun_akademik_repo;
+pub mod krs_repo;

@@ -9,6 +9,7 @@ use crate::{
 use axum::{Json, extract::State, http::StatusCode};
 use bcrypt::{DEFAULT_COST, hash, verify};
 use jsonwebtoken::{EncodingKey, Header, encode};
+use anyhow::anyhow;
 
 // Handler untuk registrasi user baru
 pub async fn register_handler(
@@ -36,26 +37,27 @@ pub async fn register_handler(
 }
 
 // Handler untuk login
+// Handler untuk login
 pub async fn login_handler(
     State(pool): State<DbPool>,
     Json(payload): Json<LoginPayload>,
 ) -> Result<Json<TokenResponse>, AppError> {
-    // 1. Cari user berdasarkan username
+    // 1. Cari user berdasarkan username (tidak ada perubahan)
     let user = sqlx::query!(
         "SELECT id, password_hash FROM users WHERE username = $1 AND is_active = true",
         payload.username
     )
     .fetch_optional(&pool)
     .await?
-    .ok_or(anyhow::anyhow!("Username atau password salah"))?; // Error generik
+    .ok_or(anyhow!("Username atau password salah"))?;
 
-    // 2. Verifikasi password
+    // 2. Verifikasi password (tidak ada perubahan)
     let is_password_valid = verify(payload.password, &user.password_hash)?;
     if !is_password_valid {
-        return Err(anyhow::anyhow!("Username atau password salah").into());
+        return Err(anyhow!("Username atau password salah").into());
     }
 
-    // 3. Ambil semua peran (roles) yang dimiliki user ini
+    // 3. Ambil semua peran (roles) yang dimiliki user ini (tidak ada perubahan)
     let user_roles = sqlx::query!(
         r#"
         SELECT r.name FROM roles r
@@ -67,18 +69,21 @@ pub async fn login_handler(
     .fetch_all(&pool)
     .await?
     .into_iter()
-    .map(|row| row.name) // Ambil hanya nama rolenya
-    .collect(); // Kumpulkan menjadi Vec<String>
-    // 4. Buat JWT Claims dengan data roles
-    let now = chrono::Utc::now().timestamp();
+    .map(|row| row.name)
+    .collect();
+
+    // --- PERUBAHAN UTAMA DI SINI ---
+    // 4. Buat JWT Claims dengan pustaka `time`
+    let now = time::OffsetDateTime::now_utc();
     let claims = TokenClaims {
         sub: user.id,
-        roles: user_roles, // <-- Masukkan roles ke dalam claims
-        iat: now,
-        exp: now + CONFIG.jwt_expires_in,
+        roles: user_roles,
+        iat: now.unix_timestamp(), // Gunakan .unix_timestamp()
+        exp: (now + time::Duration::seconds(CONFIG.jwt_expires_in)).unix_timestamp(), // Kalkulasi waktu kedaluwarsa
     };
+    // --- AKHIR PERUBAHAN ---
 
-    // 5. Encode token (tidak ada perubahan di sini)
+    // 5. Encode token (tidak ada perubahan)
     let token = encode(
         &Header::default(),
         &claims,

@@ -78,6 +78,10 @@ impl IntoResponse for AppError {
                         "NIM ini sudah terdaftar.".to_string()
                     } else if err_string.contains("prodi_kode_prodi_key") {
                         "Kode Prodi ini sudah ada.".to_string()
+                    } else if err_string.contains("mata_kuliah_kode_mk_key") {
+                        "Kode Mata Kuliah ini sudah digunakan.".to_string()
+                    } else if err_string.contains("tahun_akademik_nama_key") {
+                        "Nama Tahun Akademik ini sudah digunakan.".to_string()
                     } else {
                         // Pesan fallback jika constraint tidak dikenali
                         "Data yang Anda masukkan sudah ada di sistem (nilai duplikat).".to_string()

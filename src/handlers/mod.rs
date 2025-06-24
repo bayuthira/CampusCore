@@ -5,3 +5,7 @@ pub mod prodi_handler;
 pub mod dosen_handler;
 pub mod auth_handler;
 pub mod mahasiswa_handler;
+pub mod matakuliah_handler;
+pub mod lookup_handler;
+pub mod tahun_akademik_handler;
+pub mod krs_handler;
