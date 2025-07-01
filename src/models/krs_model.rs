@@ -47,6 +47,11 @@ pub struct EnrollmentDetail {
     pub nilai_huruf: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateEnrollmentStatusPayload {
+    pub status_approval: EnrollmentStatus,
+}
+
 // Implementasi konversi DARI struct DB KE struct Frontend
 impl From<EnrollmentFromDb> for EnrollmentDetail {
     fn from(e: EnrollmentFromDb) -> Self {

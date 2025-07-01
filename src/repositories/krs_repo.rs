@@ -4,7 +4,7 @@ use crate::{
     db::DbPool,
     errors::AppError,
     models::{krs_model::{
-        CreateEnrollmentPayload, EnrollmentDetail, EnrollmentFromDb,
+        CreateEnrollmentPayload, EnrollmentDetail, EnrollmentFromDb, UpdateEnrollmentStatusPayload
     },
         tahun_akademik_model::TahunAkademik,
     },
@@ -124,4 +124,23 @@ pub async fn get_enrollment_by_id_repo(
     let enrollment_detail: EnrollmentDetail = enrollment_from_db.into();
 
     Ok(enrollment_detail)
+}
+
+pub async fn update_enrollment_status_repo(
+    pool: &DbPool,
+    enrollment_id: Uuid,
+    payload: UpdateEnrollmentStatusPayload,
+) -> Result<EnrollmentDetail, AppError> {
+    // Gunakan `sqlx::query!` karena kita perlu passing enum secara eksplisit
+    sqlx::query!(
+        "UPDATE enrollments SET status_approval = $1, updated_at = now() WHERE id = $2",
+        payload.status_approval as EnrollmentStatus, // Casting ke tipe ENUM
+        enrollment_id
+    )
+    .execute(pool)
+    .await?;
+
+    // Ambil dan kembalikan data terbaru setelah diupdate
+    let updated_enrollment = get_enrollment_by_id_repo(pool, enrollment_id).await?;
+    Ok(updated_enrollment)
 }

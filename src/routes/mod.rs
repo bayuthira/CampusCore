@@ -9,7 +9,7 @@ use axum::{
     Router,
     handler::Handler,
     middleware,
-    routing::{get, post, delete},
+    routing::{delete, get, post, put},
 };
 
 pub fn create_router(pool: DbPool) -> Router {
@@ -143,6 +143,15 @@ pub fn create_router(pool: DbPool) -> Router {
             get(handlers::krs_handler::get_my_enrollments_handler).layer(middleware::from_fn(
                 require_role(vec!["MAHASISWA".to_string()]),
             )),
+        )
+        .route(
+            "/api/krs/enrollments/{id}/status", // <-- RUTE BARU KITA
+            put(handlers::krs_handler::update_enrollment_status_handler)
+                // Hanya DOSEN dan SUPER_ADMIN yang bisa mencoba mengakses endpoint ini
+                .layer(middleware::from_fn(require_role(vec![
+                    "DOSEN".to_string(),
+                    "SUPER_ADMIN".to_string(),
+                ]))),
         )
         // Terapkan middleware otentikasi utama ke SEMUA rute di grup ini
         .route_layer(middleware::from_fn(auth_middleware));
