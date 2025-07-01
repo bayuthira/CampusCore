@@ -5,3 +5,4 @@ pub mod mahasiswa_model;
 pub mod matakuliah_model;
 pub mod tahun_akademik_model;
 pub mod krs_model;
+pub mod general_model;

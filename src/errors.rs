@@ -15,7 +15,7 @@ pub enum AppError {
     BcryptError(bcrypt::BcryptError),
     JsonWebTokenError(jsonwebtoken::errors::Error),
     AnyhowError(anyhow::Error),
-    Forbidden,
+    Forbidden(String),
     MultipartError(MultipartError),
     DuplicateEntry(String),
 }
@@ -82,6 +82,10 @@ impl IntoResponse for AppError {
                         "Kode Mata Kuliah ini sudah digunakan.".to_string()
                     } else if err_string.contains("tahun_akademik_nama_key") {
                         "Nama Tahun Akademik ini sudah digunakan.".to_string()
+                    } else if err_string
+                        .contains("enrollments_mahasiswa_id_matakuliah_id_tahun_akademik_id_key")
+                    {
+                        "Anda sudah mengambil mata kuliah ini di periode yang sama.".to_string()
                     } else {
                         // Pesan fallback jika constraint tidak dikenali
                         "Data yang Anda masukkan sudah ada di sistem (nilai duplikat).".to_string()
@@ -119,10 +123,7 @@ impl IntoResponse for AppError {
                 // Untuk "Username atau password salah", kita gunakan 401 Unauthorized
                 (StatusCode::UNAUTHORIZED, err.to_string())
             }
-            AppError::Forbidden => (
-                StatusCode::FORBIDDEN,
-                "Anda tidak memiliki hak akses untuk sumber daya ini.".to_string(),
-            ),
+            AppError::Forbidden(message) => (StatusCode::FORBIDDEN, message.clone()),
             AppError::MultipartError(err) => {
                 eprintln!("--> Multipart Error: {:?}", err);
                 (

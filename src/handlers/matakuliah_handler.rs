@@ -53,7 +53,9 @@ pub async fn update_matakuliah_handler(
     if let Some(ref _kode_mk) = payload.kode_mk {
         // Jika ada, hanya SUPER_ADMIN yang boleh melanjutkan
         if !claims.roles.contains(&"SUPER_ADMIN".to_string()) {
-            return Err(AppError::Forbidden);
+            return Err(AppError::Forbidden(
+                "Hanya SUPER_ADMIN yang dapat mengubah Kode MK.".to_string(),
+            ));
         }
     }
 

@@ -74,7 +74,9 @@ pub async fn update_mahasiswa_handler(
         // Jika ada, periksa apakah user memiliki peran yang diizinkan (misal: SUPER_ADMIN)
         if !claims.roles.contains(&"SUPER_ADMIN".to_string()) {
             // Jika tidak, tolak dengan error 403 Forbidden
-            return Err(AppError::Forbidden);
+            return Err(AppError::Forbidden(
+                "Hanya SUPER_ADMIN yang dapat mengubah NIM.".to_string(),
+            ));
         }
     }
 

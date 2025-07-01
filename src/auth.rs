@@ -63,7 +63,7 @@ pub fn require_role(
             if has_required_role {
                 Ok(next.run(req).await)
             } else {
-                Err(AppError::Forbidden)
+                Err(AppError::Forbidden("Anda tidak memiliki peran yang dibutuhkan untuk aksi ini.".to_string()))
             }
         })
     }
