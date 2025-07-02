@@ -20,6 +20,11 @@ pub struct CreateEnrollmentPayload {
     pub tahun_akademik_id: Uuid,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct KrsQuery {
+    pub tahun_akademik_id: Uuid,
+}
+
 // Struct UNTUK MEMBACA DARI DB.
 // Field dari tabel join dibuat opsional untuk memenuhi ekspektasi sqlx.
 #[derive(Debug, FromRow)]

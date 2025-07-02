@@ -4,7 +4,7 @@ use crate::{
     auth::TokenClaims,
     db::DbPool,
     errors::AppError,
-    models::krs_model::{CreateEnrollmentPayload, EnrollmentDetail, UpdateEnrollmentStatusPayload},
+    models::krs_model::{CreateEnrollmentPayload, EnrollmentDetail, UpdateEnrollmentStatusPayload, KrsQuery},
     repositories::krs_repo,
 };
 use axum::{
@@ -12,7 +12,6 @@ use axum::{
     extract::{Path,Json, Query, State},
     http::StatusCode,
 };
-use serde::Deserialize;
 use uuid::Uuid;
 use crate::models::general_model::SuccessResponse;
 
@@ -43,11 +42,6 @@ pub async fn create_enrollment_handler(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-// Struct untuk query parameter di URL, contoh: ?tahun_akademik_id=...
-#[derive(Debug, Deserialize)]
-pub struct KrsQuery {
-    pub tahun_akademik_id: Uuid,
-}
 
 // Handler untuk mahasiswa melihat KRS miliknya di periode tertentu
 pub async fn get_my_enrollments_handler(

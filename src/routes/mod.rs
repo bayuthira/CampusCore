@@ -1,17 +1,19 @@
 // src/routes/mod.rs
 
-use crate::{
-    auth::{auth_middleware, require_role},
-    db::DbPool,
-    handlers,
-};
-use axum::{
-    Router,
-    handler::Handler,
-    middleware,
-    routing::{delete, get, post, put},
-};
+use crate::{auth::auth_middleware, db::DbPool, handlers};
+use axum::{middleware, routing::{get, post}, Router};
 
+// Deklarasikan semua modul rute baru kita
+mod dosen_pa_routes;
+mod dosen_routes;
+mod krs_routes;
+mod lookup_routes;
+mod mahasiswa_routes;
+mod matakuliah_routes;
+mod prodi_routes;
+mod tahun_akademik_routes;
+
+/// Fungsi utama untuk membuat dan menggabungkan semua router
 pub fn create_router(pool: DbPool) -> Router {
     // Rute publik (tidak perlu login)
     let public_routes = Router::new()
@@ -25,154 +27,20 @@ pub fn create_router(pool: DbPool) -> Router {
             post(handlers::auth_handler::login_handler),
         );
 
-    // Rute yang butuh login
+    // Gabungkan semua rute yang butuh proteksi login,
+    // lalu terapkan middleware otentikasi utama sebagai lapisan terluar.
     let protected_routes = Router::new()
-        // --- Rute untuk Lookup ---
-        .route(
-            "/api/lookups/enrollment-statuses",
-            get(handlers::lookup_handler::get_enrollment_statuses_handler),
-        )
-        // --- Rute untuk Program Studi ---
-        .route(
-            "/api/prodi",
-            get(handlers::prodi_handler::get_all_prodi_handler).post(
-                handlers::prodi_handler::create_prodi_handler.layer(middleware::from_fn(
-                    require_role(vec!["SUPER_ADMIN".to_string()]),
-                )),
-            ),
-        )
-        // --- Rute untuk Dosen ---
-        .route(
-            "/api/dosen",
-            get(handlers::dosen_handler::get_all_dosen_handler)
-                .post(handlers::dosen_handler::create_dosen_handler),
-        )
-        .route(
-            "/api/dosen/{id}",
-            get(handlers::dosen_handler::get_dosen_by_id_handler)
-                .put(handlers::dosen_handler::update_dosen_handler)
-                .delete(handlers::dosen_handler::delete_dosen_handler),
-        )
-        // --- Rute untuk Mahasiswa ---
-        .route(
-            "/api/mahasiswa/import-csv",
-            post(handlers::mahasiswa_handler::import_mahasiswa_from_csv_handler).layer(
-                middleware::from_fn(require_role(vec![
-                    "SUPER_ADMIN".to_string(),
-                    "STAF_AKADEMIK".to_string(),
-                ])),
-            ),
-        )
-        .route(
-            "/api/mahasiswa",
-            get(handlers::mahasiswa_handler::get_all_mahasiswa_handler)
-                .layer(middleware::from_fn(require_role(vec![
-                    "SUPER_ADMIN".to_string(),
-                    "STAF_AKADEMIK".to_string(),
-                    "DOSEN".to_string(),
-                ])))
-                .post(handlers::mahasiswa_handler::create_mahasiswa_handler.layer(
-                    middleware::from_fn(require_role(vec![
-                        "SUPER_ADMIN".to_string(),
-                        "STAF_AKADEMIK".to_string(),
-                    ])),
-                )),
-        )
-        .route(
-            "/api/mahasiswa/{id}",
-            get(handlers::mahasiswa_handler::get_mahasiswa_by_id_handler)
-                .put(handlers::mahasiswa_handler::update_mahasiswa_handler)
-                .delete(handlers::mahasiswa_handler::delete_mahasiswa_handler)
-                .layer(middleware::from_fn(require_role(vec![
-                    "SUPER_ADMIN".to_string(),
-                    "STAF_AKADEMIK".to_string(),
-                ]))),
-        )
-        // --- Rute untuk Mata Kuliah ---
-        .route(
-            "/api/matakuliah",
-            get(handlers::matakuliah_handler::get_all_matakuliah_handler).post(
-                handlers::matakuliah_handler::create_matakuliah_handler.layer(middleware::from_fn(
-                    require_role(vec!["SUPER_ADMIN".to_string(), "KAPRODI".to_string()]),
-                )),
-            ),
-        )
-        .route(
-            "/api/matakuliah/{id}",
-            get(handlers::matakuliah_handler::get_matakuliah_by_id_handler)
-                .put(handlers::matakuliah_handler::update_matakuliah_handler)
-                .delete(handlers::matakuliah_handler::delete_matakuliah_handler)
-                .layer(middleware::from_fn(require_role(vec![
-                    "SUPER_ADMIN".to_string(),
-                    "KAPRODI".to_string(),
-                ]))),
-        )
-        // --- Rute untuk Tahun Akademik (Hanya SUPER_ADMIN) ---  <-- INI YANG HILANG
-        .route(
-            "/api/tahun-akademik",
-            get(handlers::tahun_akademik_handler::get_all_tahun_akademik_handler)
-                .post(handlers::tahun_akademik_handler::create_tahun_akademik_handler),
-        )
-        .route(
-            "/api/tahun-akademik/{id}",
-            get(handlers::tahun_akademik_handler::get_tahun_akademik_by_id_handler)
-                .put(handlers::tahun_akademik_handler::update_tahun_akademik_handler)
-                .delete(handlers::tahun_akademik_handler::delete_tahun_akademik_handler),
-        )
-        .layer(middleware::from_fn(require_role(vec![
-            "SUPER_ADMIN".to_string(),
-        ])))
-        // --- Rute untuk KRS ---
-        .route(
-            "/api/krs/enrollments",
-            post(handlers::krs_handler::create_enrollment_handler).layer(middleware::from_fn(
-                require_role(vec!["MAHASISWA".to_string()]),
-            )),
-        )
-        .route(
-            "/api/krs/enrollments/{id}",
-            delete(handlers::krs_handler::delete_enrollment_handler)
-                // Izinkan MAHASISWA dan SUPER_ADMIN untuk mengakses endpoint ini
-                .layer(middleware::from_fn(require_role(vec![
-                    "MAHASISWA".to_string(),
-                    "SUPER_ADMIN".to_string(),
-                ]))),
-        )
-        .route(
-            "/api/krs/my-enrollments",
-            get(handlers::krs_handler::get_my_enrollments_handler).layer(middleware::from_fn(
-                require_role(vec!["MAHASISWA".to_string()]),
-            )),
-        )
-        .route(
-            "/api/krs/enrollments/{id}/status", // <-- RUTE BARU KITA
-            put(handlers::krs_handler::update_enrollment_status_handler)
-                // Hanya DOSEN dan SUPER_ADMIN yang bisa mencoba mengakses endpoint ini
-                .layer(middleware::from_fn(require_role(vec![
-                    "DOSEN".to_string(),
-                    "SUPER_ADMIN".to_string(),
-                ]))),
-        )
-        // --- Rute untuk Dosen PA ---
-        .route(
-            "/api/dosen-pa/my-advisees",
-            get(handlers::dosen_pa_handler::get_my_advisees_handler)
-                // Hanya user dengan peran DOSEN yang bisa mengakses
-                .layer(middleware::from_fn(require_role(vec!["DOSEN".to_string()]))),
-        )
-        .route(
-            "/api/dosen-pa/advisee-krs/{mahasiswa_id}",
-            get(handlers::dosen_pa_handler::get_advisee_krs_handler)
-                // Hanya DOSEN dan SUPER_ADMIN yang bisa mencoba mengakses
-                .layer(middleware::from_fn(require_role(vec![
-                    "DOSEN".to_string(),
-                    "SUPER_ADMIN".to_string(),
-                ]))),
-        )
-        // Terapkan middleware otentikasi utama ke SEMUA rute di grup ini
-        .route_layer(middleware::from_fn(auth_middleware));
+        .merge(dosen_pa_routes::dosen_pa_router())
+        .merge(dosen_routes::dosen_router())
+        .merge(krs_routes::krs_router())
+        .merge(lookup_routes::lookup_router())
+        .merge(mahasiswa_routes::mahasiswa_router())
+        .merge(matakuliah_routes::matakuliah_router())
+        .merge(prodi_routes::prodi_router())
+        .merge(tahun_akademik_routes::tahun_akademik_router())
+        .route_layer(middleware::from_fn_with_state(pool.clone(), auth_middleware));
 
-    // Gabungkan semua router
+    // Gabungkan router publik dan terproteksi menjadi satu
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
