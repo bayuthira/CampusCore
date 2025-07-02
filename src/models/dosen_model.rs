@@ -9,7 +9,8 @@ pub struct CreateDosenPayload {
     pub nidn: String,
     pub nama_dosen: String,
     pub email: Option<String>, // Email bisa jadi opsional
-    pub prodi_id: Uuid,      // WAJIB ada saat membuat dosen baru
+    pub prodi_id: Uuid,
+    pub password: String,
 }
 
 // Struct ini digunakan untuk menampilkan detail Dosen,

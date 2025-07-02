@@ -9,3 +9,4 @@ pub mod matakuliah_handler;
 pub mod lookup_handler;
 pub mod tahun_akademik_handler;
 pub mod krs_handler;
+pub mod dosen_pa_handler;

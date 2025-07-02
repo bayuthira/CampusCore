@@ -55,3 +55,13 @@ pub struct UpdateMahasiswaPayload {
     pub prodi_id: Uuid,
     pub nim: Option<String>,
 }
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct MahasiswaBimbingan {
+    pub id: Uuid,
+    pub nim: String,
+    pub nama_mahasiswa: String,
+    pub angkatan: i32,
+    pub email: Option<String>,
+    pub nama_prodi: String,
+}

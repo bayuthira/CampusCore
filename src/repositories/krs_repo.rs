@@ -4,7 +4,7 @@ use crate::{
     db::DbPool,
     errors::AppError,
     models::{krs_model::{
-        CreateEnrollmentPayload, EnrollmentDetail, EnrollmentFromDb, UpdateEnrollmentStatusPayload
+        CreateEnrollmentPayload, EnrollmentDetail, EnrollmentFromDb, UpdateEnrollmentStatusPayload,EnrollmentStatus
     },
         tahun_akademik_model::TahunAkademik,
     },

@@ -153,6 +153,22 @@ pub fn create_router(pool: DbPool) -> Router {
                     "SUPER_ADMIN".to_string(),
                 ]))),
         )
+        // --- Rute untuk Dosen PA ---
+        .route(
+            "/api/dosen-pa/my-advisees",
+            get(handlers::dosen_pa_handler::get_my_advisees_handler)
+                // Hanya user dengan peran DOSEN yang bisa mengakses
+                .layer(middleware::from_fn(require_role(vec!["DOSEN".to_string()]))),
+        )
+        .route(
+            "/api/dosen-pa/advisee-krs/{mahasiswa_id}",
+            get(handlers::dosen_pa_handler::get_advisee_krs_handler)
+                // Hanya DOSEN dan SUPER_ADMIN yang bisa mencoba mengakses
+                .layer(middleware::from_fn(require_role(vec![
+                    "DOSEN".to_string(),
+                    "SUPER_ADMIN".to_string(),
+                ]))),
+        )
         // Terapkan middleware otentikasi utama ke SEMUA rute di grup ini
         .route_layer(middleware::from_fn(auth_middleware));
 
