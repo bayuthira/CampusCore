@@ -14,6 +14,19 @@ pub enum EnrollmentStatus {
     Mengulang,
 }
 
+impl EnrollmentStatus {
+    // Fungsi untuk mengubah enum menjadi referensi string statis
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EnrollmentStatus::MenungguPersetujuan => "Menunggu Persetujuan",
+            EnrollmentStatus::Disetujui => "Disetujui",
+            EnrollmentStatus::Ditolak => "Ditolak",
+            EnrollmentStatus::Selesai => "Selesai",
+            EnrollmentStatus::Mengulang => "Mengulang",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateEnrollmentPayload {
     pub matakuliah_id: Uuid,

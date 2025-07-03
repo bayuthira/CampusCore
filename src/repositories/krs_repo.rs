@@ -61,86 +61,136 @@ pub async fn get_my_enrollments_repo(
     mahasiswa_id: Uuid,
     tahun_akademik_id: Uuid,
 ) -> Result<Vec<EnrollmentDetail>, AppError> {
-    // Gunakan query_as! untuk memetakan hasil langsung ke struct EnrollmentFromDb.
-    // Ini lebih aman dan memanfaatkan struct yang sudah Anda definisikan.
-    let enrollments_from_db = sqlx::query_as!(
-        EnrollmentFromDb,
+    // Query ini TIDAK BERUBAH. Ini sudah benar.
+    let rows = sqlx::query!(
         r#"
         SELECT 
             e.id, 
             e.mahasiswa_id,
-            ta.nama as tahun_akademik,
-            mk.kode_mk, 
-            mk.nama_mk, 
-            mk.sks, 
-            e.status_approval::TEXT as "status_approval!", -- Pastikan tipe enum di DB menjadi String di Rust
+            COALESCE(ta.nama, '') as "tahun_akademik!",
+            COALESCE(mk.kode_mk, '') as "kode_mk!",
+            COALESCE(mk.nama_mk, '') as "nama_mk!",
+            COALESCE(mk.sks, 0) as "sks!",
+            e.status_approval::TEXT as "status_approval", 
             e.nilai_huruf
         FROM enrollments e
         LEFT JOIN mata_kuliah mk ON e.matakuliah_id = mk.id
         LEFT JOIN tahun_akademik ta ON e.tahun_akademik_id = ta.id
         WHERE e.mahasiswa_id = $1 AND e.tahun_akademik_id = $2
         ORDER BY mk.kode_mk
-        "#, mahasiswa_id, tahun_akademik_id
+        "#,
+        mahasiswa_id,
+        tahun_akademik_id
     )
     .fetch_all(pool)
     .await?;
 
-    // Konversi Vec<EnrollmentFromDb> ke Vec<EnrollmentDetail> menggunakan implementasi `From`
-    let enrollments_detail: Vec<EnrollmentDetail> = enrollments_from_db
+    // --- PERBAIKAN DI BLOK .map() DI BAWAH INI ---
+    let enrollments_detail: Vec<EnrollmentDetail> = rows
         .into_iter()
-        .map(Into::into) // Ini akan memanggil `EnrollmentDetail::from(enrollment_db_item)`
+        .map(|row| {
+            let status = match row.status_approval.as_deref() { // status_approval masih Option karena bisa NULL
+                Some("Disetujui") => EnrollmentStatus::Disetujui,
+                Some("Ditolak") => EnrollmentStatus::Ditolak,
+                Some("Selesai") => EnrollmentStatus::Selesai,
+                Some("Mengulang") => EnrollmentStatus::Mengulang,
+                _ => EnrollmentStatus::MenungguPersetujuan,
+            };
+
+            EnrollmentDetail {
+                id: row.id,
+                mahasiswa_id: row.mahasiswa_id,
+                // Hapus .unwrap_or_default() karena `row` sudah berisi tipe non-option
+                tahun_akademik: row.tahun_akademik,
+                kode_mk: row.kode_mk,
+                nama_mk: row.nama_mk,
+                sks: row.sks,
+                status_approval: status,
+                nilai_huruf: row.nilai_huruf,
+            }
+        })
         .collect();
 
     Ok(enrollments_detail)
 }
 
+
+
 pub async fn get_enrollment_by_id_repo(
     pool: &DbPool,
     id: Uuid,
 ) -> Result<EnrollmentDetail, AppError> {
-    // Sama seperti di atas, gunakan query_as! untuk keamanan tipe.
-    let enrollment_from_db = sqlx::query_as!(
-        EnrollmentFromDb,
+    // Query ini TIDAK BERUBAH. Ini sudah benar.
+    let row = sqlx::query!(
         r#"
         SELECT 
             e.id, 
             e.mahasiswa_id,
-            ta.nama as tahun_akademik,
-            mk.kode_mk, 
-            mk.nama_mk, 
-            mk.sks, 
-            e.status_approval::TEXT as "status_approval!",
+            COALESCE(ta.nama, '') as "tahun_akademik!",
+            COALESCE(mk.kode_mk, '') as "kode_mk!",
+            COALESCE(mk.nama_mk, '') as "nama_mk!",
+            COALESCE(mk.sks, 0) as "sks!",
+            e.status_approval::TEXT as "status_approval", 
             e.nilai_huruf
         FROM enrollments e
         LEFT JOIN mata_kuliah mk ON e.matakuliah_id = mk.id
         LEFT JOIN tahun_akademik ta ON e.tahun_akademik_id = ta.id
         WHERE e.id = $1
-        "#, id
+        "#,
+        id
     )
     .fetch_one(pool)
     .await?;
 
-    // Konversi satu objek dari EnrollmentFromDb ke EnrollmentDetail
-    let enrollment_detail: EnrollmentDetail = enrollment_from_db.into();
+    // --- PERBAIKAN DI BAWAH INI ---
+    let status = match row.status_approval.as_deref() {
+        Some("Disetujui") => EnrollmentStatus::Disetujui,
+        Some("Ditolak") => EnrollmentStatus::Ditolak,
+        Some("Selesai") => EnrollmentStatus::Selesai,
+        Some("Mengulang") => EnrollmentStatus::Mengulang,
+        _ => EnrollmentStatus::MenungguPersetujuan,
+    };
+
+    let enrollment_detail = EnrollmentDetail {
+        id: row.id,
+        mahasiswa_id: row.mahasiswa_id,
+        // Hapus .unwrap_or_default()
+        tahun_akademik: row.tahun_akademik,
+        kode_mk: row.kode_mk,
+        nama_mk: row.nama_mk,
+        sks: row.sks,
+        status_approval: status,
+        nilai_huruf: row.nilai_huruf,
+    };
 
     Ok(enrollment_detail)
 }
+
 
 pub async fn update_enrollment_status_repo(
     pool: &DbPool,
     enrollment_id: Uuid,
     payload: UpdateEnrollmentStatusPayload,
 ) -> Result<EnrollmentDetail, AppError> {
-    // Gunakan `sqlx::query!` karena kita perlu passing enum secara eksplisit
-    sqlx::query!(
-        "UPDATE enrollments SET status_approval = $1, updated_at = now() WHERE id = $2",
-        payload.status_approval as EnrollmentStatus, // Casting ke tipe ENUM
-        enrollment_id
-    )
-    .execute(pool)
-    .await?;
+    // 1. Ubah enum dari payload menjadi string menggunakan helper kita (tidak berubah)
+    let status_str = payload.status_approval.as_str();
 
-    // Ambil dan kembalikan data terbaru setelah diupdate
+    // 2. Gunakan `sqlx::query()` (tanpa `!`) dan `.bind()`
+    //    Kita tidak perlu melakukan casting eksplisit di SQL.
+    let rows_affected = sqlx::query(
+        "UPDATE enrollments SET status_approval = $1, updated_at = now() WHERE id = $2",
+    )
+    .bind(status_str)
+    .bind(enrollment_id)
+    .execute(pool)
+    .await?
+    .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound.into());
+    }
+
+    // Ambil dan kembalikan data terbaru setelah diupdate (tidak berubah)
     let updated_enrollment = get_enrollment_by_id_repo(pool, enrollment_id).await?;
     Ok(updated_enrollment)
 }
