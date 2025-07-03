@@ -5,3 +5,4 @@ pub mod matakuliah_repo;
 pub mod tahun_akademik_repo;
 pub mod krs_repo;
 pub mod dosen_pa_repo;
+pub mod user_management_repo;

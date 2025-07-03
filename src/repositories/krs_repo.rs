@@ -4,7 +4,7 @@ use crate::{
     db::DbPool,
     errors::AppError,
     models::{krs_model::{
-        CreateEnrollmentPayload, EnrollmentDetail, EnrollmentFromDb, UpdateEnrollmentStatusPayload,EnrollmentStatus
+        CreateEnrollmentPayload, EnrollmentDetail, UpdateEnrollmentStatusPayload,EnrollmentStatus
     },
         tahun_akademik_model::TahunAkademik,
     },
@@ -114,13 +114,11 @@ pub async fn get_my_enrollments_repo(
     Ok(enrollments_detail)
 }
 
-
-
 pub async fn get_enrollment_by_id_repo(
     pool: &DbPool,
     id: Uuid,
 ) -> Result<EnrollmentDetail, AppError> {
-    // Query ini TIDAK BERUBAH. Ini sudah benar.
+    // Menggunakan query! dengan COALESCE dan '!' persis seperti fungsi Anda yang lain
     let row = sqlx::query!(
         r#"
         SELECT 
@@ -142,7 +140,7 @@ pub async fn get_enrollment_by_id_repo(
     .fetch_one(pool)
     .await?;
 
-    // --- PERBAIKAN DI BAWAH INI ---
+    // Melakukan pemetaan manual, persis seperti yang Anda lakukan
     let status = match row.status_approval.as_deref() {
         Some("Disetujui") => EnrollmentStatus::Disetujui,
         Some("Ditolak") => EnrollmentStatus::Ditolak,
@@ -151,14 +149,14 @@ pub async fn get_enrollment_by_id_repo(
         _ => EnrollmentStatus::MenungguPersetujuan,
     };
 
+    // Membuat struct EnrollmentDetail TANPA .unwrap_or_default()
     let enrollment_detail = EnrollmentDetail {
         id: row.id,
         mahasiswa_id: row.mahasiswa_id,
-        // Hapus .unwrap_or_default()
-        tahun_akademik: row.tahun_akademik,
-        kode_mk: row.kode_mk,
-        nama_mk: row.nama_mk,
-        sks: row.sks,
+        tahun_akademik: row.tahun_akademik, // Langsung digunakan
+        kode_mk: row.kode_mk,             // Langsung digunakan
+        nama_mk: row.nama_mk,             // Langsung digunakan
+        sks: row.sks,                     // Langsung digunakan
         status_approval: status,
         nilai_huruf: row.nilai_huruf,
     };
@@ -167,18 +165,30 @@ pub async fn get_enrollment_by_id_repo(
 }
 
 
+
 pub async fn update_enrollment_status_repo(
     pool: &DbPool,
     enrollment_id: Uuid,
     payload: UpdateEnrollmentStatusPayload,
-) -> Result<EnrollmentDetail, AppError> {
-    // 1. Ubah enum dari payload menjadi string menggunakan helper kita (tidak berubah)
-    let status_str = payload.status_approval.as_str();
+) -> Result<(), AppError> { // <-- Return type diubah menjadi Result<(), AppError>
+    // 1. Konversi enum dari payload ke representasi string yang TEPAT
+    //    sesuai dengan label yang ada di ENUM PostgreSQL Anda.
+    //    Perhatikan "Menunggu Persetujuan" yang kemungkinan memiliki spasi.
+    let status_str = match payload.status_approval {
+        EnrollmentStatus::MenungguPersetujuan => "Menunggu Persetujuan",
+        EnrollmentStatus::Disetujui => "Disetujui",
+        EnrollmentStatus::Ditolak => "Ditolak",
+        EnrollmentStatus::Selesai => "Selesai",
+        EnrollmentStatus::Mengulang => "Mengulang",
+    };
 
-    // 2. Gunakan `sqlx::query()` (tanpa `!`) dan `.bind()`
-    //    Kita tidak perlu melakukan casting eksplisit di SQL.
+    // 2. Jalankan query UPDATE dengan melakukan CAST eksplisit dari string ke tipe ENUM di database.
+    //    Ini adalah cara yang paling robust untuk memastikan PostgreSQL menerima nilainya.
+    //    Kita menggunakan sqlx::query() (non-macro) untuk menghindari type-checking dari macro yang terlalu ketat.
     let rows_affected = sqlx::query(
-        "UPDATE enrollments SET status_approval = $1, updated_at = now() WHERE id = $2",
+        r#"
+        UPDATE enrollments SET status_approval = $1::"EnrollmentStatus", updated_at = now() WHERE id = $2
+        "#,
     )
     .bind(status_str)
     .bind(enrollment_id)
@@ -186,11 +196,11 @@ pub async fn update_enrollment_status_repo(
     .await?
     .rows_affected();
 
+    // Jika tidak ada baris yang ter-update, berarti id tidak ditemukan
     if rows_affected == 0 {
         return Err(sqlx::Error::RowNotFound.into());
     }
 
-    // Ambil dan kembalikan data terbaru setelah diupdate (tidak berubah)
-    let updated_enrollment = get_enrollment_by_id_repo(pool, enrollment_id).await?;
-    Ok(updated_enrollment)
+    // Jika berhasil, cukup kembalikan Ok
+    Ok(())
 }
