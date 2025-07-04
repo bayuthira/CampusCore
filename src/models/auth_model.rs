@@ -1,5 +1,6 @@
 // src/models/auth_model.rs
 use serde::{Deserialize, Serialize};
+use crate::models::user_model::UserData;
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterPayload {
@@ -17,6 +18,7 @@ pub struct LoginPayload {
 
 // Struct untuk response saat login berhasil
 #[derive(Debug, Serialize)]
-pub struct TokenResponse {
+pub struct LoginSuccessResponse {
     pub token: String,
+    pub user: UserData,
 }

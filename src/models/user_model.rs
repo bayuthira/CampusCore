@@ -24,3 +24,11 @@ pub struct RoleAssignmentPayload {
     pub user_id: Uuid,
     pub role_id: Uuid,
 }
+
+#[derive(Debug, Serialize)]
+pub struct UserData {
+    pub id: Uuid,
+    pub username: String,
+    pub full_name: String,
+    pub roles: Vec<String>,
+}

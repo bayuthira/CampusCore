@@ -4,12 +4,13 @@ use crate::{
     config::CONFIG,
     db::DbPool,
     errors::AppError,
-    models::auth_model::{LoginPayload, RegisterPayload, TokenResponse},
+    models::auth_model::{LoginPayload, RegisterPayload, LoginSuccessResponse},
+    models::user_model::UserData,
 };
+
 use axum::{Json, extract::State, http::StatusCode};
 use bcrypt::{DEFAULT_COST, hash, verify};
 use jsonwebtoken::{EncodingKey, Header, encode};
-use anyhow::anyhow;
 
 // Handler untuk registrasi user baru
 pub async fn register_handler(
@@ -41,24 +42,24 @@ pub async fn register_handler(
 pub async fn login_handler(
     State(pool): State<DbPool>,
     Json(payload): Json<LoginPayload>,
-) -> Result<Json<TokenResponse>, AppError> {
-    // 1. Cari user berdasarkan username (tidak ada perubahan)
+) -> Result<Json<LoginSuccessResponse>, AppError> {
+    // 1. Cari user berdasarkan username, ambil juga data `full_name`
     let user = sqlx::query!(
-        "SELECT id, password_hash FROM users WHERE username = $1 AND is_active = true",
+        "SELECT id, password_hash, full_name, username FROM users WHERE username = $1 AND is_active = true",
         payload.username
     )
     .fetch_optional(&pool)
     .await?
-    .ok_or(anyhow!("Username atau password salah"))?;
+    .ok_or(anyhow::anyhow!("Username atau password salah"))?;
 
-    // 2. Verifikasi password (tidak ada perubahan)
+    // 2. Verifikasi password
     let is_password_valid = verify(payload.password, &user.password_hash)?;
     if !is_password_valid {
-        return Err(anyhow!("Username atau password salah").into());
+        return Err(anyhow::anyhow!("Username atau password salah").into());
     }
 
-    // 3. Ambil semua peran (roles) yang dimiliki user ini (tidak ada perubahan)
-    let user_roles = sqlx::query!(
+    // 3. Ambil semua peran (roles) user dengan anotasi tipe eksplisit
+    let user_roles: Vec<String> = sqlx::query!( // <-- PERBAIKAN DI SINI
         r#"
         SELECT r.name FROM roles r
         INNER JOIN user_roles ur ON r.id = ur.role_id
@@ -72,23 +73,32 @@ pub async fn login_handler(
     .map(|row| row.name)
     .collect();
 
-    // --- PERUBAHAN UTAMA DI SINI ---
-    // 4. Buat JWT Claims dengan pustaka `time`
+    // 4. Buat JWT Claims
     let now = time::OffsetDateTime::now_utc();
     let claims = TokenClaims {
         sub: user.id,
-        roles: user_roles,
-        iat: now.unix_timestamp(), // Gunakan .unix_timestamp()
-        exp: (now + time::Duration::seconds(CONFIG.jwt_expires_in)).unix_timestamp(), // Kalkulasi waktu kedaluwarsa
+        roles: user_roles.clone(),
+        iat: now.unix_timestamp(),
+        exp: (now + time::Duration::seconds(CONFIG.jwt_expires_in)).unix_timestamp(),
     };
-    // --- AKHIR PERUBAHAN ---
 
-    // 5. Encode token (tidak ada perubahan)
+    // 5. Encode token
     let token = encode(
         &Header::default(),
         &claims,
         &EncodingKey::from_secret(CONFIG.jwt_secret.as_ref()),
     )?;
 
-    Ok(Json(TokenResponse { token }))
+    // 6. Buat objek respons yang baru
+    let login_response = LoginSuccessResponse {
+        token,
+        user: UserData {
+            id: user.id,
+            username: user.username,
+            full_name: user.full_name,
+            roles: user_roles,
+        },
+    };
+
+    Ok(Json(login_response))
 }

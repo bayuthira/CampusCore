@@ -23,3 +23,9 @@ pub struct CreateProdiPayload {
     pub kode_prodi: String,
     pub nama_prodi: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateProdiPayload {
+    pub nama_prodi: String,
+    pub kode_prodi: Option<String>, // Dibuat opsional
+}

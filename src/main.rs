@@ -14,13 +14,14 @@ use crate::db::create_pool;
 use crate::routes::create_router;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
+use tower_http::cors::{CorsLayer, Any};
+use axum::http::{HeaderValue, Method}; // <-- 1. TAMBAHKAN USE STATEMENT INI
 
 #[tokio::main]
 async fn main() {
     // Memuat konfigurasi
-    // Akses via CONFIG.database_url atau CONFIG.server_address
     println!("->> LOADING CONFIGURATION");
-    let _ = &CONFIG.server_address; // Memaksa lazy_static untuk inisialisasi
+    let _ = &CONFIG.server_address; 
 
     // Membuat koneksi pool ke database
     println!("->> INITIALIZING DATABASE POOL");
@@ -28,8 +29,15 @@ async fn main() {
         .await
         .expect("Failed to create database pool");
 
-    // Membuat router aplikasi
-    let app = create_router(pool);
+    // <-- 2. DEFINISIKAN CORS DI SINI -->
+    let cors = CorsLayer::new()
+        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH, Method::OPTIONS])
+        .allow_headers(Any);
+
+    // Membuat router aplikasi dan menerapkan layer CORS
+    // <-- 3. TERAPKAN LAYER PADA APP -->
+    let app = create_router(pool).layer(cors);
 
     // Mendapatkan alamat server dari konfigurasi
     let addr: SocketAddr = CONFIG.server_address.parse()
