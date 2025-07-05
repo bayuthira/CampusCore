@@ -94,15 +94,18 @@ pub async fn get_mahasiswa_by_id_repo(pool: &DbPool, id: Uuid) -> Result<Mahasis
     Ok(mhs)
 }
 
-// (Anda bisa menambahkan fungsi get_all, update, dan delete dengan pola yang sama)
 pub async fn get_all_mahasiswa_repo(pool: &DbPool) -> Result<Vec<MahasiswaDetail>, AppError> {
     let mahasiswa_list = sqlx::query_as!(
         MahasiswaDetail,
         r#"
         SELECT 
             m.id, m.nim, m.nama_mahasiswa, m.angkatan, m.email,
-            m.prodi_id, p.nama_prodi,
-            m.user_id, u.username
+            m.prodi_id,
+            -- Jika nama prodi NULL, gunakan string default. Tanda '!' memberitahu sqlx hasilnya tidak akan NULL.
+            COALESCE(p.nama_prodi, 'Prodi Tidak Ada') as "nama_prodi!",
+            m.user_id,
+            -- Jika username NULL (karena user_id NULL), gunakan string default.
+            COALESCE(u.username, 'Akun Tidak Terhubung') as "username!"
         FROM mahasiswa m
         LEFT JOIN prodi p ON m.prodi_id = p.id
         LEFT JOIN users u ON m.user_id = u.id

@@ -32,3 +32,26 @@ pub struct UserData {
     pub full_name: String,
     pub roles: Vec<String>,
 }
+
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateUserPayload {
+    pub full_name: String,
+    pub email: Option<String>,
+    pub is_active: bool,
+    pub role_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResetPasswordPayload {
+    pub new_password: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateUserPayload {
+    pub username: String,
+    pub full_name: String,
+    pub email: Option<String>,
+    pub password: String,
+    pub role_ids: Vec<Uuid>, // Admin bisa langsung memberikan satu atau lebih peran
+}

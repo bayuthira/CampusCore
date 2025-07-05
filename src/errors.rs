@@ -93,6 +93,17 @@ impl IntoResponse for AppError {
 
                     // Kembalikan 409 Conflict dengan pesan yang sudah diterjemahkan
                     (StatusCode::CONFLICT, message)
+                } else if err_string.contains("violates foreign key constraint") {
+                    // <-- TAMBAHKAN BLOK INI
+                    // Kode untuk 23503 (foreign key)
+                    let message = if err_string.contains("dosen_user_id_fkey")
+                        || err_string.contains("mahasiswa_user_id_fkey")
+                    {
+                        "User tidak dapat dihapus karena masih terdaftar sebagai Dosen atau Mahasiswa.".to_string()
+                    } else {
+                        "Operasi gagal karena melanggar relasi data.".to_string()
+                    };
+                    (StatusCode::CONFLICT, message) // 409 Conflict cocok untuk kasus ini
                 } else {
                     // Untuk semua error database lainnya
                     (
