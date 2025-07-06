@@ -86,6 +86,8 @@ impl IntoResponse for AppError {
                         .contains("enrollments_mahasiswa_id_matakuliah_id_tahun_akademik_id_key")
                     {
                         "Anda sudah mengambil mata kuliah ini di periode yang sama.".to_string()
+                    } else if err_string.contains("kurikulum_prodi_id_nama_key") {
+                        "Nama kurikulum untuk prodi ini sudah ada.".to_string()
                     } else {
                         // Pesan fallback jika constraint tidak dikenali
                         "Data yang Anda masukkan sudah ada di sistem (nilai duplikat).".to_string()

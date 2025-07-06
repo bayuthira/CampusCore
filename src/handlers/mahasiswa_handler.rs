@@ -13,6 +13,7 @@ use axum::{
     Extension,
 };
 use uuid::Uuid;
+use axum::response::{IntoResponse, Response};
 
 /// Handler untuk membuat data Mahasiswa baru, sekaligus membuat akun user-nya.
 pub async fn create_mahasiswa_handler(
@@ -91,4 +92,27 @@ pub async fn delete_mahasiswa_handler(
 ) -> Result<StatusCode, AppError> {
     mahasiswa_repo::delete_mahasiswa_repo(&pool, id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn download_mahasiswa_csv_template_handler() -> Response {
+    // 1. Definisikan header CSV
+    let header = "nim;nama_mahasiswa;email;angkatan;kode_prodi";
+    
+    // 2. Buat beberapa baris contoh untuk memperjelas format
+    let example_row1 = "250101001;Budi Darmawan;budi.d@student.kampus.ac.id;2025;S1TI";
+    let example_row2 = "250202002;Citra Ayu;citra.a@student.kampus.ac.id;2025;D3MI";
+
+    // 3. Gabungkan menjadi satu string konten CSV
+    let content = format!("{}\n{}\n{}", header, example_row1, example_row2);
+
+    // 4. Siapkan header HTTP untuk respons
+    let headers = [
+        // Memberitahu browser bahwa ini adalah file CSV
+        (axum::http::header::CONTENT_TYPE, "text/csv; charset=utf-8"),
+        // Memberitahu browser untuk mengunduh file dengan nama tertentu
+        (axum::http::header::CONTENT_DISPOSITION, "attachment; filename=\"template_mahasiswa.csv\""),
+    ];
+
+    // 5. Kembalikan respons dengan header dan konten
+    (headers, content).into_response()
 }

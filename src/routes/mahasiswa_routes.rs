@@ -4,6 +4,10 @@ use axum::{handler::Handler, middleware, routing::{get, post}, Router};
 pub fn mahasiswa_router() -> Router<DbPool> {
     Router::new()
         .route(
+            "/api/mahasiswa/template-csv",
+            get(handlers::mahasiswa_handler::download_mahasiswa_csv_template_handler)
+        )
+        .route(
             "/api/mahasiswa/import-csv",
             post(handlers::mahasiswa_handler::import_mahasiswa_from_csv_handler).layer(
                 middleware::from_fn(require_role(vec![
