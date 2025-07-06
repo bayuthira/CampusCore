@@ -13,11 +13,11 @@ pub fn kurikulum_router() -> Router<DbPool> {
                 .delete(handlers::kurikulum_handler::delete_kurikulum_handler)
         )
         .route(
-            "/api/kurikulum/{id}/matakuliah", // <-- PERBAIKAN SINTAKS
+            "/api/kurikulum/{id}/matakuliah", 
             post(handlers::kurikulum_handler::add_matakuliah_to_kurikulum_handler)
         )
         .route(
-            "/api/kurikulum/{id}/matakuliah/{mk_id}", // <-- PERBAIKAN SINTAKS
+            "/api/kurikulum/{id}/matakuliah/{mk_id}", 
             delete(handlers::kurikulum_handler::remove_matakuliah_from_kurikulum_handler)
         )
         .layer(middleware::from_fn(require_role(vec!["SUPER_ADMIN".to_string(), "KAPRODI".to_string()])));
@@ -26,11 +26,11 @@ pub fn kurikulum_router() -> Router<DbPool> {
     let all_user_routes = Router::new()
         .route("/api/kurikulum", get(handlers::kurikulum_handler::get_all_kurikulum_handler))
         .route(
-            "/api/kurikulum/{id}", // <-- PERBAIKAN SINTAKS
+            "/api/kurikulum/{id}", 
             get(handlers::kurikulum_handler::get_kurikulum_by_id_handler)
         )
         .route(
-            "/api/kurikulum/{id}/matakuliah", // <-- PERBAIKAN SINTAKS
+            "/api/kurikulum/{id}/matakuliah",
             get(handlers::kurikulum_handler::get_matakuliah_in_kurikulum_handler)
         );
 
