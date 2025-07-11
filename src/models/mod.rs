@@ -9,5 +9,6 @@ pub mod general_model;
 pub mod user_model;
 pub mod role_model;
 pub mod kurikulum_model;
+pub mod ruangan_model;
 
 

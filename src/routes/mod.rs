@@ -15,6 +15,7 @@ mod tahun_akademik_routes;
 mod user_management_routes;
 mod role_routes;
 mod kurikulum_routes;
+mod aset_routes;
 
 /// Fungsi utama untuk membuat dan menggabungkan semua router
 pub fn create_router(pool: DbPool) -> Router {
@@ -44,6 +45,7 @@ pub fn create_router(pool: DbPool) -> Router {
         .merge(user_management_routes::user_management_router())
         .merge(role_routes::role_router())
         .merge(kurikulum_routes::kurikulum_router())
+        .merge(aset_routes::aset_router())
         .route_layer(middleware::from_fn_with_state(pool.clone(), auth_middleware));
 
     // Gabungkan router publik dan terproteksi menjadi satu
