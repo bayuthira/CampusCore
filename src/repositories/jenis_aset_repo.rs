@@ -19,7 +19,10 @@ pub async fn create_jenis_aset_repo(
     let kelompok_str = payload.kelompok.as_str();
 
     let id = sqlx::query_scalar(
-        "INSERT INTO jenis_aset (nama_jenis, deskripsi, kelompok) VALUES ($1, $2, $3) RETURNING id",
+        r#"
+        INSERT INTO jenis_aset (nama_jenis, deskripsi, kelompok) 
+        VALUES ($1, $2, $3::"KelompokAset") RETURNING id
+        "#,
     )
     .bind(payload.nama_jenis)
     .bind(payload.deskripsi)
@@ -40,7 +43,10 @@ pub async fn update_jenis_aset_repo(
     let kelompok_str = payload.kelompok.as_str();
 
     let rows_affected = sqlx::query(
-        "UPDATE jenis_aset SET nama_jenis = $1, deskripsi = $2, kelompok = $3, updated_at = now() WHERE id = $4",
+        r#"
+        UPDATE jenis_aset SET nama_jenis = $1, deskripsi = $2, kelompok = $3::"KelompokAset", updated_at = now() 
+        WHERE id = $4
+        "#,
     )
     .bind(payload.nama_jenis)
     .bind(payload.deskripsi)
