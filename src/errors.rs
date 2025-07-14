@@ -90,6 +90,8 @@ impl IntoResponse for AppError {
                         "Nama kurikulum untuk prodi ini sudah ada.".to_string()
                     } else if err_string.contains("ruangan_kode_ruangan_key") {
                         "Kode Ruangan ini sudah digunakan.".to_string()
+                    } else if err_string.contains("jenis_aset_nama_jenis_key") {
+                        "Nama Jenis Aset ini sudah ada.".to_string()
                     } else {
                         // Pesan fallback jika constraint tidak dikenali
                         "Data yang Anda masukkan sudah ada di sistem (nilai duplikat).".to_string()

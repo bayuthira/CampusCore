@@ -1,8 +1,22 @@
+// src/routes/aset_routes.rs
 use crate::{auth::require_role, db::DbPool, handlers};
-use axum::{middleware, routing::{delete, get, post, put}, Router};
+use axum::{middleware, routing::{get}, Router};
 
 pub fn aset_router() -> Router<DbPool> {
+    // Gabungkan semua rute untuk modul aset di sini
     Router::new()
+        // Rute untuk Jenis Aset
+        .route(
+            "/api/aset/jenis",
+            get(handlers::jenis_aset_handler::get_all_jenis_aset_handler)
+            .post(handlers::jenis_aset_handler::create_jenis_aset_handler)
+        )
+        .route(
+            "/api/aset/jenis/{id}",
+            get(handlers::jenis_aset_handler::get_jenis_aset_by_id_handler)
+            .put(handlers::jenis_aset_handler::update_jenis_aset_handler)
+            .delete(handlers::jenis_aset_handler::delete_jenis_aset_handler)
+        )
         .route(
             "/api/aset/ruangan",
             get(handlers::ruangan_handler::get_all_ruangan_handler)
@@ -14,6 +28,6 @@ pub fn aset_router() -> Router<DbPool> {
             .put(handlers::ruangan_handler::update_ruangan_handler)
             .delete(handlers::ruangan_handler::delete_ruangan_handler)
         )
-        // Hanya SUPER_ADMIN dan STAF_AKADEMIK yang bisa mengelola aset ruangan
+        // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec!["SUPER_ADMIN".to_string(), "STAF_BAUM".to_string()])))
 }

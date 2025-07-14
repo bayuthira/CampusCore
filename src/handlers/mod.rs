@@ -14,4 +14,5 @@ pub mod user_management_handler;
 pub mod role_handler;
 pub mod kurikulum_handler;
 pub mod ruangan_handler;
+pub mod jenis_aset_handler;
 

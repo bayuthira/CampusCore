@@ -10,5 +10,6 @@ pub mod user_model;
 pub mod role_model;
 pub mod kurikulum_model;
 pub mod ruangan_model;
+pub mod jenis_aset_model;
 
 

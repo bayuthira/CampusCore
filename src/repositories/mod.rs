@@ -9,4 +9,5 @@ pub mod user_management_repo;
 pub mod role_repo;
 pub mod kurikulum_repo;
 pub mod ruangan_repo;
+pub mod jenis_aset_repo;
 
