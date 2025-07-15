@@ -39,6 +39,10 @@ pub fn aset_router() -> Router<DbPool> {
                 .put(handlers::aset_handler::update_aset_handler)
                 .delete(handlers::aset_handler::delete_aset_handler),
         )
+        .route(
+            "/api/aset/item/{id}/histori", 
+            get(handlers::aset_handler::get_aset_histori_handler)
+        )
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),

@@ -1,8 +1,8 @@
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::aset_model::{AsetDetail, AsetPayload},
-    repositories::aset_repo,
+    models::aset_model::{AsetDetail, AsetPayload,HistoriAsetDetail},
+    repositories::{aset_repo,histori_aset_repo},
 };
 use axum::{
     extract::{Path, State, Json},
@@ -53,4 +53,12 @@ pub async fn delete_aset_handler(
 ) -> Result<StatusCode, AppError> {
     aset_repo::delete_aset_repo(&pool, id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn get_aset_histori_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>, // ID dari aset
+) -> Result<Json<Vec<HistoriAsetDetail>>, AppError> {
+    let histori = histori_aset_repo::get_histori_by_aset_id_repo(&pool, id).await?;
+    Ok(Json(histori))
 }

@@ -11,4 +11,4 @@ pub mod kurikulum_repo;
 pub mod ruangan_repo;
 pub mod jenis_aset_repo;
 pub mod aset_repo;
-
+pub mod histori_aset_repo;

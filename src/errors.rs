@@ -92,6 +92,8 @@ impl IntoResponse for AppError {
                         "Kode Ruangan ini sudah digunakan.".to_string()
                     } else if err_string.contains("jenis_aset_nama_jenis_key") {
                         "Nama Jenis Aset ini sudah ada.".to_string()
+                    } else if err_string.contains("aset_kode_aset_key") {
+                        "Kode Aset ini sudah digunakan.".to_string()
                     } else {
                         // Pesan fallback jika constraint tidak dikenali
                         "Data yang Anda masukkan sudah ada di sistem (nilai duplikat).".to_string()
@@ -111,11 +113,21 @@ impl IntoResponse for AppError {
                     };
                     (StatusCode::CONFLICT, message) // 409 Conflict cocok untuk kasus ini
                 } else {
-                    // Untuk semua error database lainnya
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Terjadi masalah pada database.".to_string(),
-                    )
+                    // --- PERUBAHAN DI SINI ---
+                    // Tampilkan error asli saat development, pesan generik saat release
+                    let body = {
+                        #[cfg(debug_assertions)]
+                        {
+                            // Mode Debug (`cargo run`)
+                            err.to_string()
+                        }
+                        #[cfg(not(debug_assertions))]
+                        {
+                            // Mode Release (`cargo run --release`)
+                            "Terjadi masalah pada database.".to_string()
+                        }
+                    };
+                    (StatusCode::INTERNAL_SERVER_ERROR, body)
                 }
             }
             // --- AKHIR DARI BLOK YANG TIDAK DIUBAH ---

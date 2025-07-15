@@ -1,22 +1,46 @@
 // src/models/aset_model.rs
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use sqlx::{Type,FromRow};
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
-// Untuk menampilkan detail aset, hasil dari JOIN
-#[derive(Debug, Serialize, FromRow)]
+// ENUM baru untuk kondisi aset
+#[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
+#[sqlx(type_name = "KondisiAset", rename_all = "PascalCase")]
+pub enum KondisiAset {
+    Baik,
+    RusakRingan,
+    RusakBerat,
+    DalamPerbaikan,
+    Dihapuskan,
+}
+
+impl KondisiAset {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            KondisiAset::Baik => "Baik",
+            KondisiAset::RusakRingan => "Rusak Ringan",
+            KondisiAset::RusakBerat => "Rusak Berat",
+            KondisiAset::DalamPerbaikan => "Dalam Perbaikan",
+            KondisiAset::Dihapuskan => "Dihapuskan",
+        }
+    }
+}
+
+// Struct untuk respons API
+#[derive(Debug, Serialize)]
 pub struct AsetDetail {
     pub id: Uuid,
     pub nama_aset: String,
     pub kode_aset: Option<String>,
     pub deskripsi: Option<String>,
     pub tanggal_pembelian: Option<Date>,
+    pub kondisi: KondisiAset, // <-- TAMBAHKAN INI
     pub jenis_aset_id: Uuid,
-    pub nama_jenis: String, // dari join
+    pub nama_jenis: String,
     pub ruangan_id: Option<Uuid>,
-    pub nama_ruangan: Option<String>, // dari join
-    pub kode_ruangan: Option<String>, // dari join
+    pub nama_ruangan: Option<String>,
+    pub kode_ruangan: Option<String>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
 }
@@ -28,6 +52,36 @@ pub struct AsetPayload {
     pub kode_aset: Option<String>,
     pub deskripsi: Option<String>,
     pub tanggal_pembelian: Option<Date>,
+    pub kondisi: KondisiAset, // <-- TAMBAHKAN INI
     pub jenis_aset_id: Uuid,
-    pub ruangan_id: Option<Uuid>, // Opsional, aset bisa saja di gudang
+    pub ruangan_id: Option<Uuid>,
+}
+
+
+// Enum untuk status histori
+#[derive(Debug, Serialize, Type, Clone, PartialEq)]
+#[sqlx(type_name = "AsetHistoriStatus", rename_all = "PascalCase")]
+pub enum AsetHistoriStatus {
+    Ditempatkan,
+    Dipindahkan,
+    Dipinjam,
+    Dikembalikan,
+    DalamPerbaikan,
+    PerbaikanSelesai,
+    Dihapuskan,
+}
+
+// Struct untuk menampilkan detail histori
+#[derive(Debug, Serialize, FromRow)]
+pub struct HistoriAsetDetail {
+    pub id: Uuid,
+    pub status: AsetHistoriStatus,
+    pub catatan: Option<String>,
+    pub tanggal_kejadian: OffsetDateTime,
+    // Informasi user yang melakukan aksi
+    pub user_aksi_id: Uuid,
+    pub nama_user_aksi: String,
+    // Informasi ruangan (opsional)
+    pub dari_ruangan: Option<String>,
+    pub ke_ruangan: Option<String>,
 }
