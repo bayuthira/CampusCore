@@ -1,14 +1,16 @@
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::aset_model::{AsetDetail, AsetPayload,HistoriAsetDetail},
+    models::aset_model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload},
     repositories::{aset_repo,histori_aset_repo},
+    auth::TokenClaims,
 };
 use axum::{
     extract::{Path, State, Json},
     http::StatusCode,
 };
 use uuid::Uuid;
+use axum::Extension;
 
 /// Handler untuk membuat Aset baru
 pub async fn create_aset_handler(
@@ -61,4 +63,16 @@ pub async fn get_aset_histori_handler(
 ) -> Result<Json<Vec<HistoriAsetDetail>>, AppError> {
     let histori = histori_aset_repo::get_histori_by_aset_id_repo(&pool, id).await?;
     Ok(Json(histori))
+}
+
+pub async fn pindahkan_aset_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>, // Ambil info user yang login
+    Path(aset_id): Path<Uuid>,
+    Json(payload): Json<PindahkanAsetPayload>,
+) -> Result<Json<AsetDetail>, AppError> {
+    let user_aksi_id = claims.sub; // ID user yang melakukan aksi
+    let aset_terbaru =
+        histori_aset_repo::pindahkan_aset_repo(&pool, aset_id, user_aksi_id, payload).await?;
+    Ok(Json(aset_terbaru))
 }

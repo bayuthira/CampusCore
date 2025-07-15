@@ -85,3 +85,9 @@ pub struct HistoriAsetDetail {
     pub dari_ruangan: Option<String>,
     pub ke_ruangan: Option<String>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct PindahkanAsetPayload {
+    pub ke_ruangan_id: Uuid,
+    pub catatan: Option<String>,
+}

@@ -1,12 +1,18 @@
 // src/handlers/prodi_handler.rs
+use super::{
+    model::{CreateProdiPayload, Prodi, UpdateProdiPayload},
+    repo as prodi_repo,
+};
 use crate::{
-    auth::TokenClaims,
+    modules::auth::middleware::TokenClaims,
     db::DbPool,
     errors::AppError,
-    models::prodi_model::{CreateProdiPayload, Prodi, UpdateProdiPayload},
-    repositories::prodi_repo,
 };
-use axum::{extract::{Path, State, Json}, http::StatusCode, Extension};
+use axum::{
+    extract::{Path, State, Json},
+    http::StatusCode,
+    Extension,
+};
 use uuid::Uuid;
 
 // Handler untuk membuat prodi baru

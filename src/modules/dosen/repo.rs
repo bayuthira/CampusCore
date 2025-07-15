@@ -1,7 +1,6 @@
 // src/repositories/dosen_repo.rs
-use crate::db::DbPool;
-use crate::errors::AppError;
-use crate::models::dosen_model::{CreateDosenPayload, DosenDetail, UpdateDosenPayload};
+use super::model::{CreateDosenPayload, DosenDetail, UpdateDosenPayload};
+use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
 
 

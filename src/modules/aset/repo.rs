@@ -118,3 +118,4 @@ pub async fn delete_aset_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
     if rows_affected == 0 { return Err(sqlx::Error::RowNotFound.into()); }
     Ok(())
 }
+

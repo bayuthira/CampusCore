@@ -1,56 +1,35 @@
-// src/routes/mod.rs
+use crate::{
+    modules::auth::middleware::auth_middleware, // <-- Path baru yang benar
+    db::DbPool,
+    modules,
+};
+use axum::{
+    middleware,
+    routing::{get, post},
+    Router,
+};
 
-use crate::{auth::auth_middleware, db::DbPool, handlers};
-use axum::{middleware, routing::{get, post}, Router};
-
-// Deklarasikan semua modul rute baru kita
-mod dosen_pa_routes;
-mod dosen_routes;
-mod krs_routes;
-mod lookup_routes;
-mod mahasiswa_routes;
-mod matakuliah_routes;
-mod prodi_routes;
-mod tahun_akademik_routes;
-mod user_management_routes;
-mod role_routes;
-mod kurikulum_routes;
-mod aset_routes;
+// Tidak perlu deklarasi `mod` di sini karena sudah diatur di `main.rs` dan `modules/mod.rs`
 
 /// Fungsi utama untuk membuat dan menggabungkan semua router
 pub fn create_router(pool: DbPool) -> Router {
     // Rute publik (tidak perlu login)
     let public_routes = Router::new()
-        .route("/api/health", get(handlers::health_handler::health_check))
-        .route(
-            "/api/auth/register",
-            post(handlers::auth_handler::register_handler),
-       )
-        .route(
-            "/api/auth/login",
-            post(handlers::auth_handler::login_handler),
-        );
+        // Kita panggil handler langsung dari path modularnya
+        //.route("/health", get(modules::health::handler::health_check))
+        .route("/auth/login", post(modules::auth::handler::login_handler));
 
-    // Gabungkan semua rute yang butuh proteksi login,
-    // lalu terapkan middleware otentikasi utama sebagai lapisan terluar.
-    let protected_routes = Router::new()
-        .merge(dosen_pa_routes::dosen_pa_router())
-        .merge(dosen_routes::dosen_router())
-        .merge(krs_routes::krs_router())
-        .merge(lookup_routes::lookup_router())
-        .merge(mahasiswa_routes::mahasiswa_router())
-        .merge(matakuliah_routes::matakuliah_router())
-        .merge(prodi_routes::prodi_router())
-        .merge(tahun_akademik_routes::tahun_akademik_router())
-        .merge(user_management_routes::user_management_router())
-        .merge(role_routes::role_router())
-        .merge(kurikulum_routes::kurikulum_router())
-        .merge(aset_routes::aset_router())
-        .route_layer(middleware::from_fn_with_state(pool.clone(), auth_middleware));
+    // Untuk saat ini, kita hanya gabungkan modul prodi yang sudah direfactor
+    let protected_routes = Router::<DbPool>::new() // <-- Perlu tipe state <DbPool>
+        .merge(modules::prodi::routes::prodi_router())
+        // Anda bisa tambahkan .merge() untuk modul lain di sini nanti
+        .route_layer(middleware::from_fn_with_state(
+            pool.clone(),
+            auth_middleware,
+        ));
 
-    // Gabungkan router publik dan terproteksi menjadi satu
-    Router::new()
-        .merge(public_routes)
-        .merge(protected_routes)
+    // Gabungkan router publik dan terproteksi menjadi satu dengan prefix /api
+    Router::<DbPool>::new() // <-- Perlu tipe state <DbPool>
+        .nest("/api", public_routes.merge(protected_routes))
         .with_state(pool)
 }

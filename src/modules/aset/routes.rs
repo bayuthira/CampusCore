@@ -1,6 +1,6 @@
 // src/routes/aset_routes.rs
 use crate::{auth::require_role, db::DbPool, handlers};
-use axum::{Router, middleware, routing::get};
+use axum::{Router, middleware, routing::{get,post}};
 
 pub fn aset_router() -> Router<DbPool> {
     // Gabungkan semua rute untuk modul aset di sini
@@ -42,6 +42,10 @@ pub fn aset_router() -> Router<DbPool> {
         .route(
             "/api/aset/item/{id}/histori", 
             get(handlers::aset_handler::get_aset_histori_handler)
+        )
+        .route(
+            "/api/aset/item/{id}/pindahkan",
+            post(handlers::aset_handler::pindahkan_aset_handler)
         )
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![

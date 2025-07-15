@@ -1,11 +1,11 @@
 // src/handlers/auth_handler.rs
-use crate::auth::TokenClaims;
+use super::middleware::TokenClaims;
+use super::model::{LoginPayload, LoginSuccessResponse, RegisterPayload};
 use crate::{
     config::CONFIG,
     db::DbPool,
     errors::AppError,
-    models::auth_model::{LoginPayload, RegisterPayload, LoginSuccessResponse},
-    models::user_model::UserData,
+    modules::user_management::model::UserData
 };
 
 use axum::{Json, extract::State, http::StatusCode};

@@ -1,14 +1,13 @@
 // src/handlers/dosen_handler.rs
-
-use crate::{
-    db::DbPool,
-    errors::AppError,
-    models::dosen_model::{CreateDosenPayload, DosenDetail, UpdateDosenPayload},
-    repositories::dosen_repo,
+use super::{
+    model::{CreateDosenPayload, DosenDetail, UpdateDosenPayload},
+    repo as dosen_repo, // Gunakan alias agar panggilan fungsi tetap sama
 };
+use crate::{db::DbPool, errors::AppError};
 use axum::{
-    extract::{Path,State, Json},
+    extract::{Path, State, Json},
     http::StatusCode,
+    Extension,
 };
 use uuid::Uuid;
 

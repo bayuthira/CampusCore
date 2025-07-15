@@ -1,7 +1,6 @@
 // src/repositories/prodi_repo.rs
-use crate::db::DbPool;
-use crate::errors::AppError;
-use crate::models::prodi_model::{CreateProdiPayload, Prodi,UpdateProdiPayload};
+use super::model::{CreateProdiPayload, Prodi, UpdateProdiPayload};
+use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
 
 // Fungsi untuk membuat prodi baru di database

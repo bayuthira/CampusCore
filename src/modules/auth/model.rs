@@ -1,6 +1,6 @@
 // src/models/auth_model.rs
 use serde::{Deserialize, Serialize};
-use crate::models::user_model::UserData;
+use crate::modules::user_management::model::UserData;
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterPayload {
