@@ -3,14 +3,6 @@ use serde::{Deserialize, Serialize};
 use crate::modules::user_management::model::UserData;
 
 #[derive(Debug, Deserialize)]
-pub struct RegisterPayload {
-    pub full_name: String,
-    pub username: String, // Ini bisa NIDN, NIM, dll.
-    pub email: String,
-    pub password: String,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct LoginPayload {
     pub username: String,
     pub password: String,

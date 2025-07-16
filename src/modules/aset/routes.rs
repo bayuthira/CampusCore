@@ -1,5 +1,6 @@
 // src/routes/aset_routes.rs
-use crate::{auth::require_role, db::DbPool, handlers};
+use super::{handler as aset_handler,jenis_aset_handler,ruangan_handler};
+use crate::{modules::auth::middleware::require_role, db::DbPool};
 use axum::{Router, middleware, routing::{get,post}};
 
 pub fn aset_router() -> Router<DbPool> {
@@ -7,45 +8,45 @@ pub fn aset_router() -> Router<DbPool> {
     Router::new()
         // Rute untuk Jenis Aset
         .route(
-            "/api/aset/jenis",
-            get(handlers::jenis_aset_handler::get_all_jenis_aset_handler)
-                .post(handlers::jenis_aset_handler::create_jenis_aset_handler),
+            "/aset/jenis",
+            get(jenis_aset_handler::get_all_jenis_aset_handler)
+                .post(jenis_aset_handler::create_jenis_aset_handler),
         )
         .route(
-            "/api/aset/jenis/{id}",
-            get(handlers::jenis_aset_handler::get_jenis_aset_by_id_handler)
-                .put(handlers::jenis_aset_handler::update_jenis_aset_handler)
-                .delete(handlers::jenis_aset_handler::delete_jenis_aset_handler),
+            "/aset/jenis/{id}",
+            get(jenis_aset_handler::get_jenis_aset_by_id_handler)
+                .put(jenis_aset_handler::update_jenis_aset_handler)
+                .delete(jenis_aset_handler::delete_jenis_aset_handler),
         )
         .route(
-            "/api/aset/ruangan",
-            get(handlers::ruangan_handler::get_all_ruangan_handler)
-                .post(handlers::ruangan_handler::create_ruangan_handler),
+            "/aset/ruangan",
+            get(ruangan_handler::get_all_ruangan_handler)
+                .post(ruangan_handler::create_ruangan_handler),
         )
         .route(
-            "/api/aset/ruangan/{id}",
-            get(handlers::ruangan_handler::get_ruangan_by_id_handler)
-                .put(handlers::ruangan_handler::update_ruangan_handler)
-                .delete(handlers::ruangan_handler::delete_ruangan_handler),
+            "/aset/ruangan/{id}",
+            get(ruangan_handler::get_ruangan_by_id_handler)
+                .put(ruangan_handler::update_ruangan_handler)
+                .delete(ruangan_handler::delete_ruangan_handler),
         )
         .route(
-            "/api/aset/item",
-            get(handlers::aset_handler::get_all_aset_handler)
-                .post(handlers::aset_handler::create_aset_handler),
+            "/aset/item",
+            get(aset_handler::get_all_aset_handler)
+                .post(aset_handler::create_aset_handler),
         )
         .route(
-            "/api/aset/item/{id}",
-            get(handlers::aset_handler::get_aset_by_id_handler)
-                .put(handlers::aset_handler::update_aset_handler)
-                .delete(handlers::aset_handler::delete_aset_handler),
+            "/aset/item/{id}",
+            get(aset_handler::get_aset_by_id_handler)
+                .put(aset_handler::update_aset_handler)
+                .delete(aset_handler::delete_aset_handler),
         )
         .route(
-            "/api/aset/item/{id}/histori", 
-            get(handlers::aset_handler::get_aset_histori_handler)
+            "/aset/item/{id}/histori", 
+            get(aset_handler::get_aset_histori_handler)
         )
         .route(
-            "/api/aset/item/{id}/pindahkan",
-            post(handlers::aset_handler::pindahkan_aset_handler)
+            "/aset/item/{id}/pindahkan",
+            post(aset_handler::pindahkan_aset_handler)
         )
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![

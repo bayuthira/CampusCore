@@ -7,7 +7,6 @@ use crate::{db::DbPool, errors::AppError};
 use axum::{
     extract::{Path, State, Json},
     http::StatusCode,
-    Extension,
 };
 use uuid::Uuid;
 

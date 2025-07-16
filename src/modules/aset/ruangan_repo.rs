@@ -1,4 +1,4 @@
-use crate::{db::DbPool, errors::AppError, models::ruangan_model::{Ruangan, RuanganPayload}};
+use crate::{db::DbPool, errors::AppError, modules::aset::ruangan_model::{Ruangan, RuanganPayload}};
 use uuid::Uuid;
 
 pub async fn create_ruangan_repo(pool: &DbPool, payload: RuanganPayload) -> Result<Ruangan, AppError> {

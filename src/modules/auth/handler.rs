@@ -1,6 +1,6 @@
 // src/handlers/auth_handler.rs
 use super::middleware::TokenClaims;
-use super::model::{LoginPayload, LoginSuccessResponse, RegisterPayload};
+use super::model::{LoginPayload, LoginSuccessResponse};
 use crate::{
     config::CONFIG,
     db::DbPool,
@@ -8,36 +8,10 @@ use crate::{
     modules::user_management::model::UserData
 };
 
-use axum::{Json, extract::State, http::StatusCode};
-use bcrypt::{DEFAULT_COST, hash, verify};
+use axum::{Json, extract::State};
+use bcrypt::{verify};
 use jsonwebtoken::{EncodingKey, Header, encode};
 
-// Handler untuk registrasi user baru
-pub async fn register_handler(
-    State(pool): State<DbPool>,
-    Json(payload): Json<RegisterPayload>,
-) -> Result<StatusCode, AppError> {
-    // Hash password dengan bcrypt
-    let hashed_password = hash(payload.password, DEFAULT_COST)?;
-
-    // Simpan user baru ke database
-    sqlx::query!(
-        "INSERT INTO users (full_name, username, email, password_hash) VALUES ($1, $2, $3, $4)",
-        payload.full_name,
-        payload.username,
-        payload.email,
-        hashed_password,
-    )
-    .execute(&pool)
-    .await?;
-
-    // Di sini nanti Anda bisa otomatis memberikan role default ke user baru
-    // dengan INSERT ke tabel `user_roles`.
-
-    Ok(StatusCode::CREATED)
-}
-
-// Handler untuk login
 // Handler untuk login
 pub async fn login_handler(
     State(pool): State<DbPool>,

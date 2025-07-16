@@ -1,6 +1,6 @@
 // src/repositories/user_management_repo.rs
 use super::{
-    model::{RoleAssignmentPayload, UserWithRoles, UpdateUserPayload,ResetPasswordPayload, CreateUserPayload},
+    model::{RoleAssignmentPayload, UserWithRoles, UpdateUserPayload,CreateUserPayload},
 };
 
 use crate::{

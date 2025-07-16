@@ -1,7 +1,11 @@
+use super::{
+    model::{AsetDetail, AsetPayload, KondisiAset},
+
+};
+
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::aset_model::{AsetDetail, AsetPayload, KondisiAset}, // Impor KondisiAset
 };
 use uuid::Uuid;
 

@@ -5,5 +5,4 @@ pub mod routes;
 pub mod role_handler;
 pub mod role_model;
 pub mod role_repo;
-pub mod role_routes;
 

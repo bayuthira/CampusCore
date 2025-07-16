@@ -1,4 +1,4 @@
-use crate::{db::DbPool, errors::AppError, models::ruangan_model::{Ruangan, RuanganPayload}, repositories::ruangan_repo};
+use crate::{db::DbPool, errors::AppError, modules::aset::ruangan_model::{Ruangan, RuanganPayload}, modules::aset::ruangan_repo};
 use axum::{extract::{Path, State, Json}, http::StatusCode};
 use uuid::Uuid;
 

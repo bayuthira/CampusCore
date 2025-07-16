@@ -1,9 +1,10 @@
 // src/repositories/jenis_aset_repo.rs
-
+use super::{
+    jenis_aset_model::{JenisAset, JenisAsetPayload, KelompokAset},
+};
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::jenis_aset_model::{JenisAset, JenisAsetPayload, KelompokAset},
 };
 use uuid::Uuid;
 

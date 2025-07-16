@@ -1,5 +1,8 @@
 // src/repositories/histori_aset_repo.rs
-use crate::{db::DbPool, errors::AppError, models::aset_model::{HistoriAsetDetail,PindahkanAsetPayload,AsetDetail}};
+use super::{
+    model::{HistoriAsetDetail,PindahkanAsetPayload,AsetDetail},
+};
+use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
 
 pub async fn get_histori_by_aset_id_repo(pool: &DbPool, aset_id: Uuid) -> Result<Vec<HistoriAsetDetail>, AppError> {
@@ -70,6 +73,6 @@ pub async fn pindahkan_aset_repo(
     tx.commit().await?;
 
     // Ambil dan kembalikan detail aset terbaru
-    let aset_terbaru = crate::repositories::aset_repo::get_aset_by_id_repo(pool, aset_id).await?;
+    let aset_terbaru = crate::modules::aset::repo::get_aset_by_id_repo(pool, aset_id).await?;
     Ok(aset_terbaru)
 }

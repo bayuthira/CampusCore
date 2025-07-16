@@ -4,7 +4,7 @@ use super::handler; // <-- Impor yang benar
 use crate::{modules::auth::middleware::require_role, db::DbPool};
 use axum::{
     middleware,
-    routing::{delete, get, post, put},
+    routing::{get, post, put},
     Router,
 };
 

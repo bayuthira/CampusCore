@@ -1,5 +1,10 @@
 // src/handlers/jenis_aset_handler.rs
-use crate::{db::DbPool, errors::AppError, models::jenis_aset_model::{JenisAset, JenisAsetPayload}, repositories::jenis_aset_repo};
+use super::{
+    jenis_aset_model::{JenisAset, JenisAsetPayload},
+    jenis_aset_repo,
+};
+
+use crate::{db::DbPool, errors::AppError};
 use axum::{extract::{Path, State, Json}, http::StatusCode};
 use uuid::Uuid;
 

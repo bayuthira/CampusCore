@@ -1,7 +1,7 @@
 use crate::{db::DbPool, modules, modules::auth::middleware::auth_middleware};
 use axum::{
     Router, middleware,
-    routing::{get, post},
+    routing::{post},
 };
 
 /// Fungsi utama untuk membuat dan menggabungkan semua router
@@ -22,6 +22,7 @@ pub fn create_router(pool: DbPool) -> Router {
         .merge(modules::krs::dosen_pa_routes::dosen_pa_router())
         .merge(modules::krs::routes::krs_router())
         .merge(modules::user_management::routes::user_management_router())
+        .merge(modules::aset::routes::aset_router())
         .route_layer(middleware::from_fn_with_state(
             pool.clone(),
             auth_middleware,

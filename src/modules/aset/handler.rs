@@ -1,9 +1,13 @@
+use super::{
+    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload},
+    repo as aset_repo,
+    histori_repo as histori_aset_repo,
+};
+
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::aset_model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload},
-    repositories::{aset_repo,histori_aset_repo},
-    auth::TokenClaims,
+    modules::auth::middleware::TokenClaims,
 };
 use axum::{
     extract::{Path, State, Json},

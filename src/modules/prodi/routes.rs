@@ -3,7 +3,7 @@
 use crate::{modules::auth::middleware::require_role, db::DbPool, modules::prodi::handler};
 use axum::{
     middleware,
-    routing::{delete, get, post, put},
+    routing::{get, post, put},
     Router,
 };
 

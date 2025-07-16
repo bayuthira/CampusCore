@@ -1,0 +1,11 @@
+pub mod handler;
+pub mod model;
+pub mod repo;
+pub mod routes;
+pub mod histori_repo;
+pub mod jenis_aset_handler;
+pub mod jenis_aset_model;
+pub mod jenis_aset_repo;
+pub mod ruangan_handler;
+pub mod ruangan_model;
+pub mod ruangan_repo;
