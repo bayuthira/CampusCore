@@ -1,11 +1,14 @@
 // src/handlers/krs_handler.rs
 
+use super::{
+    model::{CreateEnrollmentPayload, EnrollmentDetail, UpdateEnrollmentStatusPayload, KrsQuery},
+    repo as krs_repo,
+};   
+
 use crate::{
-    auth::TokenClaims,
+    modules::auth::middleware::TokenClaims,
     db::DbPool,
     errors::AppError,
-    models::krs_model::{CreateEnrollmentPayload, EnrollmentDetail, UpdateEnrollmentStatusPayload, KrsQuery},
-    repositories::krs_repo,
 };
 use axum::{
     Extension,
@@ -13,7 +16,7 @@ use axum::{
     http::StatusCode,
 };
 use uuid::Uuid;
-use crate::models::general_model::SuccessResponse;
+use crate::modules::general::model::SuccessResponse;
 
 // Handler saat mahasiswa mengambil MK
 

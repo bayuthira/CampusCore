@@ -1,13 +1,9 @@
 // src/repositories/krs_repo.rs
 
-use crate::{
-    db::DbPool,
-    errors::AppError,
-    models::{krs_model::{
-        CreateEnrollmentPayload, EnrollmentDetail, UpdateEnrollmentStatusPayload,EnrollmentStatus
-    },
-        tahun_akademik_model::TahunAkademik,
-    },
+use crate::{db::DbPool, errors::AppError, modules::tahun_akademik::model::TahunAkademik};
+
+use super::model::{
+    CreateEnrollmentPayload, EnrollmentDetail, EnrollmentStatus, UpdateEnrollmentStatusPayload,
 };
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -40,7 +36,7 @@ pub async fn create_enrollment_repo(
     )
     .execute(pool)
     .await?;
-    
+
     Ok(())
 }
 
@@ -89,7 +85,8 @@ pub async fn get_my_enrollments_repo(
     let enrollments_detail: Vec<EnrollmentDetail> = rows
         .into_iter()
         .map(|row| {
-            let status = match row.status_approval.as_deref() { // status_approval masih Option karena bisa NULL
+            let status = match row.status_approval.as_deref() {
+                // status_approval masih Option karena bisa NULL
                 Some("Disetujui") => EnrollmentStatus::Disetujui,
                 Some("Ditolak") => EnrollmentStatus::Ditolak,
                 Some("Selesai") => EnrollmentStatus::Selesai,
@@ -154,9 +151,9 @@ pub async fn get_enrollment_by_id_repo(
         id: row.id,
         mahasiswa_id: row.mahasiswa_id,
         tahun_akademik: row.tahun_akademik, // Langsung digunakan
-        kode_mk: row.kode_mk,             // Langsung digunakan
-        nama_mk: row.nama_mk,             // Langsung digunakan
-        sks: row.sks,                     // Langsung digunakan
+        kode_mk: row.kode_mk,               // Langsung digunakan
+        nama_mk: row.nama_mk,               // Langsung digunakan
+        sks: row.sks,                       // Langsung digunakan
         status_approval: status,
         nilai_huruf: row.nilai_huruf,
     };
@@ -164,13 +161,12 @@ pub async fn get_enrollment_by_id_repo(
     Ok(enrollment_detail)
 }
 
-
-
 pub async fn update_enrollment_status_repo(
     pool: &DbPool,
     enrollment_id: Uuid,
     payload: UpdateEnrollmentStatusPayload,
-) -> Result<(), AppError> { // <-- Return type diubah menjadi Result<(), AppError>
+) -> Result<(), AppError> {
+    // <-- Return type diubah menjadi Result<(), AppError>
     // 1. Konversi enum dari payload ke representasi string yang TEPAT
     //    sesuai dengan label yang ada di ENUM PostgreSQL Anda.
     //    Perhatikan "Menunggu Persetujuan" yang kemungkinan memiliki spasi.

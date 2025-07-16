@@ -1,7 +1,7 @@
 // src/repositories/mahasiswa_repo.rs
 use crate::db::DbPool;
 use crate::errors::AppError;
-use crate::models::mahasiswa_model::{CreateMahasiswaPayload, MahasiswaDetail,MahasiswaCsvRecord, ImportResult, UpdateMahasiswaPayload};
+use super::model::{CreateMahasiswaPayload, MahasiswaDetail,MahasiswaCsvRecord, ImportResult, UpdateMahasiswaPayload};
 use uuid::Uuid;
 use bytes::Bytes;
 

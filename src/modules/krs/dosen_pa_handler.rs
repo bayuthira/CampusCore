@@ -1,18 +1,18 @@
 // src/handlers/dosen_pa_handler.rs
-use crate::models::krs_model::{EnrollmentDetail, KrsQuery}; 
-use crate::repositories::krs_repo;                          
-use axum::extract::{Path, Query};                           
-use uuid::Uuid;                                            
-
-
+use super::{
+    model::{EnrollmentDetail, KrsQuery},
+    repo as krs_repo,
+};                    
+                      
+use uuid::Uuid;                                          
 use crate::{
-    auth::TokenClaims,
+    modules::auth::middleware::TokenClaims,
     db::DbPool,
     errors::AppError,
-    models::mahasiswa_model::MahasiswaBimbingan,
-    repositories::dosen_pa_repo,
+    modules::mahasiswa::model::MahasiswaBimbingan,
+    modules::krs::dosen_pa_repo,
 };
-use axum::{extract::State, Json, Extension};
+use axum::{extract::{Path, Query,State}, Json, Extension};
 
 /// Handler untuk Dosen PA melihat daftar mahasiswa bimbingannya
 pub async fn get_my_advisees_handler(

@@ -3,7 +3,7 @@ mod config;
 mod db;
 mod errors;
 mod modules;
-mod routes; // <-- Tambahkan ini
+mod routes;
 
 use crate::config::CONFIG;
 use crate::db::create_pool;

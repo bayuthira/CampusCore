@@ -2,8 +2,8 @@
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::matakuliah_model::{CreateMataKuliahPayload, MataKuliahDetail, UpdateMataKuliahPayload},
 };
+use super::model::{CreateMataKuliahPayload, MataKuliahDetail, UpdateMataKuliahPayload};
 use uuid::Uuid;
 
 pub async fn create_matakuliah_repo(

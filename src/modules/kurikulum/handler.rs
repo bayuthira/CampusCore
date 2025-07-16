@@ -1,5 +1,11 @@
-use crate::{db::DbPool, errors::AppError, 
-    models::{kurikulum_model::{CreateKurikulumPayload, KurikulumDetail, UpdateKurikulumPayload,AddMataKuliahToKurikulumPayload}, matakuliah_model::MataKuliahDetail}, repositories::kurikulum_repo};
+use crate::{db::DbPool, 
+    errors::AppError, 
+    modules::matakuliah::model::MataKuliahDetail};
+
+use super::{
+    model::{CreateKurikulumPayload, KurikulumDetail, UpdateKurikulumPayload,AddMataKuliahToKurikulumPayload},
+    repo as kurikulum_repo,
+};
 use axum::{extract::{Path, State, Json}, http::StatusCode};
 use uuid::Uuid;
 

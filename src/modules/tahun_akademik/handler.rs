@@ -1,10 +1,13 @@
 // src/handlers/tahun_akademik_handler.rs
 
+use super::{
+    model::{TaPayload, TahunAkademik},
+    repo as tahun_akademik_repo,
+};
+
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::tahun_akademik_model::{TaPayload, TahunAkademik},
-    repositories::tahun_akademik_repo,
 };
 use axum::{
     extract::{Path, State, Json},

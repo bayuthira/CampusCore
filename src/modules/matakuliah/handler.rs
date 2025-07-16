@@ -1,14 +1,16 @@
 // src/handlers/matakuliah_handler.rs
 
+use super::{
+    model::{CreateMataKuliahPayload, MataKuliahDetail, UpdateMataKuliahPayload},
+    repo as matakuliah_repo,
+};
+
 use crate::{
-    auth::TokenClaims,
+    modules::auth::middleware::TokenClaims,
     db::DbPool,
     errors::AppError,
-    models::matakuliah_model::{
-        CreateMataKuliahPayload, MataKuliahDetail, UpdateMataKuliahPayload,
-    },
-    repositories::matakuliah_repo,
 };
+
 use axum::{
     extract::{Path, State, Json},
     http::StatusCode,

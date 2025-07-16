@@ -2,7 +2,7 @@
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::mahasiswa_model::MahasiswaBimbingan,
+    modules::mahasiswa::model::MahasiswaBimbingan,
 };
 use uuid::Uuid;
 

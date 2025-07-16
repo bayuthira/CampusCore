@@ -3,3 +3,11 @@
 pub mod auth;
 pub mod user_management;
 pub mod prodi;
+pub mod health;
+pub mod dosen;
+pub mod mahasiswa;
+pub mod general;
+pub mod matakuliah;
+pub mod tahun_akademik;
+pub mod kurikulum;
+pub mod krs;

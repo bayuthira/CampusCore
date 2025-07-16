@@ -3,8 +3,9 @@
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::tahun_akademik_model::{TaPayload, TahunAkademik},
 };
+
+use super::model::{TaPayload, TahunAkademik};
 use uuid::Uuid;
 
 // Fungsi helper untuk menonaktifkan semua tahun akademik lain

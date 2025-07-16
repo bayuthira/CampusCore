@@ -1,11 +1,13 @@
 // src/handlers/mahasiswa_handler.rs
 
+use super::{
+    model::{CreateMahasiswaPayload, ImportResult, MahasiswaDetail, UpdateMahasiswaPayload},
+    repo as mahasiswa_repo,
+};
 use crate::{
+    modules::auth::middleware::TokenClaims,
     db::DbPool,
     errors::AppError,
-    models::mahasiswa_model::{CreateMahasiswaPayload, MahasiswaDetail,ImportResult, UpdateMahasiswaPayload},
-    repositories::mahasiswa_repo,
-    auth::TokenClaims,
 };
 use axum::{
     extract::{Path, State, Json, Multipart},
