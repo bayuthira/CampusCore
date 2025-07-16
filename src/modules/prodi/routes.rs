@@ -2,7 +2,6 @@
 
 use crate::{modules::auth::middleware::require_role, db::DbPool, modules::prodi::handler};
 use axum::{
-    handler::Handler, // <-- Perlu di-import untuk bisa menggunakan .layer()
     middleware,
     routing::{delete, get, post, put},
     Router,

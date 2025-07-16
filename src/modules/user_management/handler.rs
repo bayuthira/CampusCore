@@ -1,9 +1,14 @@
 // src/handlers/user_management_handler.rs
+use super::{
+    model::{RoleAssignmentPayload, UserWithRoles, UpdateUserPayload,ResetPasswordPayload, CreateUserPayload},
+    repo as user_management_repo,
+};
+
+
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::{general_model::SuccessResponse, user_model::{RoleAssignmentPayload, UserWithRoles, UpdateUserPayload,ResetPasswordPayload, CreateUserPayload}},
-    repositories::user_management_repo,
+    modules::general::model::SuccessResponse, 
 };
 use axum::{extract::{State, Path}, http::StatusCode, Json};
 use uuid::Uuid;

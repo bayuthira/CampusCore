@@ -1,9 +1,9 @@
 // src/routes/user_management_routes.rs
 
 use crate::{
-    auth::middleware::require_role, // Path middleware tetap karena di modul berbeda
+    modules::auth::middleware::require_role,
     db::DbPool,
-    modules::user_management::{handler, role_handler}, // Gunakan `super` atau path lengkap
+    modules::user_management::{handler, role_handler},
 };
 use axum::{
     middleware,

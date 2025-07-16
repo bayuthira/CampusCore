@@ -1,9 +1,13 @@
 // src/handlers/role_handler.rs
+use super::{
+    role_model::RoleResponse,
+    role_repo as role_repo,
+};
+
+
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::role_model::RoleResponse,
-    repositories::role_repo,
 };
 use axum::{extract::State, Json};
 

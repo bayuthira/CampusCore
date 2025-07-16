@@ -21,6 +21,7 @@ pub fn create_router(pool: DbPool) -> Router {
         .merge(modules::kurikulum::routes::kurikulum_router())
         .merge(modules::krs::dosen_pa_routes::dosen_pa_router())
         .merge(modules::krs::routes::krs_router())
+        .merge(modules::user_management::routes::user_management_router())
         .route_layer(middleware::from_fn_with_state(
             pool.clone(),
             auth_middleware,

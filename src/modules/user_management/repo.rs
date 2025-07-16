@@ -1,8 +1,11 @@
 // src/repositories/user_management_repo.rs
+use super::{
+    model::{RoleAssignmentPayload, UserWithRoles, UpdateUserPayload,ResetPasswordPayload, CreateUserPayload},
+};
+
 use crate::{
     db::DbPool,
     errors::AppError,
-    models::user_model::{RoleAssignmentPayload, UserWithRoles, UpdateUserPayload, CreateUserPayload},
 };
 use futures::future::try_join_all;
 use uuid::Uuid;
