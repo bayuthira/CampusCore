@@ -1,7 +1,13 @@
-// src/routes/aset_routes.rs
-use super::{handler as aset_handler,jenis_aset_handler,ruangan_handler};
-use crate::{modules::auth::middleware::require_role, db::DbPool};
-use axum::{Router, middleware, routing::{get,post}};
+// src/modules/aset/routes.rs
+use super::{
+    habis_pakai::handler as habis_pakai_handler, handler as aset_handler, jenis_aset_handler,
+    ruangan_handler,
+};
+use crate::{db::DbPool, modules::auth::middleware::require_role};
+use axum::{
+    Router, middleware,
+    routing::{get, post},
+};
 
 pub fn aset_router() -> Router<DbPool> {
     // Gabungkan semua rute untuk modul aset di sini
@@ -31,8 +37,7 @@ pub fn aset_router() -> Router<DbPool> {
         )
         .route(
             "/aset/item",
-            get(aset_handler::get_all_aset_handler)
-                .post(aset_handler::create_aset_handler),
+            get(aset_handler::get_all_aset_handler).post(aset_handler::create_aset_handler),
         )
         .route(
             "/aset/item/{id}",
@@ -41,12 +46,22 @@ pub fn aset_router() -> Router<DbPool> {
                 .delete(aset_handler::delete_aset_handler),
         )
         .route(
-            "/aset/item/{id}/histori", 
-            get(aset_handler::get_aset_histori_handler)
+            "/aset/item/{id}/histori",
+            get(aset_handler::get_aset_histori_handler),
         )
         .route(
             "/aset/item/{id}/pindahkan",
-            post(aset_handler::pindahkan_aset_handler)
+            post(aset_handler::pindahkan_aset_handler),
+        )
+        .route(
+            "/aset/konsumsi",
+            get(habis_pakai_handler::get_all_handler).post(habis_pakai_handler::create_handler),
+        )
+        .route(
+            "/aset/konsumsi/{id}",
+            get(habis_pakai_handler::get_by_id_handler)
+                .put(habis_pakai_handler::update_handler)
+                .delete(habis_pakai_handler::delete_handler),
         )
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![

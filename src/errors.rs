@@ -94,6 +94,8 @@ impl IntoResponse for AppError {
                         "Nama Jenis Aset ini sudah ada.".to_string()
                     } else if err_string.contains("aset_kode_aset_key") {
                         "Kode Aset ini sudah digunakan.".to_string()
+                    } else if err_string.contains("aset_habis_pakai_nama_barang_key") {
+                        "Nama barang ini sudah terdaftar.".to_string()
                     } else {
                         // Pesan fallback jika constraint tidak dikenali
                         "Data yang Anda masukkan sudah ada di sistem (nilai duplikat).".to_string()
