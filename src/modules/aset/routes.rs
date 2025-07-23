@@ -63,6 +63,14 @@ pub fn aset_router() -> Router<DbPool> {
                 .put(habis_pakai_handler::update_handler)
                 .delete(habis_pakai_handler::delete_handler),
         )
+        .route(
+            "/aset/konsumsi/{id}/tambah-stok",
+            post(habis_pakai_handler::tambah_stok_handler),
+        )
+        .route(
+            "/aset/konsumsi/{id}/ambil-stok",
+            post(habis_pakai_handler::ambil_stok_handler),
+        )
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),
