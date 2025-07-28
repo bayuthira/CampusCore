@@ -28,4 +28,7 @@ pub struct AsetHabisPakaiPayload {
 pub struct StokTransaksiPayload {
     pub jumlah: i32, // Jumlah yang ditambah atau diambil
     pub catatan: Option<String>,
+    #[serde(default)]
+    #[serde(rename = "tanggal_dan_jam", with = "time::serde::rfc3339::option")]
+    pub tanggal_transaksi: Option<OffsetDateTime>, // Opsional
 }

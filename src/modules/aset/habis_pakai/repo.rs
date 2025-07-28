@@ -1,6 +1,7 @@
 use super::model::{AsetHabisPakai, AsetHabisPakaiPayload,StokTransaksiPayload};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
+use time::OffsetDateTime; 
 
     pub async fn create_repo(pool: &DbPool, payload: AsetHabisPakaiPayload) -> Result<AsetHabisPakai, AppError> {
         let item = sqlx::query_as!(
@@ -39,20 +40,22 @@ use uuid::Uuid;
 pub async fn tambah_stok_repo(pool: &DbPool, id: Uuid, payload: StokTransaksiPayload, user_id: Uuid) -> Result<AsetHabisPakai, AppError> {
     let mut tx = pool.begin().await?;
 
-    // Kunci baris aset untuk mencegah update serentak (race condition)
     let aset = sqlx::query_as!(AsetHabisPakai, "SELECT * FROM aset_habis_pakai WHERE id = $1 FOR UPDATE", id)
         .fetch_one(&mut *tx).await?;
 
     let saldo_sebelum = aset.stok;
     let saldo_setelah = saldo_sebelum + payload.jumlah;
 
-    // Masukkan ke histori
+    // Tentukan timestamp: gunakan dari payload, atau waktu sekarang jika tidak ada
+    let trx_timestamp = payload.tanggal_transaksi.unwrap_or_else(OffsetDateTime::now_utc);
+
+    // Masukkan ke histori dengan timestamp yang sudah ditentukan
     sqlx::query!(
-        "INSERT INTO histori_stok (aset_id, tipe_transaksi, jumlah, saldo_sebelum, saldo_setelah, user_aksi_id, catatan) VALUES ($1, 'Pembelian', $2, $3, $4, $5, $6)",
-        id, payload.jumlah, saldo_sebelum, saldo_setelah, user_id, payload.catatan
+        "INSERT INTO histori_stok (aset_id, tipe_transaksi, jumlah, saldo_sebelum, saldo_setelah, user_aksi_id, catatan, tanggal_transaksi) VALUES ($1, 'Pembelian', $2, $3, $4, $5, $6, $7)",
+        id, payload.jumlah, saldo_sebelum, saldo_setelah, user_id, payload.catatan, trx_timestamp
     ).execute(&mut *tx).await?;
 
-    // Update stok di tabel utama
+    // ... (sisa fungsi tidak berubah) ...
     let updated_aset = sqlx::query_as!(
         AsetHabisPakai,
         "UPDATE aset_habis_pakai SET stok = $1, updated_at = now() WHERE id = $2 RETURNING *",
@@ -69,22 +72,24 @@ pub async fn ambil_stok_repo(pool: &DbPool, id: Uuid, payload: StokTransaksiPayl
     let aset = sqlx::query_as!(AsetHabisPakai, "SELECT * FROM aset_habis_pakai WHERE id = $1 FOR UPDATE", id)
         .fetch_one(&mut *tx).await?;
 
-    // Validasi stok
     if aset.stok < payload.jumlah {
         return Err(AppError::Forbidden("Stok tidak mencukupi.".to_string()));
     }
 
     let saldo_sebelum = aset.stok;
     let saldo_setelah = saldo_sebelum - payload.jumlah;
-    let jumlah_diambil = -payload.jumlah; // Jumlah di histori dicatat sebagai negatif
+    let jumlah_diambil = -payload.jumlah;
 
-    // Masukkan ke histori
+    // Tentukan timestamp: gunakan dari payload, atau waktu sekarang jika tidak ada
+    let trx_timestamp = payload.tanggal_transaksi.unwrap_or_else(OffsetDateTime::now_utc);
+
+    // Masukkan ke histori dengan timestamp yang sudah ditentukan
     sqlx::query!(
-        "INSERT INTO histori_stok (aset_id, tipe_transaksi, jumlah, saldo_sebelum, saldo_setelah, user_aksi_id, catatan) VALUES ($1, 'Pengambilan', $2, $3, $4, $5, $6)",
-        id, jumlah_diambil, saldo_sebelum, saldo_setelah, user_id, payload.catatan
+        "INSERT INTO histori_stok (aset_id, tipe_transaksi, jumlah, saldo_sebelum, saldo_setelah, user_aksi_id, catatan, tanggal_transaksi) VALUES ($1, 'Pengambilan', $2, $3, $4, $5, $6, $7)",
+        id, jumlah_diambil, saldo_sebelum, saldo_setelah, user_id, payload.catatan, trx_timestamp
     ).execute(&mut *tx).await?;
 
-    // Update stok di tabel utama
+    // ... (sisa fungsi tidak berubah) ...
     let updated_aset = sqlx::query_as!(
         AsetHabisPakai,
         "UPDATE aset_habis_pakai SET stok = $1, updated_at = now() WHERE id = $2 RETURNING *",
