@@ -1,5 +1,5 @@
 use super::{
-    model::{AsetHabisPakai, AsetHabisPakaiPayload,StokTransaksiPayload},
+    model::{AsetHabisPakai, AsetHabisPakaiPayload,StokTransaksiPayload,StokOpnamePayload,HistoriStokDetail},
     repo, // kita akan panggil repo::...
 };
 use crate::modules::auth::middleware::TokenClaims; 
@@ -53,5 +53,24 @@ pub async fn ambil_stok_handler(
 ) -> Result<Json<AsetHabisPakai>, AppError> {
     let user_id = claims.sub;
     let updated_item = repo::ambil_stok_repo(&pool, id, payload, user_id).await?;
+    Ok(Json(updated_item))
+}
+
+pub async fn get_histori_stok_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<HistoriStokDetail>>, AppError> {
+    let list = repo::get_histori_stok_repo(&pool, id).await?;
+    Ok(Json(list))
+}
+
+pub async fn stok_opname_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+    Extension(claims): Extension<TokenClaims>,
+    Json(payload): Json<StokOpnamePayload>,
+) -> Result<Json<AsetHabisPakai>, AppError> {
+    let user_id = claims.sub;
+    let updated_item = repo::stok_opname_repo(&pool, id, payload, user_id).await?;
     Ok(Json(updated_item))
 }

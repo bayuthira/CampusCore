@@ -1,4 +1,5 @@
 // src/models/ruangan_model.rs
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use time::OffsetDateTime;
@@ -10,6 +11,8 @@ pub struct Ruangan {
     pub kode_ruangan: String,
     pub nama_ruangan: String,
     pub kapasitas: i32,
+    pub panjang: Decimal,
+    pub lebar: Decimal,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
 }
@@ -19,4 +22,6 @@ pub struct RuanganPayload {
     pub kode_ruangan: String,
     pub nama_ruangan: String,
     pub kapasitas: i32,
+    pub panjang: Decimal, // <-- Tambahkan ini
+    pub lebar: Decimal,   // <-- Tambahkan ini
 }

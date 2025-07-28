@@ -32,3 +32,34 @@ pub struct StokTransaksiPayload {
     #[serde(rename = "tanggal_dan_jam", with = "time::serde::rfc3339::option")]
     pub tanggal_transaksi: Option<OffsetDateTime>, // Opsional
 }
+
+#[derive(Debug, Serialize, sqlx::Type)]
+#[sqlx(type_name = "TipeTransaksiStok")]
+pub enum TipeTransaksiStok {
+    Pembelian,
+    Pengambilan,
+     #[sqlx(rename = "Stok Opname")]
+    StokOpname,
+}
+
+// Struct untuk menampilkan detail histori stok
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct HistoriStokDetail {
+    pub id: Uuid,
+    pub tipe_transaksi: TipeTransaksiStok,
+    pub jumlah: i32,
+    pub saldo_sebelum: i32,
+    pub saldo_setelah: i32,
+    pub catatan: Option<String>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub tanggal_transaksi: OffsetDateTime,
+    pub user_aksi_id: Uuid,
+    pub nama_user_aksi: String, // Dari join ke tabel users
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StokOpnamePayload {
+    /// Jumlah stok fisik yang sebenarnya ada saat ini.
+    pub stok_fisik: i32,
+    pub catatan: Option<String>,
+}

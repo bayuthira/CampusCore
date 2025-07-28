@@ -1,7 +1,8 @@
-use super::model::{AsetHabisPakai, AsetHabisPakaiPayload,StokTransaksiPayload};
+use super::model::{AsetHabisPakai, AsetHabisPakaiPayload,StokTransaksiPayload,HistoriStokDetail,StokOpnamePayload};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
 use time::OffsetDateTime; 
+
 
     pub async fn create_repo(pool: &DbPool, payload: AsetHabisPakaiPayload) -> Result<AsetHabisPakai, AppError> {
         let item = sqlx::query_as!(
@@ -90,6 +91,63 @@ pub async fn ambil_stok_repo(pool: &DbPool, id: Uuid, payload: StokTransaksiPayl
     ).execute(&mut *tx).await?;
 
     // ... (sisa fungsi tidak berubah) ...
+    let updated_aset = sqlx::query_as!(
+        AsetHabisPakai,
+        "UPDATE aset_habis_pakai SET stok = $1, updated_at = now() WHERE id = $2 RETURNING *",
+        saldo_setelah, id
+    ).fetch_one(&mut *tx).await?;
+
+    tx.commit().await?;
+    Ok(updated_aset)
+}
+
+pub async fn get_histori_stok_repo(
+    pool: &DbPool,
+    aset_id: Uuid,
+) -> Result<Vec<HistoriStokDetail>, AppError> {
+    let histori = sqlx::query_as!(
+        HistoriStokDetail,
+        r#"
+        SELECT
+            h.id,
+            h.tipe_transaksi as "tipe_transaksi: _",
+            h.jumlah,
+            h.saldo_sebelum,
+            h.saldo_setelah,
+            h.catatan,
+            h.tanggal_transaksi,
+            h.user_aksi_id,
+            u.full_name as "nama_user_aksi!"
+        FROM histori_stok h
+        JOIN users u ON h.user_aksi_id = u.id
+        WHERE h.aset_id = $1
+        ORDER BY h.tanggal_transaksi DESC
+        "#,
+        aset_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(histori)
+}
+
+pub async fn stok_opname_repo(pool: &DbPool, id: Uuid, payload: StokOpnamePayload, user_id: Uuid) -> Result<AsetHabisPakai, AppError> {
+    let mut tx = pool.begin().await?;
+
+    let aset = sqlx::query_as!(AsetHabisPakai, "SELECT * FROM aset_habis_pakai WHERE id = $1 FOR UPDATE", id)
+        .fetch_one(&mut *tx).await?;
+
+    let saldo_sebelum = aset.stok;
+    let saldo_setelah = payload.stok_fisik; // Stok baru adalah jumlah fisik
+    let jumlah_penyesuaian = saldo_setelah - saldo_sebelum; // Bisa positif atau negatif
+
+    // Masukkan ke histori dengan tipe 'StokOpname'
+    sqlx::query!(
+        "INSERT INTO histori_stok (aset_id, tipe_transaksi, jumlah, saldo_sebelum, saldo_setelah, user_aksi_id, catatan) VALUES ($1, 'Stok Opname', $2, $3, $4, $5, $6)",
+        id, jumlah_penyesuaian, saldo_sebelum, saldo_setelah, user_id, payload.catatan
+    ).execute(&mut *tx).await?;
+
+    // Update stok di tabel utama
     let updated_aset = sqlx::query_as!(
         AsetHabisPakai,
         "UPDATE aset_habis_pakai SET stok = $1, updated_at = now() WHERE id = $2 RETURNING *",
