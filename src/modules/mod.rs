@@ -12,3 +12,4 @@ pub mod tahun_akademik;
 pub mod kurikulum;
 pub mod krs;
 pub mod aset;
+pub mod lookup; 

@@ -6,11 +6,15 @@ use uuid::Uuid;
 
 // ENUM baru untuk kondisi aset
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
-#[sqlx(type_name = "KondisiAset", rename_all = "PascalCase")]
+#[sqlx(type_name = "KondisiAset")] // Atribut sqlx tidak berubah
 pub enum KondisiAset {
     Baik,
+    // Beri tahu serde nama string yang tepat untuk varian ini
+    #[serde(rename = "Rusak Ringan")]
     RusakRingan,
+    #[serde(rename = "Rusak Berat")]
     RusakBerat,
+    #[serde(rename = "Dalam Perbaikan")]
     DalamPerbaikan,
     Dihapuskan,
 }

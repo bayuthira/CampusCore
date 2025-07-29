@@ -2,8 +2,8 @@ use crate::{db::DbPool, errors::AppError, modules::aset::ruangan_model::{Ruangan
 use uuid::Uuid;
 
 pub async fn create_ruangan_repo(pool: &DbPool, payload: RuanganPayload) -> Result<Ruangan, AppError> {
-    let ruangan = sqlx::query_as!(Ruangan, "INSERT INTO ruangan (kode_ruangan, nama_ruangan, kapasitas) VALUES ($1, $2, $3) RETURNING *",
-        payload.kode_ruangan, payload.nama_ruangan, payload.kapasitas
+    let ruangan = sqlx::query_as!(Ruangan, "INSERT INTO ruangan (kode_ruangan, nama_ruangan, kapasitas, panjang, lebar) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+        payload.kode_ruangan, payload.nama_ruangan, payload.kapasitas, payload.panjang, payload.lebar
     ).fetch_one(pool).await?;
     Ok(ruangan)
 }
@@ -19,8 +19,8 @@ pub async fn get_ruangan_by_id_repo(pool: &DbPool, id: Uuid) -> Result<Ruangan, 
 }
 
 pub async fn update_ruangan_repo(pool: &DbPool, id: Uuid, payload: RuanganPayload) -> Result<Ruangan, AppError> {
-    let ruangan = sqlx::query_as!(Ruangan, "UPDATE ruangan SET kode_ruangan = $1, nama_ruangan = $2, kapasitas = $3, updated_at = now() WHERE id = $4 RETURNING *",
-        payload.kode_ruangan, payload.nama_ruangan, payload.kapasitas, id
+    let ruangan = sqlx::query_as!(Ruangan, "UPDATE ruangan SET kode_ruangan = $1, nama_ruangan = $2, kapasitas = $3, panjang = $4, lebar = $5, updated_at = now() WHERE id = $6 RETURNING *",
+        payload.kode_ruangan, payload.nama_ruangan, payload.kapasitas, payload.panjang, payload.lebar, id
     ).fetch_one(pool).await?;
     Ok(ruangan)
 }
