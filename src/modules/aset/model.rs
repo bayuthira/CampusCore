@@ -1,6 +1,6 @@
 // src/models/aset_model.rs
 use serde::{Deserialize, Serialize};
-use sqlx::{Type,FromRow};
+use sqlx::{Type};
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
@@ -76,18 +76,19 @@ pub enum AsetHistoriStatus {
 }
 
 // Struct untuk menampilkan detail histori
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize)]
 pub struct HistoriAsetDetail {
     pub id: Uuid,
     pub status: AsetHistoriStatus,
-    pub catatan: Option<String>,
+    pub catatan: String,
+    #[serde(with = "time::serde::rfc3339")]
     pub tanggal_kejadian: OffsetDateTime,
     // Informasi user yang melakukan aksi
     pub user_aksi_id: Uuid,
     pub nama_user_aksi: String,
     // Informasi ruangan (opsional)
-    pub dari_ruangan: Option<String>,
-    pub ke_ruangan: Option<String>,
+    pub dari_ruangan: String,
+    pub ke_ruangan: String,
 }
 
 #[derive(Debug, Deserialize)]
