@@ -1,5 +1,5 @@
 use super::{
-    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload},
+    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload},
     repo as aset_repo,
     histori_repo as histori_aset_repo,
 };
@@ -78,5 +78,17 @@ pub async fn pindahkan_aset_handler(
     let user_aksi_id = claims.sub; // ID user yang melakukan aksi
     let aset_terbaru =
         histori_aset_repo::pindahkan_aset_repo(&pool, aset_id, user_aksi_id, payload).await?;
+    Ok(Json(aset_terbaru))
+}
+
+pub async fn update_kondisi_aset_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Path(aset_id): Path<Uuid>,
+    Json(payload): Json<UpdateKondisiPayload>,
+) -> Result<Json<AsetDetail>, AppError> {
+    let user_aksi_id = claims.sub;
+    let aset_terbaru =
+        histori_aset_repo::update_kondisi_aset_repo(&pool, aset_id, user_aksi_id, payload).await?;
     Ok(Json(aset_terbaru))
 }

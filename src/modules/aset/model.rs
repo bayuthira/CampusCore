@@ -96,3 +96,9 @@ pub struct PindahkanAsetPayload {
     pub ke_ruangan_id: Uuid,
     pub catatan: Option<String>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateKondisiPayload {
+    pub kondisi: KondisiAset,
+    pub catatan: Option<String>,
+}

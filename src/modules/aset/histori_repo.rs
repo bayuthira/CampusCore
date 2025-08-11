@@ -1,6 +1,6 @@
 // src/repositories/histori_aset_repo.rs
 use super::{
-    model::{HistoriAsetDetail,PindahkanAsetPayload,AsetDetail,AsetHistoriStatus},
+    model::{HistoriAsetDetail,PindahkanAsetPayload,AsetDetail,AsetHistoriStatus,UpdateKondisiPayload,KondisiAset},
 };
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
@@ -107,4 +107,63 @@ pub async fn get_histori_by_aset_id_repo(
         .collect();
 
     Ok(histori_list)
+}
+
+// src/modules/aset/histori_repo.rs
+
+pub async fn update_kondisi_aset_repo(
+    pool: &DbPool,
+    aset_id: Uuid,
+    user_aksi_id: Uuid,
+    payload: UpdateKondisiPayload,
+) -> Result<AsetDetail, AppError> {
+    let mut tx = pool.begin().await?;
+
+    // Tentukan string status histori secara manual
+    let histori_status_str = match payload.kondisi {
+        KondisiAset::DalamPerbaikan => "Dalam Perbaikan",
+        KondisiAset::Baik => "Perbaikan Selesai",
+        KondisiAset::Dihapuskan => "Dihapuskan",
+        // Fallback untuk kondisi lain jika diperlukan
+        _ => "Ditempatkan",
+    };
+
+    // Tentukan string kondisi aset secara manual
+    let kondisi_str = match payload.kondisi {
+        KondisiAset::Baik => "Baik",
+        KondisiAset::RusakRingan => "Rusak Ringan",
+        KondisiAset::RusakBerat => "Rusak Berat",
+        KondisiAset::DalamPerbaikan => "Dalam Perbaikan",
+        KondisiAset::Dihapuskan => "Dihapuskan",
+    };
+
+    // 1. Buat catatan histori baru menggunakan string
+    sqlx::query(
+        r#"
+        INSERT INTO histori_aset (aset_id, user_aksi_id, status, catatan)
+        VALUES ($1, $2, $3::"AsetHistoriStatus", $4)
+        "#,
+    )
+    .bind(aset_id)
+    .bind(user_aksi_id)
+    .bind(histori_status_str) // <-- Gunakan string
+    .bind(payload.catatan)
+    .execute(&mut *tx)
+    .await?;
+
+    // 2. Update kondisi di tabel aset menggunakan string
+    sqlx::query(
+        "UPDATE aset SET kondisi = $1::\"KondisiAset\", updated_at = now() WHERE id = $2",
+    )
+    .bind(kondisi_str) // <-- Gunakan string
+    .bind(aset_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // 3. Commit transaksi
+    tx.commit().await?;
+
+    // Ambil dan kembalikan detail aset terbaru
+    let aset_terbaru = crate::modules::aset::repo::get_aset_by_id_repo(pool, aset_id).await?;
+    Ok(aset_terbaru)
 }
