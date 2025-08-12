@@ -63,16 +63,32 @@ pub struct AsetPayload {
 
 
 // Enum untuk status histori
-#[derive(Debug, Serialize, Type, Clone, PartialEq)]
-#[sqlx(type_name = "AsetHistoriStatus", rename_all = "PascalCase")]
+#[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
+#[sqlx(type_name = "AsetHistoriStatus")]
 pub enum AsetHistoriStatus {
     Ditempatkan,
     Dipindahkan,
     Dipinjam,
     Dikembalikan,
+    #[serde(rename = "Dalam Perbaikan")] // <-- Tambahkan rename untuk serde
     DalamPerbaikan,
+    #[serde(rename = "Perbaikan Selesai")]
     PerbaikanSelesai,
     Dihapuskan,
+}
+
+impl AsetHistoriStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AsetHistoriStatus::Ditempatkan => "Ditempatkan",
+            AsetHistoriStatus::Dipindahkan => "Dipindahkan",
+            AsetHistoriStatus::Dipinjam => "Dipinjam",
+            AsetHistoriStatus::Dikembalikan => "Dikembalikan",
+            AsetHistoriStatus::DalamPerbaikan => "Dalam Perbaikan",
+            AsetHistoriStatus::PerbaikanSelesai => "Perbaikan Selesai",
+            AsetHistoriStatus::Dihapuskan => "Dihapuskan",
+        }
+    }
 }
 
 // Struct untuk menampilkan detail histori
@@ -100,5 +116,24 @@ pub struct PindahkanAsetPayload {
 #[derive(Debug, Deserialize)]
 pub struct UpdateKondisiPayload {
     pub kondisi: KondisiAset,
+    pub catatan: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateHistoriPayload {
+    pub status: AsetHistoriStatus,
+    pub catatan: Option<String>,
+    pub ke_ruangan_id: Option<Uuid>, // Opsional, hanya diisi saat memindahkan
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PinjamAsetPayload {
+    pub user_peminjam_id: Uuid,
+    pub estimasi_tanggal_kembali: OffsetDateTime,
+    pub catatan: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct KembalikanAsetPayload {
     pub catatan: Option<String>,
 }

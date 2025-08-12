@@ -1,8 +1,9 @@
 use super::{
-    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload},
+    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload,CreateHistoriPayload,PinjamAsetPayload, KembalikanAsetPayload},
     repo as aset_repo,
     histori_repo as histori_aset_repo,
 };
+use crate::modules::general::model::SuccessResponse;
 
 use crate::{
     db::DbPool,
@@ -91,4 +92,30 @@ pub async fn update_kondisi_aset_handler(
     let aset_terbaru =
         histori_aset_repo::update_kondisi_aset_repo(&pool, aset_id, user_aksi_id, payload).await?;
     Ok(Json(aset_terbaru))
+}
+
+
+pub async fn create_histori_aset_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Path(aset_id): Path<Uuid>,
+    Json(payload): Json<CreateHistoriPayload>,
+) -> Result<Json<AsetDetail>, AppError> {
+    let user_aksi_id = claims.sub;
+    let aset_terbaru =
+        histori_aset_repo::create_histori_repo(&pool, aset_id, user_aksi_id, payload).await?;
+    Ok(Json(aset_terbaru))
+}
+
+
+pub async fn pinjam_aset_handler(State(pool): State<DbPool>, Extension(claims): Extension<TokenClaims>, Path(aset_id): Path<Uuid>, Json(payload): Json<PinjamAsetPayload>) -> Result<Json<SuccessResponse>, AppError> {
+    let user_approve_id = claims.sub;
+    histori_aset_repo::pinjam_aset_repo(&pool, aset_id, user_approve_id, payload).await?;
+    Ok(Json(SuccessResponse { message: "Aset berhasil dicatat sebagai dipinjam.".to_string() }))
+}
+
+pub async fn kembalikan_aset_handler(State(pool): State<DbPool>, Extension(claims): Extension<TokenClaims>, Path(aset_id): Path<Uuid>, Json(payload): Json<KembalikanAsetPayload>) -> Result<Json<SuccessResponse>, AppError> {
+    let user_approve_id = claims.sub;
+    histori_aset_repo::kembalikan_aset_repo(&pool, aset_id, user_approve_id, payload).await?;
+    Ok(Json(SuccessResponse { message: "Aset berhasil dicatat sebagai dikembalikan.".to_string() }))
 }

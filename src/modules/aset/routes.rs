@@ -3,6 +3,7 @@ use super::{
     habis_pakai::handler as habis_pakai_handler, handler as aset_handler, jenis_aset_handler,
     ruangan_handler,
 };
+
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
     Router, middleware,
@@ -47,7 +48,8 @@ pub fn aset_router() -> Router<DbPool> {
         )
         .route(
             "/aset/item/{id}/histori",
-            get(aset_handler::get_aset_histori_handler),
+            get(aset_handler::get_aset_histori_handler)
+                .post(aset_handler::create_histori_aset_handler),
         )
         .route(
             "/aset/item/{id}/pindahkan",
@@ -81,7 +83,15 @@ pub fn aset_router() -> Router<DbPool> {
         )
         .route(
             "/aset/item/{id}/update-kondisi",
-            post(aset_handler::update_kondisi_aset_handler)
+            post(aset_handler::update_kondisi_aset_handler),
+        )
+        .route(
+            "/aset/item/{id}/pinjam",
+            post(aset_handler::pinjam_aset_handler),
+        )
+        .route(
+            "/aset/item/{id}/kembalikan",
+            post(aset_handler::kembalikan_aset_handler),
         )
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![

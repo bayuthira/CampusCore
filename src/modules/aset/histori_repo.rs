@@ -1,6 +1,6 @@
 // src/repositories/histori_aset_repo.rs
 use super::{
-    model::{HistoriAsetDetail,PindahkanAsetPayload,AsetDetail,AsetHistoriStatus,UpdateKondisiPayload,KondisiAset},
+    model::{HistoriAsetDetail,PindahkanAsetPayload,AsetDetail,AsetHistoriStatus,UpdateKondisiPayload,KondisiAset,CreateHistoriPayload,PinjamAsetPayload, KembalikanAsetPayload},
 };
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
@@ -166,4 +166,130 @@ pub async fn update_kondisi_aset_repo(
     // Ambil dan kembalikan detail aset terbaru
     let aset_terbaru = crate::modules::aset::repo::get_aset_by_id_repo(pool, aset_id).await?;
     Ok(aset_terbaru)
+}
+
+pub async fn create_histori_repo(
+    pool: &DbPool,
+    aset_id: Uuid,
+    user_aksi_id: Uuid,
+    payload: CreateHistoriPayload,
+) -> Result<AsetDetail, AppError> {
+    let mut tx = pool.begin().await?;
+
+    let aset_saat_ini = sqlx::query!(
+        "SELECT kondisi::TEXT as kondisi, ruangan_id FROM aset WHERE id = $1 FOR UPDATE",
+        aset_id
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    let kondisi_saat_ini_str = aset_saat_ini.kondisi.unwrap_or_default();
+
+    let mut dari_ruangan_id = aset_saat_ini.ruangan_id;
+    let mut ke_ruangan_id = aset_saat_ini.ruangan_id;
+    let mut kondisi_aset_baru: Option<KondisiAset> = None;
+
+    // --- PERBAIKAN UTAMA DI SINI ---
+    match payload.status {
+        // Gabungkan logika untuk status yang sama-sama butuh `ke_ruangan_id`
+        AsetHistoriStatus::Ditempatkan | AsetHistoriStatus::Dipindahkan => {
+            ke_ruangan_id = payload.ke_ruangan_id;
+            if ke_ruangan_id.is_none() {
+                return Err(AppError::Forbidden("Ruangan tujuan harus diisi untuk status 'Ditempatkan' atau 'Dipindahkan'.".to_string()));
+            }
+        }
+        AsetHistoriStatus::DalamPerbaikan => {
+            dari_ruangan_id = None;
+            ke_ruangan_id = None;
+            kondisi_aset_baru = Some(KondisiAset::DalamPerbaikan);
+        }
+        AsetHistoriStatus::PerbaikanSelesai => {
+            if kondisi_saat_ini_str != "Dalam Perbaikan" {
+                return Err(AppError::Forbidden("Aset tidak sedang dalam perbaikan.".to_string()));
+            }
+            dari_ruangan_id = None;
+            ke_ruangan_id = None;
+            kondisi_aset_baru = Some(KondisiAset::Baik);
+        }
+        AsetHistoriStatus::Dihapuskan => {
+            dari_ruangan_id = None;
+            ke_ruangan_id = None;
+            kondisi_aset_baru = Some(KondisiAset::Dihapuskan);
+        }
+        _ => { // Untuk status lain seperti Dipinjam, Dikembalikan
+            dari_ruangan_id = None;
+            ke_ruangan_id = None;
+        }
+    }
+
+    // ... (sisa fungsi untuk update dan insert histori tidak berubah) ...
+    
+    // Update tabel aset
+    if let Some(kondisi) = kondisi_aset_baru {
+        sqlx::query("UPDATE aset SET kondisi = $1::\"KondisiAset\", ruangan_id = $2, updated_at = now() WHERE id = $3")
+            .bind(kondisi.as_str()).bind(ke_ruangan_id).bind(aset_id)
+            .execute(&mut *tx).await?;
+    } else {
+        sqlx::query("UPDATE aset SET ruangan_id = $1, updated_at = now() WHERE id = $2")
+            .bind(ke_ruangan_id).bind(aset_id)
+            .execute(&mut *tx).await?;
+    }
+
+    // Selalu buat catatan histori
+    sqlx::query(
+        r#"
+        INSERT INTO histori_aset (aset_id, dari_ruangan_id, ke_ruangan_id, user_aksi_id, status, catatan)
+        VALUES ($1, $2, $3, $4, $5::"AsetHistoriStatus", $6)
+        "#,
+    )
+    .bind(aset_id).bind(dari_ruangan_id).bind(ke_ruangan_id)
+    .bind(user_aksi_id).bind(payload.status.as_str()).bind(payload.catatan)
+    .execute(&mut *tx).await?;
+    
+    tx.commit().await?;
+
+    let aset_terbaru = crate::modules::aset::repo::get_aset_by_id_repo(pool, aset_id).await?;
+    Ok(aset_terbaru)
+}
+
+
+pub async fn pinjam_aset_repo(pool: &DbPool, aset_id: Uuid, user_approve_id: Uuid, payload: PinjamAsetPayload) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+    // 1. Buat catatan peminjaman baru
+    sqlx::query!(
+        "INSERT INTO peminjaman_aset (aset_id, user_peminjam_id, estimasi_tanggal_kembali, catatan_pinjam, user_approve_pinjam_id) VALUES ($1, $2, $3, $4, $5)",
+        aset_id, payload.user_peminjam_id, payload.estimasi_tanggal_kembali, payload.catatan, user_approve_id
+    ).execute(&mut *tx).await?;
+
+    // 2. Buat catatan histori
+    sqlx::query!(
+        "INSERT INTO histori_aset (aset_id, user_aksi_id, status, catatan) VALUES ($1, $2, 'Dipinjam', $3)",
+        aset_id, user_approve_id, payload.catatan
+    ).execute(&mut *tx).await?;
+
+    // 3. Update status aset menjadi 'Dalam Perbaikan' sebagai tanda sedang tidak tersedia
+    sqlx::query!("UPDATE aset SET kondisi = 'Dalam Perbaikan' WHERE id = $1", aset_id).execute(&mut *tx).await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn kembalikan_aset_repo(pool: &DbPool, aset_id: Uuid, user_approve_id: Uuid, payload: KembalikanAsetPayload) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+    // 1. Update catatan peminjaman yang aktif
+    sqlx::query!(
+        "UPDATE peminjaman_aset SET status = 'Dikembalikan', tanggal_kembali_aktual = now(), catatan_kembali = $1, user_approve_kembali_id = $2 WHERE aset_id = $3 AND status = 'Dipinjam'",
+        payload.catatan, user_approve_id, aset_id
+    ).execute(&mut *tx).await?;
+
+    // 2. Buat catatan histori
+    sqlx::query!(
+        "INSERT INTO histori_aset (aset_id, user_aksi_id, status, catatan) VALUES ($1, $2, 'Dikembalikan', $3)",
+        aset_id, user_approve_id, payload.catatan
+    ).execute(&mut *tx).await?;
+
+    // 3. Update status aset kembali menjadi 'Baik'
+    sqlx::query!("UPDATE aset SET kondisi = 'Baik' WHERE id = $1", aset_id).execute(&mut *tx).await?;
+    
+    tx.commit().await?;
+    Ok(())
 }
