@@ -11,8 +11,13 @@ use axum::{
 };
 
 pub fn aset_router() -> Router<DbPool> {
+    let peminjaman_routes = Router::new().route(
+        "/peminjaman/{id}/kembalikan", // <-- URL BARU
+        post(aset_handler::kembalikan_aset_handler),
+    );
     // Gabungkan semua rute untuk modul aset di sini
-    Router::new()
+    let admin_aset_routes = Router::new()
+        .merge(peminjaman_routes)
         // Rute untuk Jenis Aset
         .route(
             "/aset/jenis",
@@ -89,13 +94,10 @@ pub fn aset_router() -> Router<DbPool> {
             "/aset/item/{id}/pinjam",
             post(aset_handler::pinjam_aset_handler),
         )
-        .route(
-            "/aset/item/{id}/kembalikan",
-            post(aset_handler::kembalikan_aset_handler),
-        )
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),
             "STAF_BAUM".to_string(),
-        ])))
+        ])));
+    Router::new().merge(admin_aset_routes)
 }

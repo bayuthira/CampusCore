@@ -129,6 +129,7 @@ pub struct CreateHistoriPayload {
 #[derive(Debug, Deserialize)]
 pub struct PinjamAsetPayload {
     pub user_peminjam_id: Uuid,
+    #[serde(with = "time::serde::rfc3339")] 
     pub estimasi_tanggal_kembali: OffsetDateTime,
     pub catatan: Option<String>,
 }

@@ -114,8 +114,15 @@ pub async fn pinjam_aset_handler(State(pool): State<DbPool>, Extension(claims): 
     Ok(Json(SuccessResponse { message: "Aset berhasil dicatat sebagai dipinjam.".to_string() }))
 }
 
-pub async fn kembalikan_aset_handler(State(pool): State<DbPool>, Extension(claims): Extension<TokenClaims>, Path(aset_id): Path<Uuid>, Json(payload): Json<KembalikanAsetPayload>) -> Result<Json<SuccessResponse>, AppError> {
+pub async fn kembalikan_aset_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Path(peminjaman_id): Path<Uuid>, // <-- Diubah dari aset_id ke peminjaman_id
+    Json(payload): Json<KembalikanAsetPayload>,
+) -> Result<Json<SuccessResponse>, AppError> {
     let user_approve_id = claims.sub;
-    histori_aset_repo::kembalikan_aset_repo(&pool, aset_id, user_approve_id, payload).await?;
-    Ok(Json(SuccessResponse { message: "Aset berhasil dicatat sebagai dikembalikan.".to_string() }))
+    histori_aset_repo::kembalikan_aset_repo(&pool, peminjaman_id, user_approve_id, payload).await?;
+    Ok(Json(SuccessResponse {
+        message: "Aset berhasil dicatat sebagai dikembalikan.".to_string(),
+    }))
 }

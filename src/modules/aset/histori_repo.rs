@@ -252,44 +252,95 @@ pub async fn create_histori_repo(
 }
 
 
-pub async fn pinjam_aset_repo(pool: &DbPool, aset_id: Uuid, user_approve_id: Uuid, payload: PinjamAsetPayload) -> Result<(), AppError> {
+pub async fn pinjam_aset_repo(
+    pool: &DbPool,
+    aset_id: Uuid,
+    user_approve_id: Uuid,
+    payload: PinjamAsetPayload,
+) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
-    // 1. Buat catatan peminjaman baru
+
+    // 1. Cek kondisi aset: Hanya bisa dipinjam jika 'Baik'
+    let aset = sqlx::query!("SELECT kondisi::TEXT as kondisi FROM aset WHERE id = $1 FOR UPDATE", aset_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
+    if aset.kondisi != Some("Baik".to_string()) {
+        return Err(AppError::Forbidden(format!(
+            "Aset tidak dalam kondisi 'Baik' dan tidak dapat dipinjam (Kondisi saat ini: {}).",
+            aset.kondisi.unwrap_or_default()
+        )));
+    }
+
+    // 2. Cek apakah aset sudah sedang dipinjam
+    let peminjaman_aktif = sqlx::query!(
+        "SELECT id FROM peminjaman_aset WHERE aset_id = $1 AND status = 'Dipinjam'",
+        aset_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if peminjaman_aktif.is_some() {
+        return Err(AppError::Forbidden(
+            "Aset ini sudah sedang dalam status dipinjam.".to_string(),
+        ));
+    }
+
+    // 3. Buat catatan peminjaman baru (tidak berubah)
     sqlx::query!(
         "INSERT INTO peminjaman_aset (aset_id, user_peminjam_id, estimasi_tanggal_kembali, catatan_pinjam, user_approve_pinjam_id) VALUES ($1, $2, $3, $4, $5)",
         aset_id, payload.user_peminjam_id, payload.estimasi_tanggal_kembali, payload.catatan, user_approve_id
     ).execute(&mut *tx).await?;
 
-    // 2. Buat catatan histori
+    // 4. Buat catatan histori (tidak berubah)
     sqlx::query!(
         "INSERT INTO histori_aset (aset_id, user_aksi_id, status, catatan) VALUES ($1, $2, 'Dipinjam', $3)",
         aset_id, user_approve_id, payload.catatan
     ).execute(&mut *tx).await?;
 
-    // 3. Update status aset menjadi 'Dalam Perbaikan' sebagai tanda sedang tidak tersedia
-    sqlx::query!("UPDATE aset SET kondisi = 'Dalam Perbaikan' WHERE id = $1", aset_id).execute(&mut *tx).await?;
+    // 5. HAPUS logika update kondisi aset menjadi 'Dalam Perbaikan'
+    // Logika ini sudah tidak diperlukan lagi.
 
     tx.commit().await?;
     Ok(())
 }
 
-pub async fn kembalikan_aset_repo(pool: &DbPool, aset_id: Uuid, user_approve_id: Uuid, payload: KembalikanAsetPayload) -> Result<(), AppError> {
-    let mut tx = pool.begin().await?;
-    // 1. Update catatan peminjaman yang aktif
-    sqlx::query!(
-        "UPDATE peminjaman_aset SET status = 'Dikembalikan', tanggal_kembali_aktual = now(), catatan_kembali = $1, user_approve_kembali_id = $2 WHERE aset_id = $3 AND status = 'Dipinjam'",
-        payload.catatan, user_approve_id, aset_id
-    ).execute(&mut *tx).await?;
 
-    // 2. Buat catatan histori
+pub async fn kembalikan_aset_repo(
+    pool: &DbPool,
+    peminjaman_id: Uuid,
+    user_approve_id: Uuid,
+    payload: KembalikanAsetPayload,
+) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+
+    // 1. Ambil aset_id dari data peminjaman yang aktif
+    let peminjaman = sqlx::query!(
+        "SELECT aset_id FROM peminjaman_aset WHERE id = $1 AND status = 'Dipinjam'",
+        peminjaman_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| {
+        AppError::Forbidden("Transaksi peminjaman tidak ditemukan atau sudah dikembalikan.".to_string())
+    })?;
+
+    // 2. Update tabel peminjaman berdasarkan ID peminjaman
+    sqlx::query!(
+        "UPDATE peminjaman_aset SET status = 'Dikembalikan', tanggal_kembali_aktual = now(), catatan_kembali = $1, user_approve_kembali_id = $2 WHERE id = $3",
+        payload.catatan, user_approve_id, peminjaman_id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    // 3. Buat catatan histori
     sqlx::query!(
         "INSERT INTO histori_aset (aset_id, user_aksi_id, status, catatan) VALUES ($1, $2, 'Dikembalikan', $3)",
-        aset_id, user_approve_id, payload.catatan
-    ).execute(&mut *tx).await?;
+        peminjaman.aset_id, user_approve_id, payload.catatan
+    )
+    .execute(&mut *tx)
+    .await?;
 
-    // 3. Update status aset kembali menjadi 'Baik'
-    sqlx::query!("UPDATE aset SET kondisi = 'Baik' WHERE id = $1", aset_id).execute(&mut *tx).await?;
-    
     tx.commit().await?;
     Ok(())
 }
