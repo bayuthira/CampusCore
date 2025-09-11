@@ -55,3 +55,10 @@ pub struct CreateUserPayload {
     pub password: String,
     pub role_ids: Vec<Uuid>, // Admin bisa langsung memberikan satu atau lebih peran
 }
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct UserLookup {
+    pub id: Uuid,
+    pub username: String,
+    pub full_name: String,
+}

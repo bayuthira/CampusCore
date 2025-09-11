@@ -1,13 +1,19 @@
 // src/handlers/lookup_handler.rs
-use crate::{db::DbPool, errors::AppError};
-use axum::{extract::State, Json};
+use crate::{db::DbPool, errors::AppError, modules::user_management::model::UserLookup};
+use axum::{extract::{Query, State}, Json};
 use serde::Deserialize;
 use sqlx::FromRow;
+use super::repo;
 
 // Struct sementara untuk menampung hasil query dari pg_enum
 #[derive(Debug, FromRow, Deserialize)]
 struct EnumLabel {
     enumlabel: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SearchQuery {
+    pub q: String, // Kita gunakan `q` sebagai parameter standar pencarian
 }
 
 /// Handler untuk mengambil semua nilai dari ENUM 'EnrollmentStatus'
@@ -87,4 +93,13 @@ pub async fn get_aset_histori_statuses_handler(
     let list: Vec<String> = enum_values.into_iter().map(|item| item.enumlabel).collect();
 
     Ok(Json(list))
+}
+
+/// Handler untuk mencari user (untuk dropdown, dll)
+pub async fn search_users_handler(
+    State(pool): State<DbPool>,
+    Query(params): Query<SearchQuery>,
+) -> Result<Json<Vec<UserLookup>>, AppError> {
+    let users = repo::search_users_repo(&pool, &params.q).await?;
+    Ok(Json(users))
 }
