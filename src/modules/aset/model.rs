@@ -1,6 +1,6 @@
 // src/models/aset_model.rs
 use serde::{Deserialize, Serialize};
-use sqlx::{Type};
+use sqlx::Type;
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
@@ -47,6 +47,10 @@ pub struct AsetDetail {
     pub kode_ruangan: Option<String>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
+    pub peminjaman_id: Option<Uuid>,
+    pub nama_peminjam: Option<String>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub estimasi_tanggal_kembali: Option<OffsetDateTime>,
 }
 
 // Payload untuk create dan update
@@ -60,7 +64,6 @@ pub struct AsetPayload {
     pub jenis_aset_id: Uuid,
     pub ruangan_id: Option<Uuid>,
 }
-
 
 // Enum untuk status histori
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
@@ -129,7 +132,7 @@ pub struct CreateHistoriPayload {
 #[derive(Debug, Deserialize)]
 pub struct PinjamAsetPayload {
     pub user_peminjam_id: Uuid,
-    #[serde(with = "time::serde::rfc3339")] 
+    #[serde(with = "time::serde::rfc3339")]
     pub estimasi_tanggal_kembali: OffsetDateTime,
     pub catatan: Option<String>,
 }
