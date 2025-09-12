@@ -99,7 +99,7 @@ impl AsetHistoriStatus {
 pub struct HistoriAsetDetail {
     pub id: Uuid,
     pub status: AsetHistoriStatus,
-    pub catatan: String,
+    pub catatan: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub tanggal_kejadian: OffsetDateTime,
     // Informasi user yang melakukan aksi
@@ -108,6 +108,7 @@ pub struct HistoriAsetDetail {
     // Informasi ruangan (opsional)
     pub dari_ruangan: String,
     pub ke_ruangan: String,
+    pub nama_peminjam: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
