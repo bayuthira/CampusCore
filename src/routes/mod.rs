@@ -1,5 +1,6 @@
 use crate::{db::DbPool, modules, modules::auth::middleware::auth_middleware};
 use axum::{Router, middleware, routing::post};
+use tower_http::services::ServeDir;
 
 /// Fungsi utama untuk membuat dan menggabungkan semua router
 pub fn create_router(pool: DbPool) -> Router {
@@ -28,5 +29,6 @@ pub fn create_router(pool: DbPool) -> Router {
 
     Router::<DbPool>::new()
         .nest("/api", public_routes.merge(protected_routes))
+        .nest_service("/uploads", ServeDir::new("uploads"))
         .with_state(pool)
 }

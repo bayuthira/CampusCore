@@ -2,12 +2,13 @@
 use super::{
     habis_pakai::handler as habis_pakai_handler, handler as aset_handler, jenis_aset_handler,
     ruangan_handler,
+    biaya_handler,
 };
 
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
     Router, middleware,
-    routing::{get, post},
+    routing::{get, post,put},
 };
 
 pub fn aset_router() -> Router<DbPool> {
@@ -59,6 +60,15 @@ pub fn aset_router() -> Router<DbPool> {
         .route(
             "/aset/item/{id}/pindahkan",
             post(aset_handler::pindahkan_aset_handler),
+        )
+        .route(
+            "/aset/item/{aset_id}/biaya",
+            get(biaya_handler::get_all_biaya_by_aset_id_handler)
+                .post(biaya_handler::create_biaya_handler),
+        )
+        .route(
+            "/aset/biaya/{id}", // Rute untuk operasi pada satu record biaya
+            put(biaya_handler::update_biaya_handler).delete(biaya_handler::delete_biaya_handler),
         )
         .route(
             "/aset/konsumsi",

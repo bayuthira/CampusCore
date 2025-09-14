@@ -10,3 +10,6 @@ pub mod ruangan_handler;
 pub mod ruangan_model;
 pub mod ruangan_repo;
 pub mod habis_pakai;
+pub mod biaya_model;
+pub mod biaya_repo;
+pub mod biaya_handler;

@@ -1,64 +1,97 @@
-// src/errors.rs
-
 use axum::extract::multipart::MultipartError;
 use axum::{
     Json,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use rust_decimal::Error as DecimalError;
+use serde_json::Error as SerdeJsonError;
 use serde_json::json;
+use std::io::Error as IoError;
+use time::error::Parse as TimeParseError;
+use tracing;
+use uuid::Error as UuidError;
 
-// --- MODIFIKASI 1: Menambahkan varian error baru ---
 #[derive(Debug)]
 pub enum AppError {
     SqlxError(sqlx::Error),
+    #[allow(dead_code)] // Izinkan "dead code" karena hanya dipakai di log
     BcryptError(bcrypt::BcryptError),
+    #[allow(dead_code)] // Izinkan "dead code" karena hanya dipakai di log
     JsonWebTokenError(jsonwebtoken::errors::Error),
     AnyhowError(anyhow::Error),
     Forbidden(String),
     MultipartError(MultipartError),
     DuplicateEntry(String),
+    IoError(IoError),
+    UuidError(UuidError),
+    SerdeJsonError(SerdeJsonError),
+    TimeParseError(TimeParseError),
+    DecimalError(DecimalError),
 }
-
-// --- MODIFIKASI 2: Menambahkan implementasi `From` untuk error baru ---
 
 impl From<sqlx::Error> for AppError {
     fn from(err: sqlx::Error) -> Self {
         AppError::SqlxError(err)
     }
 }
-
-// Implementasi untuk error dari bcrypt
 impl From<bcrypt::BcryptError> for AppError {
     fn from(err: bcrypt::BcryptError) -> Self {
         AppError::BcryptError(err)
     }
 }
-
-// Implementasi untuk error dari jsonwebtoken
 impl From<jsonwebtoken::errors::Error> for AppError {
     fn from(err: jsonwebtoken::errors::Error) -> Self {
         AppError::JsonWebTokenError(err)
     }
 }
-
-// Implementasi untuk error dari anyhow
 impl From<anyhow::Error> for AppError {
     fn from(err: anyhow::Error) -> Self {
         AppError::AnyhowError(err)
     }
 }
-
 impl From<MultipartError> for AppError {
     fn from(err: MultipartError) -> Self {
         AppError::MultipartError(err)
     }
 }
+impl From<DecimalError> for AppError {
+    fn from(err: DecimalError) -> Self {
+        AppError::DecimalError(err)
+    }
+}
+
+// --- TAMBAHKAN DUA IMPLEMENTASI `From` BARU DI SINI ---
+impl From<IoError> for AppError {
+    fn from(err: IoError) -> Self {
+        AppError::IoError(err)
+    }
+}
+
+impl From<UuidError> for AppError {
+    fn from(err: UuidError) -> Self {
+        AppError::UuidError(err)
+    }
+}
+
+impl From<SerdeJsonError> for AppError {
+    fn from(err: SerdeJsonError) -> Self {
+        AppError::SerdeJsonError(err)
+    }
+}
+
+impl From<TimeParseError> for AppError {
+    fn from(err: TimeParseError) -> Self {
+        AppError::TimeParseError(err)
+    }
+}
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let (status, error_message) = match &self {
-            // --- BLOK INI TIDAK SAYA UBAH SAMA SEKALI, KARENA INI SUDAH BEKERJA UNTUK ANDA ---
+        // Log error asli ke konsol server
+        tracing::error!("--> An error occurred: {:#?}", &self);
+
+        let (status, error_message) = match self {
             AppError::SqlxError(err) => {
                 // Ubah error sqlx menjadi string untuk dianalisis
                 let err_string = err.to_string();
@@ -132,36 +165,37 @@ impl IntoResponse for AppError {
                     (StatusCode::INTERNAL_SERVER_ERROR, body)
                 }
             }
-            // --- AKHIR DARI BLOK YANG TIDAK DIUBAH ---
             AppError::DuplicateEntry(message) => (StatusCode::CONFLICT, message.clone()),
-            // --- MODIFIKASI 3: Menambahkan cabang `match` untuk error baru ---
-            AppError::BcryptError(err) => {
-                eprintln!("--> Bcrypt Error: {:?}", err);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Terjadi kesalahan pemrosesan internal.".to_string(),
-                )
-            }
-            AppError::JsonWebTokenError(err) => {
-                eprintln!("--> JWT Error: {:?}", err);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Terjadi kesalahan pada token otentikasi.".to_string(),
-                )
-            }
-            AppError::AnyhowError(err) => {
-                eprintln!("--> Logic Error: {:?}", err);
-                // Untuk "Username atau password salah", kita gunakan 401 Unauthorized
-                (StatusCode::UNAUTHORIZED, err.to_string())
-            }
+            AppError::BcryptError(_) | AppError::JsonWebTokenError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Terjadi kesalahan pemrosesan internal.".to_string(),
+            ),
+            AppError::AnyhowError(err) => (StatusCode::UNAUTHORIZED, err.to_string()),
             AppError::Forbidden(message) => (StatusCode::FORBIDDEN, message.clone()),
-            AppError::MultipartError(err) => {
-                eprintln!("--> Multipart Error: {:?}", err);
-                (
-                    StatusCode::BAD_REQUEST, // 400 Bad Request cocok untuk upload yang salah/gagal
-                    format!("Request upload tidak valid: {}", err),
-                )
-            }
+            AppError::MultipartError(err) => (
+                StatusCode::BAD_REQUEST,
+                format!("Request upload tidak valid: {}", err),
+            ),
+            AppError::IoError(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Terjadi masalah I/O file: {}", err),
+            ),
+            AppError::UuidError(err) => (
+                StatusCode::BAD_REQUEST,
+                format!("Format ID tidak valid: {}", err),
+            ),
+            AppError::SerdeJsonError(err) => (
+                StatusCode::BAD_REQUEST,
+                format!("Format JSON tidak valid: {}", err),
+            ),
+            AppError::TimeParseError(err) => (
+                StatusCode::BAD_REQUEST,
+                format!("Format tanggal tidak valid: {}", err),
+            ),
+            AppError::DecimalError(err) => (
+                StatusCode::BAD_REQUEST,
+                format!("Format angka tidak valid: {}", err),
+            ),
         };
 
         let body = Json(json!({ "error": error_message }));

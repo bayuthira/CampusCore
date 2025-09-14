@@ -190,7 +190,7 @@ pub async fn create_histori_repo(
     let kondisi_saat_ini_str = aset_saat_ini.kondisi.unwrap_or_default();
 
     let mut dari_ruangan_id = aset_saat_ini.ruangan_id;
-    let mut ke_ruangan_id = aset_saat_ini.ruangan_id;
+    let ke_ruangan_id;
     let mut kondisi_aset_baru: Option<KondisiAset> = None;
 
     // --- PERBAIKAN UTAMA DI SINI ---
@@ -228,7 +228,7 @@ pub async fn create_histori_repo(
         _ => {
             // Untuk status lain seperti Dipinjam, Dikembalikan
             dari_ruangan_id = None;
-            ke_ruangan_id = None;
+            ke_ruangan_id = dari_ruangan_id; 
         }
     }
 
