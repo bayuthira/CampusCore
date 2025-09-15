@@ -1683,6 +1683,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "jsonwebtoken",
+ "mime_guess",
  "once_cell",
  "rust_decimal",
  "rust_decimal_macros",
