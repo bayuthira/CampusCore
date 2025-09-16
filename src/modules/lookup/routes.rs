@@ -17,4 +17,5 @@ pub fn lookup_router() -> Router<DbPool> {
             get(handler::get_aset_histori_statuses_handler),
         )
         .route("/lookups/users", get(handler::search_users_handler))
+        .route("/lookups/tipe-biaya", get(handler::get_tipe_biaya_handler))
 }
