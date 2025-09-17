@@ -5,6 +5,7 @@ use crate::{
     errors::AppError,
     modules::aset::biaya_model::{BiayaAset, BiayaAsetPayload,TipeBiaya},
     modules::aset::biaya_repo,
+    utils::file_validator::validate_file,
 };
 use axum::{
     extract::{Path, State, Json,Multipart},
@@ -31,9 +32,6 @@ pub async fn create_biaya_handler(
     let mut bukti_url: Option<String> = None;
 
     while let Some(field) = multipart.next_field().await? {
-        // --- PERBAIKAN DI SINI ---
-        // Ambil nama field dan langsung kloning menjadi String.
-        // Ini akan menyelesaikan pinjaman (borrow) pada `field`.
         let field_name = match field.name() {
             Some(name) => name.to_string(),
             None => continue, // Lewati field tanpa nama
@@ -49,8 +47,10 @@ pub async fn create_biaya_handler(
                 tokio::fs::create_dir_all("uploads/bukti_biaya").await?;
                 // Sekarang `.bytes()` bisa mengambil kepemilikan `field` tanpa masalah.
                 let data = field.bytes().await?;
-                tokio::fs::write(&file_path_str, data).await?;
-                
+                // Validasi file
+                validate_file(&data, &["image/jpeg", "image/png", "application/pdf"])?;
+                // Jika validasi lolos, lanjutkan menyimpan file
+                tokio::fs::write(&file_path_str, data).await?;                
                 bukti_url = Some(file_path_str);
             }
             // Untuk field teks, `.text()` juga mengambil kepemilikan `field`.
@@ -127,6 +127,7 @@ pub async fn update_bukti_handler(
             
             tokio::fs::create_dir_all("uploads/bukti_biaya").await?;
             let data = field.bytes().await?;
+            validate_file(&data, &["image/jpeg", "image/png", "application/pdf"])?;
             tokio::fs::write(&file_path_str, data).await?;
             
             new_bukti_url = Some(file_path_str);

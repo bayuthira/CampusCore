@@ -4,6 +4,7 @@ mod db;
 mod errors;
 mod modules;
 mod routes;
+mod utils;
 
 use crate::config::CONFIG;
 use crate::db::create_pool;
