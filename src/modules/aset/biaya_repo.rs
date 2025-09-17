@@ -142,3 +142,62 @@ pub async fn delete_biaya_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> 
 
     Ok(())
 }
+
+
+pub async fn update_bukti_repo(
+    pool: &DbPool,
+    id: Uuid,
+    new_bukti_url: String,
+) -> Result<BiayaAset, AppError> {
+    // 1. Ambil path file lama sebelum diupdate
+    let old_record = sqlx::query!("SELECT bukti_url FROM biaya_aset WHERE id = $1", id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)?;
+
+    // 2. Update database dengan path file yang baru
+    sqlx::query!(
+        "UPDATE biaya_aset SET bukti_url = $1, updated_at = now() WHERE id = $2",
+        new_bukti_url,
+        id
+    )
+    .execute(pool)
+    .await?;
+
+    // 3. Hapus file lama dari server jika ada
+    if let Some(old_path) = old_record.bukti_url {
+        if !old_path.is_empty() {
+            if let Err(e) = tokio::fs::remove_file(&old_path).await {
+                tracing::error!("Gagal menghapus file bukti lama '{}': {}", old_path, e);
+            }
+        }
+    }
+
+    // Kembalikan data terbaru
+    let updated_biaya = get_biaya_by_id_repo(pool, id).await?;
+    Ok(updated_biaya)
+}
+
+pub async fn delete_bukti_repo(pool: &DbPool, id: Uuid) -> Result<BiayaAset, AppError> {
+    let record_to_delete = sqlx::query!("SELECT bukti_url FROM biaya_aset WHERE id = $1", id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)?;
+    
+    // Hapus file fisik jika ada
+    if let Some(path_str) = record_to_delete.bukti_url {
+        if !path_str.is_empty() {
+            if let Err(e) = tokio::fs::remove_file(&path_str).await {
+                tracing::error!("Gagal menghapus file bukti '{}': {}", path_str, e);
+            }
+        }
+    }
+
+    // Set kolom bukti_url menjadi NULL
+    sqlx::query!("UPDATE biaya_aset SET bukti_url = NULL, updated_at = now() WHERE id = $1", id)
+        .execute(pool)
+        .await?;
+
+    let updated_biaya = get_biaya_by_id_repo(pool, id).await?;
+    Ok(updated_biaya)
+}

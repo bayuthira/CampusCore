@@ -110,3 +110,39 @@ pub async fn delete_biaya_handler(
     biaya_repo::delete_biaya_repo(&pool, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
+
+pub async fn update_bukti_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>, // ID dari biaya_aset
+    mut multipart: Multipart,
+) -> Result<Json<BiayaAset>, AppError> {
+    let mut new_bukti_url: Option<String> = None;
+
+    if let Some(field) = multipart.next_field().await? {
+        if field.name() == Some("bukti") {
+            let file_name = field.file_name().unwrap_or("unknown_file").to_string();
+            let file_extension = std::path::Path::new(&file_name).extension().and_then(std::ffi::OsStr::to_str).unwrap_or("");
+            let new_file_name = format!("{}.{}", Uuid::new_v4(), file_extension);
+            let file_path_str = format!("uploads/bukti_biaya/{}", new_file_name);
+            
+            tokio::fs::create_dir_all("uploads/bukti_biaya").await?;
+            let data = field.bytes().await?;
+            tokio::fs::write(&file_path_str, data).await?;
+            
+            new_bukti_url = Some(file_path_str);
+        }
+    }
+
+    let url = new_bukti_url.ok_or_else(|| AppError::AnyhowError(anyhow::anyhow!("Field 'bukti' wajib ada dalam form.")))?;
+    let updated_biaya = biaya_repo::update_bukti_repo(&pool, id, url).await?;
+
+    Ok(Json(updated_biaya))
+}
+
+pub async fn delete_bukti_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<BiayaAset>, AppError> {
+    let updated_biaya = biaya_repo::delete_bukti_repo(&pool, id).await?;
+    Ok(Json(updated_biaya))
+}

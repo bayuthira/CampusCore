@@ -8,7 +8,7 @@ use super::{
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
     Router, middleware,
-    routing::{get, post,put},
+    routing::{get, post,put,delete},
 };
 
 pub fn aset_router() -> Router<DbPool> {
@@ -67,8 +67,16 @@ pub fn aset_router() -> Router<DbPool> {
                 .post(biaya_handler::create_biaya_handler),
         )
         .route(
-            "/aset/biaya/{id}", // Rute untuk operasi pada satu record biaya
+            "/aset/biaya/{id}",
             put(biaya_handler::update_biaya_handler).delete(biaya_handler::delete_biaya_handler),
+        )
+                .route(
+            "/aset/biaya/{id}/update-bukti",
+            post(biaya_handler::update_bukti_handler)
+        )
+        .route(
+            "/aset/biaya/{id}/hapus-bukti",
+            delete(biaya_handler::delete_bukti_handler)
         )
         .route(
             "/aset/konsumsi",
