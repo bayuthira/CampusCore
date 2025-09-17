@@ -1,6 +1,6 @@
 // src/models/aset_model.rs
 use serde::{Deserialize, Serialize};
-use sqlx::Type;
+use sqlx::{Type,FromRow};
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
@@ -32,7 +32,7 @@ impl KondisiAset {
 }
 
 // Struct untuk respons API
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, FromRow)]
 pub struct AsetDetail {
     pub id: Uuid,
     pub nama_aset: String,
@@ -141,4 +141,10 @@ pub struct PinjamAsetPayload {
 #[derive(Debug, Deserialize)]
 pub struct KembalikanAsetPayload {
     pub catatan: Option<String>,
+}
+
+
+#[derive(Debug, Deserialize)]
+pub struct AsetFilter {
+    pub ruangan_id: Option<Uuid>,
 }

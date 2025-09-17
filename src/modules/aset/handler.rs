@@ -1,5 +1,5 @@
 use super::{
-    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload,CreateHistoriPayload,PinjamAsetPayload, KembalikanAsetPayload},
+    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload,CreateHistoriPayload,PinjamAsetPayload, KembalikanAsetPayload,AsetFilter},
     repo as aset_repo,
     histori_repo as histori_aset_repo,
 };
@@ -11,7 +11,7 @@ use crate::{
     modules::auth::middleware::TokenClaims,
 };
 use axum::{
-    extract::{Path, State, Json},
+    extract::{Path, State, Json, Query},
     http::StatusCode,
 };
 use uuid::Uuid;
@@ -27,10 +27,13 @@ pub async fn create_aset_handler(
 }
 
 /// Handler untuk mendapatkan semua Aset
+
 pub async fn get_all_aset_handler(
     State(pool): State<DbPool>,
+    Query(filter): Query<AsetFilter>, // <-- Terima filter dari query parameter
 ) -> Result<Json<Vec<AsetDetail>>, AppError> {
-    let list = aset_repo::get_all_aset_repo(&pool).await?;
+    // Teruskan filter ke repository
+    let list = aset_repo::get_all_aset_repo(&pool, filter).await?;
     Ok(Json(list))
 }
 

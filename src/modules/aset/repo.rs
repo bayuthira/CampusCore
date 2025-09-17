@@ -1,4 +1,4 @@
-use super::model::{AsetDetail, AsetPayload, KondisiAset};
+use super::model::{AsetDetail, AsetPayload, KondisiAset,AsetFilter};
 
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
@@ -55,37 +55,66 @@ pub async fn create_aset_repo(pool: &DbPool, payload: AsetPayload) -> Result<Ase
     Ok(new_aset)
 }
 
-pub async fn get_all_aset_repo(pool: &DbPool) -> Result<Vec<AsetDetail>, AppError> {
-    // --- PERBARUI QUERY SQL DI SINI ---
-    let query_str = r#"
-        SELECT
-            a.id, a.nama_aset, a.kode_aset, a.deskripsi, a.tanggal_pembelian,
-            a.kondisi::TEXT, a.jenis_aset_id, ja.nama_jenis,
-            a.ruangan_id, r.nama_ruangan, r.kode_ruangan,
-            
-            -- Kolom baru dari join ke peminjaman_aset dan users
-            p.id as peminjaman_id,
-            peminjam.full_name as nama_peminjam,
-            p.estimasi_tanggal_kembali,
-            
-            a.created_at, a.updated_at
-        FROM aset a
-        JOIN jenis_aset ja ON a.jenis_aset_id = ja.id
-        LEFT JOIN ruangan r ON a.ruangan_id = r.id
-        -- LEFT JOIN ke peminjaman yang statusnya 'Dipinjam'
-        LEFT JOIN peminjaman_aset p ON a.id = p.aset_id AND p.status = 'Dipinjam'
-        -- LEFT JOIN ke users untuk mendapatkan nama peminjam
-        LEFT JOIN users peminjam ON p.user_peminjam_id = peminjam.id
-        ORDER BY a.nama_aset ASC
-    "#;
 
-    let list = sqlx::query(query_str)
+pub async fn get_all_aset_repo(
+    pool: &DbPool,
+    filter: AsetFilter, // <-- Terima struct filter
+) -> Result<Vec<AsetDetail>, AppError> {
+    
+    // Gunakan if/else untuk memilih query yang tepat
+    let list = if let Some(ruangan_id) = filter.ruangan_id {
+        // --- Query JIKA ADA filter ruangan_id ---
+        sqlx::query(
+            r#"
+            SELECT
+                a.id, a.nama_aset, a.kode_aset, a.deskripsi, a.tanggal_pembelian,
+                a.kondisi::TEXT, a.jenis_aset_id, ja.nama_jenis,
+                a.ruangan_id, r.nama_ruangan, r.kode_ruangan,
+                p.id as peminjaman_id,
+                peminjam.full_name as nama_peminjam,
+                p.estimasi_tanggal_kembali,
+                a.created_at, a.updated_at
+            FROM aset a
+            JOIN jenis_aset ja ON a.jenis_aset_id = ja.id
+            LEFT JOIN ruangan r ON a.ruangan_id = r.id
+            LEFT JOIN peminjaman_aset p ON a.id = p.aset_id AND p.status = 'Dipinjam'
+            LEFT JOIN users peminjam ON p.user_peminjam_id = peminjam.id
+            WHERE a.ruangan_id = $1
+            ORDER BY a.nama_aset ASC
+            "#,
+        )
+        .bind(ruangan_id)
         .map(map_rec_to_aset_detail)
         .fetch_all(pool)
-        .await?;
-        
+        .await?
+    } else {
+        // --- Query ASLI ANDA jika tidak ada filter ---
+        sqlx::query(
+            r#"
+            SELECT
+                a.id, a.nama_aset, a.kode_aset, a.deskripsi, a.tanggal_pembelian,
+                a.kondisi::TEXT, a.jenis_aset_id, ja.nama_jenis,
+                a.ruangan_id, r.nama_ruangan, r.kode_ruangan,
+                p.id as peminjaman_id,
+                peminjam.full_name as nama_peminjam,
+                p.estimasi_tanggal_kembali,
+                a.created_at, a.updated_at
+            FROM aset a
+            JOIN jenis_aset ja ON a.jenis_aset_id = ja.id
+            LEFT JOIN ruangan r ON a.ruangan_id = r.id
+            LEFT JOIN peminjaman_aset p ON a.id = p.aset_id AND p.status = 'Dipinjam'
+            LEFT JOIN users peminjam ON p.user_peminjam_id = peminjam.id
+            ORDER BY a.nama_aset ASC
+            "#,
+        )
+        .map(map_rec_to_aset_detail)
+        .fetch_all(pool)
+        .await?
+    };
+    
     Ok(list)
 }
+
 
 pub async fn get_aset_by_id_repo(pool: &DbPool, id: Uuid) -> Result<AsetDetail, AppError> {
     // Query ini sekarang identik dengan `get_all_aset_repo` tapi dengan tambahan WHERE
