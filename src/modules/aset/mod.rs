@@ -13,3 +13,6 @@ pub mod habis_pakai;
 pub mod biaya_model;
 pub mod biaya_repo;
 pub mod biaya_handler;
+pub mod jadwal_ruangan_model;
+pub mod jadwal_ruangan_repo;
+pub mod jadwal_ruangan_handler;

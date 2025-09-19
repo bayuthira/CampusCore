@@ -1,0 +1,85 @@
+// src/modules/akademik/jadwal_kuliah_model.rs
+use serde::{Deserialize, Deserializer,Serialize};
+use time::{format_description::FormatItem, macros::format_description, Time};
+use uuid::Uuid;
+
+// Modul helper kustom HANYA untuk deserialize
+mod time_format_hm {
+    use super::*;
+
+    const FORMAT: &[FormatItem<'_>] = format_description!("[hour]:[minute]");
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Time, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Time::parse(&s, &FORMAT).map_err(serde::de::Error::custom)
+    }
+}
+
+// Enum untuk mencerminkan ENUM di DB
+#[derive(Debug, Serialize, Deserialize, sqlx::Type, Clone, PartialEq)]
+#[sqlx(type_name = "DayOfWeek")]
+pub enum DayOfWeek {
+    Senin,
+    Selasa,
+    Rabu,
+    Kamis,
+    Jumat,
+    Sabtu,
+    Minggu,
+}
+
+impl DayOfWeek {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DayOfWeek::Senin => "Senin",
+            DayOfWeek::Selasa => "Selasa",
+            DayOfWeek::Rabu => "Rabu",
+            DayOfWeek::Kamis => "Kamis",
+            DayOfWeek::Jumat => "Jumat",
+            DayOfWeek::Sabtu => "Sabtu",
+            DayOfWeek::Minggu => "Minggu",
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, sqlx::Type, Clone, PartialEq)]
+#[sqlx(type_name = "PeranDosenPengampu")]
+pub enum PeranDosenPengampu {
+    Koordinator,
+    Anggota,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DosenPengampuPayload {
+    pub dosen_id: Uuid,
+    pub peran: PeranDosenPengampu,
+}
+
+impl PeranDosenPengampu {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PeranDosenPengampu::Koordinator => "Koordinator",
+            PeranDosenPengampu::Anggota => "Anggota",
+        }
+    }
+}
+
+// Payload untuk membuat jadwal kuliah baru
+#[derive(Debug, Deserialize)]
+pub struct CreateJadwalKuliahPayload {
+    pub matakuliah_id: Uuid,
+    pub tahun_akademik_id: Uuid,
+    pub hari: DayOfWeek,
+    #[serde(with = "time_format_hm")]
+    pub jam_mulai: Time,
+    #[serde(with = "time_format_hm")]
+    pub jam_selesai: Time,
+    pub kelas: String,
+    pub dosen_pengampu: Vec<DosenPengampuPayload>, // Daftar dosen
+}
+
+// Anda bisa membuat struct `JadwalKuliahDetail` untuk respons
+// yang berisi join ke nama MK, nama dosen, dll.

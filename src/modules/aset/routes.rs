@@ -3,6 +3,7 @@ use super::{
     habis_pakai::handler as habis_pakai_handler, handler as aset_handler, jenis_aset_handler,
     ruangan_handler,
     biaya_handler,
+    jadwal_ruangan_handler,
 };
 
 use crate::{db::DbPool, modules::auth::middleware::require_role};
@@ -112,6 +113,11 @@ pub fn aset_router() -> Router<DbPool> {
             "/aset/item/{id}/pinjam",
             post(aset_handler::pinjam_aset_handler),
         )
+        .route(
+            "/aset/ruangan/jadwal",
+            post(jadwal_ruangan_handler::create_jadwal_handler)
+        )
+
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),
