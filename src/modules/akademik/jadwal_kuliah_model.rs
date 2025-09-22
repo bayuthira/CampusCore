@@ -81,5 +81,9 @@ pub struct CreateJadwalKuliahPayload {
     pub dosen_pengampu: Vec<DosenPengampuPayload>, // Daftar dosen
 }
 
-// Anda bisa membuat struct `JadwalKuliahDetail` untuk respons
-// yang berisi join ke nama MK, nama dosen, dll.
+
+#[derive(Debug, Deserialize)]
+pub struct PlotJadwalRuanganPayload {
+    pub jadwal_kuliah_id: Uuid,
+    pub ruangan_id: Uuid,
+}

@@ -6,7 +6,7 @@ use super::{
     jadwal_ruangan_handler,
 };
 
-use crate::{db::DbPool, modules::auth::middleware::require_role};
+use crate::{db::DbPool, modules::auth::middleware::require_role, modules::akademik::jadwal_kuliah_handler};
 use axum::{
     Router, middleware,
     routing::{get, post,put,delete},
@@ -117,6 +117,7 @@ pub fn aset_router() -> Router<DbPool> {
             "/aset/ruangan/jadwal",
             post(jadwal_ruangan_handler::create_jadwal_handler)
         )
+        .route("/akademik/plot-jadwal-ruangan", post(jadwal_kuliah_handler::plot_jadwal_ruangan_handler))
 
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![
