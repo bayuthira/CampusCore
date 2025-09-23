@@ -1,8 +1,9 @@
 // src/modules/akademik/jadwal_kuliah_repo.rs
-use super::jadwal_kuliah_model::{CreateJadwalKuliahPayload,PlotJadwalRuanganPayload};
+use super::jadwal_kuliah_model::{CreateJadwalKuliahPayload,PlotJadwalRuanganPayload,JadwalKuliahDetail,JadwalKuliahFilter,DosenPengampuDetail,DayOfWeek,};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
-use time::{Duration, Weekday};
+use time::{Duration, Weekday, Time};
+use sqlx::FromRow;
 
 
 pub async fn create_jadwal_kuliah_repo(
@@ -107,4 +108,65 @@ pub async fn plot_jadwal_ruangan_repo(
 
     tx.commit().await?;
     Ok(())
+}
+
+#[derive(FromRow)]
+struct JadwalKuliahRow {
+    id: Uuid, kelas: String, hari: DayOfWeek, jam_mulai: Time, jam_selesai: Time,
+    matakuliah_id: Uuid, nama_mk: String, kode_mk: String, sks: i32,
+    prodi_id: Uuid, nama_prodi: String,
+    tahun_akademik_id: Uuid, nama_tahun_akademik: String,
+}
+
+pub async fn get_all_jadwal_kuliah_repo(pool: &DbPool, filter: JadwalKuliahFilter) -> Result<Vec<JadwalKuliahDetail>, AppError> {
+    // Bangun query dasar
+    let mut query_builder = sqlx::QueryBuilder::new(r#"
+        SELECT 
+            jk.id, jk.kelas, jk.hari, jk.jam_mulai, jk.jam_selesai,
+            mk.id as matakuliah_id, mk.nama_mk, mk.kode_mk, mk.sks,
+            p.id as prodi_id, p.nama_prodi,
+            ta.id as tahun_akademik_id, ta.nama as nama_tahun_akademik
+        FROM jadwal_kuliah jk
+        JOIN mata_kuliah mk ON jk.matakuliah_id = mk.id
+        JOIN prodi p ON mk.prodi_id = p.id
+        JOIN tahun_akademik ta ON jk.tahun_akademik_id = ta.id
+        WHERE 1=1
+    "#);
+
+    // Tambahkan filter jika ada
+    if let Some(prodi_id) = filter.prodi_id {
+        query_builder.push(" AND p.id = ");
+        query_builder.push_bind(prodi_id);
+    }
+    if let Some(ta_id) = filter.tahun_akademik_id {
+        query_builder.push(" AND ta.id = ");
+        query_builder.push_bind(ta_id);
+    }
+
+    // 1. Eksekusi query utama untuk mendapatkan data jadwal
+    let jadwal_rows = query_builder.build_query_as::<JadwalKuliahRow>().fetch_all(pool).await?;
+    let mut jadwal_details = Vec::new();
+
+    // 2. Loop untuk setiap jadwal, ambil data dosen pengampunya
+    for row in jadwal_rows {
+        let dosen_pengampu = sqlx::query_as!(
+            DosenPengampuDetail,
+            r#"
+            SELECT d.id as dosen_id, d.nama_dosen, jdp.peran as "peran: _"
+            FROM jadwal_dosen_pengampu jdp
+            JOIN dosen d ON jdp.dosen_id = d.id
+            WHERE jdp.jadwal_kuliah_id = $1
+            "#,
+            row.id
+        ).fetch_all(pool).await?;
+
+        jadwal_details.push(JadwalKuliahDetail {
+            id: row.id, kelas: row.kelas, hari: row.hari, jam_mulai: row.jam_mulai, jam_selesai: row.jam_selesai,
+            matakuliah_id: row.matakuliah_id, nama_mk: row.nama_mk, kode_mk: row.kode_mk, sks: row.sks,
+            prodi_id: row.prodi_id, nama_prodi: row.nama_prodi,
+            tahun_akademik_id: row.tahun_akademik_id, nama_tahun_akademik: row.nama_tahun_akademik,
+            dosen_pengampu
+        });
+    }
+    Ok(jadwal_details)
 }

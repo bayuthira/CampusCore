@@ -87,3 +87,36 @@ pub struct PlotJadwalRuanganPayload {
     pub jadwal_kuliah_id: Uuid,
     pub ruangan_id: Uuid,
 }
+
+
+#[derive(Debug, Serialize)]
+pub struct DosenPengampuDetail {
+    pub dosen_id: Uuid,
+    pub nama_dosen: String,
+    pub peran: PeranDosenPengampu,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JadwalKuliahDetail {
+    pub id: Uuid,
+    pub kelas: String,
+    pub hari: DayOfWeek,
+    pub jam_mulai: Time,
+    pub jam_selesai: Time,
+    pub matakuliah_id: Uuid,
+    pub nama_mk: String,
+    pub kode_mk: String,
+    pub sks: i32,
+    pub prodi_id: Uuid,
+    pub nama_prodi: String,
+    pub tahun_akademik_id: Uuid,
+    pub nama_tahun_akademik: String,
+    pub dosen_pengampu: Vec<DosenPengampuDetail>,
+}
+
+
+#[derive(Debug, Deserialize)]
+pub struct JadwalKuliahFilter {
+    pub tahun_akademik_id: Option<Uuid>,
+    pub prodi_id: Option<Uuid>,
+}
