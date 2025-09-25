@@ -129,3 +129,28 @@ pub async fn get_tipe_biaya_handler(
 
     Ok(Json(list))
 }
+
+pub async fn get_peran_dosen_pengampu_handler(
+    State(pool): State<DbPool>,
+) -> Result<Json<Vec<String>>, AppError> {
+    #[derive(sqlx::FromRow)]
+    struct EnumLabel {
+        enumlabel: String,
+    }
+
+    let enum_values = sqlx::query_as::<_, EnumLabel>(
+        r#"
+        SELECT enumlabel
+        FROM pg_enum
+        JOIN pg_type ON pg_enum.enumtypid = pg_type.oid
+        WHERE pg_type.typname = 'PeranDosenPengampu'
+        ORDER BY enumsortorder
+        "#,
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    let list: Vec<String> = enum_values.into_iter().map(|item| item.enumlabel).collect();
+
+    Ok(Json(list))
+}

@@ -18,4 +18,8 @@ pub fn lookup_router() -> Router<DbPool> {
         )
         .route("/lookups/users", get(handler::search_users_handler))
         .route("/lookups/tipe-biaya", get(handler::get_tipe_biaya_handler))
+        .route(
+            "/lookups/peran-dosen-pengampu",
+            get(handler::get_peran_dosen_pengampu_handler),
+        )
 }
