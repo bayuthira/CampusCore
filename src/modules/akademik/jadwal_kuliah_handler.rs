@@ -1,9 +1,10 @@
 // src/modules/akademik/jadwal_kuliah_handler.rs
-use super::{jadwal_kuliah_model::{CreateJadwalKuliahPayload,PlotJadwalRuanganPayload,JadwalKuliahFilter,JadwalKuliahDetail} , jadwal_kuliah_repo};
+use super::{jadwal_kuliah_model::{CreateJadwalKuliahPayload,PlotJadwalRuanganPayload,JadwalKuliahFilter,JadwalKuliahDetail,UpdateJadwalKuliahPayload} , jadwal_kuliah_repo};
 use crate::{db::DbPool, errors::AppError, modules::general::model::SuccessResponse};
-use axum::{extract::{State, Json,Query}, http::StatusCode};
+use axum::{extract::{State, Json,Query,Path}, http::StatusCode};
 use crate::modules::auth::middleware::TokenClaims;
 use axum::Extension;
+use uuid::Uuid;
 
 pub async fn create_jadwal_kuliah_handler(
     State(pool): State<DbPool>,
@@ -37,4 +38,24 @@ pub async fn get_all_jadwal_kuliah_handler(
 ) -> Result<Json<Vec<JadwalKuliahDetail>>, AppError> {
     let jadwal_list = jadwal_kuliah_repo::get_all_jadwal_kuliah_repo(&pool, filter).await?;
     Ok(Json(jadwal_list))
+}
+
+
+pub async fn update_jadwal_kuliah_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<UpdateJadwalKuliahPayload>,
+) -> Result<Json<SuccessResponse>, AppError> {
+    jadwal_kuliah_repo::update_jadwal_kuliah_repo(&pool, id, payload).await?;
+    Ok(Json(SuccessResponse {
+        message: format!("Jadwal kuliah dengan ID {} berhasil diperbarui.", id),
+    }))
+}
+
+pub async fn delete_jadwal_kuliah_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    jadwal_kuliah_repo::delete_jadwal_kuliah_repo(&pool, id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

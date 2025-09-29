@@ -120,3 +120,16 @@ pub struct JadwalKuliahFilter {
     pub tahun_akademik_id: Option<Uuid>,
     pub prodi_id: Option<Uuid>,
 }
+#[derive(Debug, Deserialize)]
+pub struct UpdateJadwalKuliahPayload {
+    pub matakuliah_id: Uuid,
+    pub tahun_akademik_id: Uuid,
+    pub hari: DayOfWeek,
+    #[serde(with = "time_format_hm")]
+    pub jam_mulai: Time,
+    #[serde(with = "time_format_hm")]
+    pub jam_selesai: Time,    
+    pub kelas: String,
+    pub dosen_pengampu: Vec<DosenPengampuPayload>,
+}
+

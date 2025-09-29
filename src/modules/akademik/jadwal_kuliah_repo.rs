@@ -1,10 +1,12 @@
 // src/modules/akademik/jadwal_kuliah_repo.rs
-use super::jadwal_kuliah_model::{CreateJadwalKuliahPayload,PlotJadwalRuanganPayload,JadwalKuliahDetail,JadwalKuliahFilter,DosenPengampuDetail,DayOfWeek,};
+use super::jadwal_kuliah_model::{
+    CreateJadwalKuliahPayload, DayOfWeek, DosenPengampuDetail, JadwalKuliahDetail,
+    JadwalKuliahFilter, PeranDosenPengampu, PlotJadwalRuanganPayload, UpdateJadwalKuliahPayload,
+};
 use crate::{db::DbPool, errors::AppError};
-use uuid::Uuid;
-use time::{Duration, Weekday, Time};
 use sqlx::FromRow;
-
+use time::{Duration, Time, Weekday};
+use uuid::Uuid;
 
 pub async fn create_jadwal_kuliah_repo(
     pool: &DbPool,
@@ -12,8 +14,52 @@ pub async fn create_jadwal_kuliah_repo(
 ) -> Result<Uuid, AppError> {
     let mut tx = pool.begin().await?;
 
-    let hari_str = payload.hari.as_str(); // Konversi enum ke string
+    let hari_str = payload.hari.as_str();
+    // Validasi dosen bentrok
+    for dosen in &payload.dosen_pengampu {
+        // 1. Ambil nama dosen untuk pesan error yang lebih jelas
+        let dosen_record =
+            sqlx::query!("SELECT nama_dosen FROM dosen WHERE id = $1", dosen.dosen_id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .ok_or_else(|| {
+                    AppError::Forbidden(format!(
+                        "Dosen dengan ID {} tidak ditemukan.",
+                        dosen.dosen_id
+                    ))
+                })?;
 
+        let nama_dosen_bentrok = dosen_record.nama_dosen;
+
+        // 2. Cek konflik jadwal
+        let conflict = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM jadwal_kuliah jk
+                JOIN jadwal_dosen_pengampu jdp ON jk.id = jdp.jadwal_kuliah_id
+                WHERE jdp.dosen_id = $1
+                  AND jk.tahun_akademik_id = $2
+                  AND jk.hari::TEXT = $3
+                  AND (jk.jam_mulai, jk.jam_selesai) OVERLAPS ($4::TIME, $5::TIME)
+            )
+            "#,
+            dosen.dosen_id,
+            payload.tahun_akademik_id,
+            hari_str,
+            payload.jam_mulai,
+            payload.jam_selesai
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        // 3. Jika bentrok, kembalikan pesan error yang spesifik
+        if conflict.unwrap_or(false) {
+            return Err(AppError::Forbidden(format!(
+                "Jadwal bentrok untuk dosen '{}' pada hari {} jam tersebut.",
+                nama_dosen_bentrok, hari_str
+            )));
+        }
+    }
     // Gunakan sqlx::query() (tanpa !) dan .bind()
     let jadwal_id = sqlx::query_scalar(
         r#"
@@ -65,7 +111,9 @@ pub async fn plot_jadwal_ruangan_repo(
         WHERE jk.id = $1
         "#,
         payload.jadwal_kuliah_id
-    ).fetch_one(&mut *tx).await?;
+    )
+    .fetch_one(&mut *tx)
+    .await?;
 
     // 2. Hitung semua tanggal pertemuan selama satu semester
     let mut instances_to_create = Vec::new();
@@ -97,7 +145,10 @@ pub async fn plot_jadwal_ruangan_repo(
         ).fetch_one(&mut *tx).await?;
 
         if conflict.unwrap_or(false) {
-            return Err(AppError::Forbidden(format!("Konflik jadwal untuk ruangan pada {}.", start_time.date())));
+            return Err(AppError::Forbidden(format!(
+                "Konflik jadwal untuk ruangan pada {}.",
+                start_time.date()
+            )));
         }
 
         sqlx::query!(
@@ -112,15 +163,28 @@ pub async fn plot_jadwal_ruangan_repo(
 
 #[derive(FromRow)]
 struct JadwalKuliahRow {
-    id: Uuid, kelas: String, hari: DayOfWeek, jam_mulai: Time, jam_selesai: Time,
-    matakuliah_id: Uuid, nama_mk: String, kode_mk: String, sks: i32,
-    prodi_id: Uuid, nama_prodi: String,
-    tahun_akademik_id: Uuid, nama_tahun_akademik: String,
+    id: Uuid,
+    kelas: String,
+    hari: DayOfWeek,
+    jam_mulai: Time,
+    jam_selesai: Time,
+    matakuliah_id: Uuid,
+    nama_mk: String,
+    kode_mk: String,
+    sks: i32,
+    prodi_id: Uuid,
+    nama_prodi: String,
+    tahun_akademik_id: Uuid,
+    nama_tahun_akademik: String,
 }
 
-pub async fn get_all_jadwal_kuliah_repo(pool: &DbPool, filter: JadwalKuliahFilter) -> Result<Vec<JadwalKuliahDetail>, AppError> {
+pub async fn get_all_jadwal_kuliah_repo(
+    pool: &DbPool,
+    filter: JadwalKuliahFilter,
+) -> Result<Vec<JadwalKuliahDetail>, AppError> {
     // Bangun query dasar
-    let mut query_builder = sqlx::QueryBuilder::new(r#"
+    let mut query_builder = sqlx::QueryBuilder::new(
+        r#"
         SELECT 
             jk.id, jk.kelas, jk.hari, jk.jam_mulai, jk.jam_selesai,
             mk.id as matakuliah_id, mk.nama_mk, mk.kode_mk, mk.sks,
@@ -131,7 +195,8 @@ pub async fn get_all_jadwal_kuliah_repo(pool: &DbPool, filter: JadwalKuliahFilte
         JOIN prodi p ON mk.prodi_id = p.id
         JOIN tahun_akademik ta ON jk.tahun_akademik_id = ta.id
         WHERE 1=1
-    "#);
+    "#,
+    );
 
     // Tambahkan filter jika ada
     if let Some(prodi_id) = filter.prodi_id {
@@ -144,7 +209,10 @@ pub async fn get_all_jadwal_kuliah_repo(pool: &DbPool, filter: JadwalKuliahFilte
     }
 
     // 1. Eksekusi query utama untuk mendapatkan data jadwal
-    let jadwal_rows = query_builder.build_query_as::<JadwalKuliahRow>().fetch_all(pool).await?;
+    let jadwal_rows = query_builder
+        .build_query_as::<JadwalKuliahRow>()
+        .fetch_all(pool)
+        .await?;
     let mut jadwal_details = Vec::new();
 
     // 2. Loop untuk setiap jadwal, ambil data dosen pengampunya
@@ -158,15 +226,121 @@ pub async fn get_all_jadwal_kuliah_repo(pool: &DbPool, filter: JadwalKuliahFilte
             WHERE jdp.jadwal_kuliah_id = $1
             "#,
             row.id
-        ).fetch_all(pool).await?;
+        )
+        .fetch_all(pool)
+        .await?;
 
         jadwal_details.push(JadwalKuliahDetail {
-            id: row.id, kelas: row.kelas, hari: row.hari, jam_mulai: row.jam_mulai, jam_selesai: row.jam_selesai,
-            matakuliah_id: row.matakuliah_id, nama_mk: row.nama_mk, kode_mk: row.kode_mk, sks: row.sks,
-            prodi_id: row.prodi_id, nama_prodi: row.nama_prodi,
-            tahun_akademik_id: row.tahun_akademik_id, nama_tahun_akademik: row.nama_tahun_akademik,
-            dosen_pengampu
+            id: row.id,
+            kelas: row.kelas,
+            hari: row.hari,
+            jam_mulai: row.jam_mulai,
+            jam_selesai: row.jam_selesai,
+            matakuliah_id: row.matakuliah_id,
+            nama_mk: row.nama_mk,
+            kode_mk: row.kode_mk,
+            sks: row.sks,
+            prodi_id: row.prodi_id,
+            nama_prodi: row.nama_prodi,
+            tahun_akademik_id: row.tahun_akademik_id,
+            nama_tahun_akademik: row.nama_tahun_akademik,
+            dosen_pengampu,
         });
     }
     Ok(jadwal_details)
+}
+
+pub async fn update_jadwal_kuliah_repo(
+    pool: &DbPool,
+    id: Uuid,
+    payload: UpdateJadwalKuliahPayload,
+) -> Result<Uuid, AppError> {
+    let mut tx = pool.begin().await?;
+    let hari_str = payload.hari.as_str();
+
+    // Validasi dosen bentrok
+    for dosen in &payload.dosen_pengampu {
+        // --- TAMBAHKAN QUERY INI UNTUK MENGAMBIL NAMA DOSEN ---
+        let dosen_record =
+            sqlx::query!("SELECT nama_dosen FROM dosen WHERE id = $1", dosen.dosen_id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .ok_or_else(|| {
+                    AppError::Forbidden(format!(
+                        "Dosen dengan ID {} tidak ditemukan.",
+                        dosen.dosen_id
+                    ))
+                })?;
+
+        let nama_dosen_bentrok = dosen_record.nama_dosen;
+
+        // Cek konflik jadwal (tidak berubah)
+        let conflict = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM jadwal_kuliah jk
+                JOIN jadwal_dosen_pengampu jdp ON jk.id = jdp.jadwal_kuliah_id
+                WHERE jdp.dosen_id = $1
+                  AND jk.tahun_akademik_id = $2
+                  AND jk.hari::TEXT = $3
+                  AND (jk.jam_mulai, jk.jam_selesai) OVERLAPS ($4::TIME, $5::TIME)
+                  AND jk.id != $6
+            )
+            "#,
+            dosen.dosen_id,
+            payload.tahun_akademik_id,
+            hari_str,
+            payload.jam_mulai,
+            payload.jam_selesai,
+            id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        // Sekarang variabel `nama_dosen_bentrok` sudah ada
+        if conflict.unwrap_or(false) {
+            return Err(AppError::Forbidden(format!(
+                "Jadwal bentrok untuk dosen '{}' pada hari {} jam tersebut.",
+                nama_dosen_bentrok, hari_str
+            )));
+        }
+    }
+
+    // 1. Update data utama di tabel jadwal_kuliah
+    sqlx::query!(
+        "UPDATE jadwal_kuliah SET matakuliah_id=$1, tahun_akademik_id=$2, hari=$3, jam_mulai=$4, jam_selesai=$5, kelas=$6, updated_at=now() WHERE id=$7",
+        payload.matakuliah_id, payload.tahun_akademik_id, payload.hari as DayOfWeek,
+        payload.jam_mulai, payload.jam_selesai, payload.kelas, id
+    ).execute(&mut *tx).await?;
+
+    // 2. Sinkronisasi dosen pengampu: hapus yang lama, masukkan yang baru
+    sqlx::query!(
+        "DELETE FROM jadwal_dosen_pengampu WHERE jadwal_kuliah_id = $1",
+        id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    for dosen in payload.dosen_pengampu {
+        sqlx::query!(
+            "INSERT INTO jadwal_dosen_pengampu (jadwal_kuliah_id, dosen_id, peran) VALUES ($1, $2, $3)",
+            id, dosen.dosen_id, dosen.peran as PeranDosenPengampu
+        ).execute(&mut *tx).await?;
+    }
+
+    tx.commit().await?;
+    Ok(id)
+}
+
+pub async fn delete_jadwal_kuliah_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
+    // ON DELETE CASCADE akan otomatis menghapus relasi di jadwal_dosen_pengampu
+    let rows_affected = sqlx::query!("DELETE FROM jadwal_kuliah WHERE id = $1", id)
+        .execute(pool)
+        .await?
+        .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound.into());
+    }
+    Ok(())
 }
