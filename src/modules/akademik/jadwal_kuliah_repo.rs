@@ -1,7 +1,7 @@
 // src/modules/akademik/jadwal_kuliah_repo.rs
 use super::jadwal_kuliah_model::{
     CreateJadwalKuliahPayload, DayOfWeek, DosenPengampuDetail, JadwalKuliahDetail,
-    JadwalKuliahFilter, PeranDosenPengampu, PlotJadwalRuanganPayload, UpdateJadwalKuliahPayload,
+    JadwalKuliahFilter, PlotJadwalRuanganPayload, UpdateJadwalKuliahPayload,
 };
 use crate::{db::DbPool, errors::AppError};
 use sqlx::FromRow;
@@ -176,6 +176,8 @@ struct JadwalKuliahRow {
     nama_prodi: String,
     tahun_akademik_id: Uuid,
     nama_tahun_akademik: String,
+    ruangan_id: Option<Uuid>,
+    nama_ruangan: Option<String>,
 }
 
 pub async fn get_all_jadwal_kuliah_repo(
@@ -189,11 +191,16 @@ pub async fn get_all_jadwal_kuliah_repo(
             jk.id, jk.kelas, jk.hari, jk.jam_mulai, jk.jam_selesai,
             mk.id as matakuliah_id, mk.nama_mk, mk.kode_mk, mk.sks,
             p.id as prodi_id, p.nama_prodi,
-            ta.id as tahun_akademik_id, ta.nama as nama_tahun_akademik
+            ta.id as tahun_akademik_id, ta.nama as nama_tahun_akademik,
+            -- Ambil data ruangan dari entri jadwal_ruangan pertama yang ditemukan
+            jr.ruangan_id, r.nama_ruangan
         FROM jadwal_kuliah jk
         JOIN mata_kuliah mk ON jk.matakuliah_id = mk.id
         JOIN prodi p ON mk.prodi_id = p.id
         JOIN tahun_akademik ta ON jk.tahun_akademik_id = ta.id
+        -- Gunakan LEFT JOIN karena jadwal kuliah mungkin belum di-plot
+        LEFT JOIN jadwal_ruangan jr ON jk.id = jr.jadwal_kuliah_id
+        LEFT JOIN ruangan r ON jr.ruangan_id = r.id
         WHERE 1=1
     "#,
     );
@@ -207,6 +214,7 @@ pub async fn get_all_jadwal_kuliah_repo(
         query_builder.push(" AND ta.id = ");
         query_builder.push_bind(ta_id);
     }
+    query_builder.push(" GROUP BY jk.id, mk.id, p.id, ta.id, jr.ruangan_id, r.nama_ruangan");
 
     // 1. Eksekusi query utama untuk mendapatkan data jadwal
     let jadwal_rows = query_builder
@@ -245,6 +253,8 @@ pub async fn get_all_jadwal_kuliah_repo(
             tahun_akademik_id: row.tahun_akademik_id,
             nama_tahun_akademik: row.nama_tahun_akademik,
             dosen_pengampu,
+            ruangan_id: row.ruangan_id, 
+            nama_ruangan: row.nama_ruangan, 
         });
     }
     Ok(jadwal_details)

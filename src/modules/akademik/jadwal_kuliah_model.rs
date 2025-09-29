@@ -1,6 +1,6 @@
 // src/modules/akademik/jadwal_kuliah_model.rs
-use serde::{Deserialize, Deserializer,Serialize};
-use time::{format_description::FormatItem, macros::format_description, Time};
+use serde::{Deserialize, Deserializer, Serialize};
+use time::{Time, format_description::FormatItem, macros::format_description};
 use uuid::Uuid;
 
 // Modul helper kustom HANYA untuk deserialize
@@ -81,13 +81,11 @@ pub struct CreateJadwalKuliahPayload {
     pub dosen_pengampu: Vec<DosenPengampuPayload>, // Daftar dosen
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct PlotJadwalRuanganPayload {
     pub jadwal_kuliah_id: Uuid,
     pub ruangan_id: Uuid,
 }
-
 
 #[derive(Debug, Serialize)]
 pub struct DosenPengampuDetail {
@@ -112,8 +110,9 @@ pub struct JadwalKuliahDetail {
     pub tahun_akademik_id: Uuid,
     pub nama_tahun_akademik: String,
     pub dosen_pengampu: Vec<DosenPengampuDetail>,
+    pub ruangan_id: Option<Uuid>,
+    pub nama_ruangan: Option<String>,
 }
-
 
 #[derive(Debug, Deserialize)]
 pub struct JadwalKuliahFilter {
@@ -128,8 +127,7 @@ pub struct UpdateJadwalKuliahPayload {
     #[serde(with = "time_format_hm")]
     pub jam_mulai: Time,
     #[serde(with = "time_format_hm")]
-    pub jam_selesai: Time,    
+    pub jam_selesai: Time,
     pub kelas: String,
     pub dosen_pengampu: Vec<DosenPengampuPayload>,
 }
-
