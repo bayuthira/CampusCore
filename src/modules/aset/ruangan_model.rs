@@ -22,6 +22,11 @@ pub struct RuanganPayload {
     pub kode_ruangan: String,
     pub nama_ruangan: String,
     pub kapasitas: i32,
-    pub panjang: Decimal, // <-- Tambahkan ini
-    pub lebar: Decimal,   // <-- Tambahkan ini
+    pub panjang: Decimal,
+    pub lebar: Decimal,  
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RuanganFilter {
+    pub q: Option<String>,
 }

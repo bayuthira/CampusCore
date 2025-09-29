@@ -1,4 +1,4 @@
-use crate::{db::DbPool, errors::AppError, modules::aset::ruangan_model::{Ruangan, RuanganPayload}};
+use crate::{db::DbPool, errors::AppError, modules::aset::ruangan_model::{Ruangan, RuanganPayload,RuanganFilter}};
 use uuid::Uuid;
 
 pub async fn create_ruangan_repo(pool: &DbPool, payload: RuanganPayload) -> Result<Ruangan, AppError> {
@@ -8,8 +8,24 @@ pub async fn create_ruangan_repo(pool: &DbPool, payload: RuanganPayload) -> Resu
     Ok(ruangan)
 }
 
-pub async fn get_all_ruangan_repo(pool: &DbPool) -> Result<Vec<Ruangan>, AppError> {
-    let ruangan_list = sqlx::query_as!(Ruangan, "SELECT * FROM ruangan ORDER BY kode_ruangan ASC").fetch_all(pool).await?;
+pub async fn get_all_ruangan_repo(pool: &DbPool,filter: RuanganFilter) -> Result<Vec<Ruangan>, AppError> {
+    let ruangan_list = match filter.q {
+        Some(query) => {
+            let search_pattern = format!("%{}%", query);
+            sqlx::query_as!(
+                Ruangan,
+                "SELECT * FROM ruangan WHERE kode_ruangan ILIKE $1 OR nama_ruangan ILIKE $1 ORDER BY kode_ruangan ASC",
+                search_pattern
+            )
+            .fetch_all(pool)
+            .await?
+        }
+        None => {
+            sqlx::query_as!(Ruangan, "SELECT * FROM ruangan ORDER BY kode_ruangan ASC")
+                .fetch_all(pool)
+                .await?
+        }
+    };
     Ok(ruangan_list)
 }
 

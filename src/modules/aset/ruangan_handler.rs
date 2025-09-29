@@ -1,5 +1,5 @@
-use crate::{db::DbPool, errors::AppError, modules::aset::ruangan_model::{Ruangan, RuanganPayload}, modules::aset::ruangan_repo};
-use axum::{extract::{Path, State, Json}, http::StatusCode};
+use crate::{db::DbPool, errors::AppError, modules::aset::ruangan_model::{Ruangan, RuanganPayload,RuanganFilter}, modules::aset::ruangan_repo};
+use axum::{extract::{Path, State, Json,Query}, http::StatusCode};
 use uuid::Uuid;
 
 pub async fn create_ruangan_handler(State(pool): State<DbPool>, Json(payload): Json<RuanganPayload>) -> Result<(StatusCode, Json<Ruangan>), AppError> {
@@ -7,8 +7,8 @@ pub async fn create_ruangan_handler(State(pool): State<DbPool>, Json(payload): J
     Ok((StatusCode::CREATED, Json(ruangan)))
 }
 
-pub async fn get_all_ruangan_handler(State(pool): State<DbPool>) -> Result<Json<Vec<Ruangan>>, AppError> {
-    let ruangan_list = ruangan_repo::get_all_ruangan_repo(&pool).await?;
+pub async fn get_all_ruangan_handler(State(pool): State<DbPool>,Query(filter): Query<RuanganFilter>,) -> Result<Json<Vec<Ruangan>>, AppError> {
+    let ruangan_list = ruangan_repo::get_all_ruangan_repo(&pool, filter).await?;
     Ok(Json(ruangan_list))
 }
 
