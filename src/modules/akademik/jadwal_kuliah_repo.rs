@@ -258,6 +258,18 @@ pub async fn update_jadwal_kuliah_repo(
     let mut tx = pool.begin().await?;
     let hari_str = payload.hari.as_str();
 
+    // Pastikan tidak ada jadwal lain (selain diri sendiri) yang memiliki kombinasi ini.
+    let is_duplicate = sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM jadwal_kuliah WHERE matakuliah_id = $1 AND tahun_akademik_id = $2 AND kelas = $3 AND id != $4)",
+        payload.matakuliah_id, payload.tahun_akademik_id, payload.kelas, id
+    ).fetch_one(&mut *tx).await?;
+
+    if is_duplicate.unwrap_or(false) {
+        return Err(AppError::DuplicateEntry(
+            "Jadwal untuk mata kuliah, tahun akademik, dan kelas ini sudah ada.".to_string(),
+        ));
+    }
+
     // Validasi dosen bentrok
     for dosen in &payload.dosen_pengampu {
         // --- TAMBAHKAN QUERY INI UNTUK MENGAMBIL NAMA DOSEN ---
@@ -306,14 +318,26 @@ pub async fn update_jadwal_kuliah_repo(
         }
     }
 
-    // 1. Update data utama di tabel jadwal_kuliah
-    sqlx::query!(
-        "UPDATE jadwal_kuliah SET matakuliah_id=$1, tahun_akademik_id=$2, hari=$3, jam_mulai=$4, jam_selesai=$5, kelas=$6, updated_at=now() WHERE id=$7",
-        payload.matakuliah_id, payload.tahun_akademik_id, payload.hari as DayOfWeek,
-        payload.jam_mulai, payload.jam_selesai, payload.kelas, id
-    ).execute(&mut *tx).await?;
+    // 1. Update data utama menggunakan sqlx::query() dan .bind()
+    sqlx::query(
+        r#"
+        UPDATE jadwal_kuliah 
+        SET matakuliah_id=$1, tahun_akademik_id=$2, hari=$3::"DayOfWeek", 
+            jam_mulai=$4, jam_selesai=$5, kelas=$6, updated_at=now() 
+        WHERE id=$7
+        "#,
+    )
+    .bind(payload.matakuliah_id)
+    .bind(payload.tahun_akademik_id)
+    .bind(hari_str) // <-- Kirim sebagai string
+    .bind(payload.jam_mulai)
+    .bind(payload.jam_selesai)
+    .bind(payload.kelas)
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
 
-    // 2. Sinkronisasi dosen pengampu: hapus yang lama, masukkan yang baru
+    // 2. Sinkronisasi dosen pengampu (hapus yang lama)
     sqlx::query!(
         "DELETE FROM jadwal_dosen_pengampu WHERE jadwal_kuliah_id = $1",
         id
@@ -321,11 +345,17 @@ pub async fn update_jadwal_kuliah_repo(
     .execute(&mut *tx)
     .await?;
 
+    // 3. Masukkan yang baru menggunakan sqlx::query() dan .bind()
     for dosen in payload.dosen_pengampu {
-        sqlx::query!(
-            "INSERT INTO jadwal_dosen_pengampu (jadwal_kuliah_id, dosen_id, peran) VALUES ($1, $2, $3)",
-            id, dosen.dosen_id, dosen.peran as PeranDosenPengampu
-        ).execute(&mut *tx).await?;
+        let peran_str = dosen.peran.as_str(); // <-- Konversi enum ke string
+        sqlx::query(
+            "INSERT INTO jadwal_dosen_pengampu (jadwal_kuliah_id, dosen_id, peran) VALUES ($1, $2, $3::\"PeranDosenPengampu\")",
+        )
+        .bind(id)
+        .bind(dosen.dosen_id)
+        .bind(peran_str) // <-- Kirim sebagai string
+        .execute(&mut *tx)
+        .await?;
     }
 
     tx.commit().await?;
