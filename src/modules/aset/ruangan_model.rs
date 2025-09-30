@@ -30,3 +30,18 @@ pub struct RuanganPayload {
 pub struct RuanganFilter {
     pub q: Option<String>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct RuanganTersediaFilter {
+    pub jadwal_kuliah_id: Uuid,
+    pub q: Option<String>, // Untuk search nama/kode ruangan
+}
+
+// Untuk respons: hanya ID dan nama ruangan
+#[derive(Debug, Serialize, FromRow)]
+pub struct RuanganLookup {
+    pub id: Uuid,
+    pub nama_ruangan: String,
+    pub kode_ruangan: String,
+    pub kapasitas: i32,
+}
