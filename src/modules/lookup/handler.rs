@@ -1,5 +1,5 @@
 // src/handlers/lookup_handler.rs
-use crate::{db::DbPool, errors::AppError, modules::user_management::model::UserLookup};
+use crate::{db::DbPool, errors::AppError, modules::{user_management::model::UserLookup,aset::ruangan_model::{RuanganLookup,RuanganTersediaFilter}}};
 use axum::{extract::{Query, State}, Json};
 use serde::Deserialize;
 use sqlx::FromRow;
@@ -152,5 +152,14 @@ pub async fn get_peran_dosen_pengampu_handler(
 
     let list: Vec<String> = enum_values.into_iter().map(|item| item.enumlabel).collect();
 
+    Ok(Json(list))
+}
+
+
+pub async fn search_ruangan_tersedia_handler(
+    State(pool): State<DbPool>,
+    Query(filter): Query<RuanganTersediaFilter>,
+) -> Result<Json<Vec<RuanganLookup>>, AppError> {
+    let list = repo::search_ruangan_tersedia_repo(&pool, filter).await?;
     Ok(Json(list))
 }
