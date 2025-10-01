@@ -42,3 +42,11 @@ pub struct CreateJadwalPayload {
     pub tipe_perulangan: Option<TipePerulangan>,
     pub tanggal_akhir_perulangan: Option<Date>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct JadwalRuanganFilter {
+    #[serde(with = "time::serde::rfc3339")]
+    pub start: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub end: OffsetDateTime,
+}

@@ -2,7 +2,7 @@ use crate::{
     db::DbPool,
     errors::AppError,
 };
-use super::jadwal_ruangan_model::{CreateJadwalPayload, JadwalRuangan, TipePerulangan};
+use super::jadwal_ruangan_model::{CreateJadwalPayload, JadwalRuangan, TipePerulangan,JadwalRuanganFilter};
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
@@ -87,4 +87,44 @@ pub async fn create_jadwal_repo(
     ).fetch_all(pool).await?;
 
     Ok(new_jadwals)
+}
+
+pub async fn get_jadwal_by_ruangan_repo(
+    pool: &DbPool,
+    ruangan_id: Uuid,
+    filter: JadwalRuanganFilter,
+) -> Result<Vec<JadwalRuangan>, AppError> {
+    let jadwal_list = sqlx::query_as!(
+        JadwalRuangan,
+        r#"
+        SELECT 
+            j.id, j.ruangan_id, j.judul_kegiatan, j.deskripsi,
+            j.waktu_mulai, j.waktu_selesai, j.recurring_event_id,
+            j.user_pembuat_id, u.full_name as "nama_pembuat!"
+        FROM jadwal_ruangan j
+        JOIN users u ON j.user_pembuat_id = u.id
+        WHERE j.ruangan_id = $1 AND j.waktu_mulai >= $2 AND j.waktu_selesai <= $3
+        ORDER BY j.waktu_mulai ASC
+        "#,
+        ruangan_id,
+        filter.start,
+        filter.end
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(jadwal_list)
+}
+
+pub async fn delete_jadwal_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
+    let rows_affected = sqlx::query!("DELETE FROM jadwal_ruangan WHERE id = $1", id)
+        .execute(pool)
+        .await?
+        .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound.into());
+    }
+
+    Ok(())
 }

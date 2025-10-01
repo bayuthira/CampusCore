@@ -117,6 +117,14 @@ pub fn aset_router() -> Router<DbPool> {
             "/aset/ruangan/jadwal",
             post(jadwal_ruangan_handler::create_jadwal_handler)
         )
+        .route(
+            "/aset/ruangan/jadwal/{id}",
+            delete(jadwal_ruangan_handler::delete_jadwal_handler)
+        )
+        .route(
+            "/aset/ruangan/{id}/jadwal",
+            get(jadwal_ruangan_handler::get_jadwal_by_ruangan_handler)
+        )
         .route("/akademik/plot-jadwal-ruangan", post(jadwal_kuliah_handler::plot_jadwal_ruangan_handler))
         .route(
             "/akademik/plot-jadwal-ruangan/{id}",
