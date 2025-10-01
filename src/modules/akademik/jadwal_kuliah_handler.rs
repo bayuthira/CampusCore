@@ -32,6 +32,14 @@ pub async fn plot_jadwal_ruangan_handler(
     }))
 }
 
+pub async fn unplot_jadwal_ruangan_handler(
+    State(pool): State<DbPool>,
+    Path(jadwal_kuliah_id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    jadwal_kuliah_repo::unplot_jadwal_ruangan_repo(&pool, jadwal_kuliah_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn get_all_jadwal_kuliah_handler(
     State(pool): State<DbPool>,
     Query(filter): Query<JadwalKuliahFilter>,

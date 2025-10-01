@@ -100,6 +100,14 @@ pub async fn plot_jadwal_ruangan_repo(
 ) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
 
+    // Hapus dulu jadwal
+    sqlx::query!(
+        "DELETE FROM jadwal_ruangan WHERE jadwal_kuliah_id = $1",
+        payload.jadwal_kuliah_id
+    )
+    .execute(&mut *tx)
+    .await?;
+
     // 1. Ambil detail jadwal kuliah dan tahun akademiknya
     let jadwal = sqlx::query!(
         r#"
@@ -160,6 +168,20 @@ pub async fn plot_jadwal_ruangan_repo(
     tx.commit().await?;
     Ok(())
 }
+
+pub async fn unplot_jadwal_ruangan_repo(pool: &DbPool, jadwal_kuliah_id: Uuid) -> Result<(), AppError> {
+    // Hapus semua entri di `jadwal_ruangan` yang terkait dengan `jadwal_kuliah_id` ini
+    sqlx::query!(
+        "DELETE FROM jadwal_ruangan WHERE jadwal_kuliah_id = $1",
+        jadwal_kuliah_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+
 
 #[derive(FromRow)]
 struct JadwalKuliahRow {
@@ -253,8 +275,8 @@ pub async fn get_all_jadwal_kuliah_repo(
             tahun_akademik_id: row.tahun_akademik_id,
             nama_tahun_akademik: row.nama_tahun_akademik,
             dosen_pengampu,
-            ruangan_id: row.ruangan_id, 
-            nama_ruangan: row.nama_ruangan, 
+            ruangan_id: row.ruangan_id,
+            nama_ruangan: row.nama_ruangan,
         });
     }
     Ok(jadwal_details)

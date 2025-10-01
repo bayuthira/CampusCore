@@ -14,7 +14,7 @@ use axum::{
 
 pub fn aset_router() -> Router<DbPool> {
     let peminjaman_routes = Router::new().route(
-        "/peminjaman/{id}/kembalikan", // <-- URL BARU
+        "/peminjaman/{id}/kembalikan",
         post(aset_handler::kembalikan_aset_handler),
     );
     // Gabungkan semua rute untuk modul aset di sini
@@ -118,6 +118,10 @@ pub fn aset_router() -> Router<DbPool> {
             post(jadwal_ruangan_handler::create_jadwal_handler)
         )
         .route("/akademik/plot-jadwal-ruangan", post(jadwal_kuliah_handler::plot_jadwal_ruangan_handler))
+        .route(
+            "/akademik/plot-jadwal-ruangan/{id}",
+            delete(jadwal_kuliah_handler::unplot_jadwal_ruangan_handler)
+        )
 
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![
