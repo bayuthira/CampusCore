@@ -1,6 +1,6 @@
 // src/modules/akademik/jadwal_kuliah_model.rs
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use time::{format_description::FormatItem, macros::format_description, UtcOffset, Time};
+use time::{macros::format_description, UtcOffset, Time};
 use uuid::Uuid;
 
 // Custom struct for Time with Timezone
@@ -10,19 +10,6 @@ pub struct TimeWithOffset {
     pub offset: UtcOffset,
 }
 
-impl TimeWithOffset {
-    pub fn new(time: Time, offset: UtcOffset) -> Self {
-        Self { time, offset }
-    }
-    
-    // Helper to create with WIB timezone (+07:00)
-    pub fn wib(time: Time) -> Self {
-        Self {
-            time,
-            offset: UtcOffset::from_hms(7, 0, 0).unwrap(),
-        }
-    }
-}
 
 // Serialize/Deserialize implementation
 impl Serialize for TimeWithOffset {

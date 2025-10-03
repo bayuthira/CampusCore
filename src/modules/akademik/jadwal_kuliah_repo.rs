@@ -5,7 +5,7 @@ use super::jadwal_kuliah_model::{
 };
 use crate::{db::DbPool, errors::AppError};
 use sqlx::FromRow;
-use time::{Duration, Time, Weekday};
+use time::{Duration,Weekday};
 use uuid::Uuid;
 
 pub async fn create_jadwal_kuliah_repo(
