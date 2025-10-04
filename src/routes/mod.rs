@@ -23,6 +23,7 @@ let protected_routes = Router::<DbPool>::new() // <-- Perlu tipe state <DbPool>
     .merge(modules::user_management::routes::user_management_router())
     .merge(modules::aset::routes::aset_router())
     .merge(modules::akademik::jadwal_kuliah_routes::jadwal_kuliah_router())
+    .merge(modules::fleet::routes::fleet_router())
     .route("/files/{folder}/{filename}", get(modules::files::handler::serve_file_handler))
     .route_layer(middleware::from_fn_with_state(
         pool.clone(),

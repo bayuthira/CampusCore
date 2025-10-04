@@ -15,3 +15,4 @@ pub mod aset;
 pub mod lookup; 
 pub mod files;
 pub mod akademik;
+pub mod fleet;

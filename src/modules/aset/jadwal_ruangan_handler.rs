@@ -44,3 +44,11 @@ pub async fn delete_jadwal_handler(
     jadwal_ruangan_repo::delete_jadwal_repo(&pool, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
+
+pub async fn delete_recurring_jadwal_handler(
+    State(pool): State<DbPool>,
+    Path(recurring_id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    jadwal_ruangan_repo::delete_recurring_jadwal_repo(&pool, recurring_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}

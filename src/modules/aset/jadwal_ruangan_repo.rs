@@ -12,10 +12,11 @@ pub async fn create_jadwal_repo(
     payload: CreateJadwalPayload,
 ) -> Result<Vec<JadwalRuangan>, AppError> {
     let mut instances_to_create: Vec<OffsetDateTime> = vec![payload.waktu_mulai];
-    let recurring_event_id = Uuid::new_v4();
+    let recurring_event_id: Option<Uuid>;
 
-    // 1. Hitung semua tanggal kejadian jika ini adalah jadwal berulang
+    // 1. Hitung semua tanggal kejadian dan tentukan recurring_event_id
     if let (Some(tipe), Some(end_date)) = (payload.tipe_perulangan, payload.tanggal_akhir_perulangan) {
+        recurring_event_id = Some(Uuid::new_v4()); // <-- Isi nilai di cabang `if`
         let mut current_start_time = payload.waktu_mulai;
         let duration_to_add = match tipe {
             TipePerulangan::Harian => Duration::days(1),
@@ -29,6 +30,8 @@ pub async fn create_jadwal_repo(
             }
             instances_to_create.push(current_start_time);
         }
+    } else {
+        recurring_event_id = None; // <-- Isi nilai di cabang `else`
     }
 
     let mut tx = pool.begin().await?;
@@ -70,14 +73,14 @@ pub async fn create_jadwal_repo(
     }
 
     tx.commit().await?;
-
-    // 3. Ambil dan kembalikan semua data jadwal yang baru dibuat
+    
+    // (Sisa fungsi untuk mengambil data kembali tidak berubah)
     let new_jadwals = sqlx::query_as!(
         JadwalRuangan,
         r#"
         SELECT 
             j.id, j.ruangan_id, j.judul_kegiatan, j.deskripsi,
-            j.waktu_mulai, j.waktu_selesai, j.recurring_event_id,
+            j.waktu_mulai, j.waktu_selesai, j.recurring_event_id,j.jadwal_kuliah_id,
             j.user_pembuat_id, u.full_name as "nama_pembuat!"
         FROM jadwal_ruangan j
         JOIN users u ON j.user_pembuat_id = u.id
@@ -85,7 +88,7 @@ pub async fn create_jadwal_repo(
         "#,
         &created_jadwal_ids
     ).fetch_all(pool).await?;
-
+    
     Ok(new_jadwals)
 }
 
@@ -99,7 +102,7 @@ pub async fn get_jadwal_by_ruangan_repo(
         r#"
         SELECT 
             j.id, j.ruangan_id, j.judul_kegiatan, j.deskripsi,
-            j.waktu_mulai, j.waktu_selesai, j.recurring_event_id,
+            j.waktu_mulai, j.waktu_selesai, j.recurring_event_id,j.jadwal_kuliah_id,
             j.user_pembuat_id, u.full_name as "nama_pembuat!"
         FROM jadwal_ruangan j
         JOIN users u ON j.user_pembuat_id = u.id
@@ -125,6 +128,17 @@ pub async fn delete_jadwal_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError>
     if rows_affected == 0 {
         return Err(sqlx::Error::RowNotFound.into());
     }
+
+    Ok(())
+}
+
+pub async fn delete_recurring_jadwal_repo(pool: &DbPool, recurring_id: Uuid) -> Result<(), AppError> {
+    sqlx::query!(
+        "DELETE FROM jadwal_ruangan WHERE recurring_event_id = $1",
+        recurring_id
+    )
+    .execute(pool)
+    .await?;
 
     Ok(())
 }

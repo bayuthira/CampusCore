@@ -23,6 +23,7 @@ pub struct JadwalRuangan {
     #[serde(with = "time::serde::rfc3339")]
     pub waktu_selesai: OffsetDateTime,
     pub recurring_event_id: Option<Uuid>,
+    pub jadwal_kuliah_id: Option<Uuid>,
     pub user_pembuat_id: Uuid,
     pub nama_pembuat: String, // Dari join ke tabel users
 }

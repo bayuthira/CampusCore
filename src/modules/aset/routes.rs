@@ -122,6 +122,10 @@ pub fn aset_router() -> Router<DbPool> {
             delete(jadwal_ruangan_handler::delete_jadwal_handler)
         )
         .route(
+            "/aset/ruangan/jadwal/recurring/{id}",
+            delete(jadwal_ruangan_handler::delete_recurring_jadwal_handler)
+        )
+        .route(
             "/aset/ruangan/{id}/jadwal",
             get(jadwal_ruangan_handler::get_jadwal_by_ruangan_handler)
         )
