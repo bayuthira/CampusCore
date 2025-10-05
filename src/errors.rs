@@ -133,6 +133,8 @@ impl IntoResponse for AppError {
                         .contains("jadwal_kuliah_matakuliah_id_tahun_akademik_id_kelas_key")
                     {
                         "Jadwal untuk mata kuliah ini di kelas dan tahun akademik yang sama sudah ada.".to_string()
+                    } else if err_string.contains("kendaraan_nomor_polisi_key") {
+                        "Nomor Polisi ini sudah terdaftar.".to_string()
                     } else {
                         // Pesan fallback jika constraint tidak dikenali
                         "Data yang Anda masukkan sudah ada di sistem (nilai duplikat).".to_string()

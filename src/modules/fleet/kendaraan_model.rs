@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sqlx::Type;
+use sqlx::{Type,FromRow};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -53,4 +53,23 @@ impl StatusKendaraan {
             StatusKendaraan::Perawatan => "Perawatan",
         }
     }
+}
+
+
+// Untuk query parameter: ?start=...&end=...
+#[derive(Debug, Deserialize)]
+pub struct AvailableVehicleFilter {
+    #[serde(with = "time::serde::rfc3339")]
+    pub start: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub end: OffsetDateTime,
+}
+
+// Struct respons yang lebih sederhana untuk daftar kendaraan
+#[derive(Debug, Serialize, FromRow)]
+pub struct KendaraanLookup {
+    pub id: Uuid,
+    pub jenis: JenisKendaraan,
+    pub nama: String,
+    pub nomor_polisi: String,
 }

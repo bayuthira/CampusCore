@@ -1,4 +1,4 @@
-use crate::{db::DbPool, errors::AppError, modules::fleet::kendaraan_model::{JenisKendaraan, Kendaraan, KendaraanPayload, StatusKendaraan}};
+use crate::{db::DbPool, errors::AppError, modules::fleet::kendaraan_model::{Kendaraan, KendaraanPayload,AvailableVehicleFilter,KendaraanLookup}};
 use uuid::Uuid;
 
 pub async fn create_repo(pool: &DbPool, payload: KendaraanPayload) -> Result<Kendaraan, AppError> {
@@ -72,4 +72,26 @@ pub async fn delete_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
     Ok(())
 }
 
-// Buat fungsi get_by_id, update, dan delete dengan pola yang sama
+pub async fn search_available_vehicles_repo(pool: &DbPool, filter: AvailableVehicleFilter) -> Result<Vec<KendaraanLookup>, AppError> {
+    let available_vehicles = sqlx::query_as!(
+        KendaraanLookup,
+        r#"
+        SELECT k.id, k.jenis as "jenis: _", k.nama, k.nomor_polisi
+        FROM kendaraan k
+        WHERE k.status = 'Tersedia' AND NOT EXISTS (
+            SELECT 1
+            FROM booking_kendaraan bk
+            WHERE bk.kendaraan_id = k.id
+            AND bk.status IN ('Disetujui', 'Berlangsung', 'Diajukan')
+            AND (bk.waktu_berangkat, bk.estimasi_waktu_kembali) OVERLAPS ($1, $2)
+        )
+        ORDER BY k.nama
+        "#,
+        filter.start,
+        filter.end
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(available_vehicles)
+}

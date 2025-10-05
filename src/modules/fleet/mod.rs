@@ -1,4 +1,7 @@
 pub mod kendaraan_model;
 pub mod kendaraan_repo;
 pub mod kendaraan_handler;
+pub mod booking_model;
+pub mod booking_repo;
+pub mod booking_handler;
 pub mod routes;

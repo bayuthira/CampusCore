@@ -1,5 +1,5 @@
-use crate::{db::DbPool, errors::AppError, modules::fleet::{kendaraan_model::{Kendaraan, KendaraanPayload}, kendaraan_repo as repo}};
-use axum::{extract::{Path, State, Json}, http::StatusCode, response::IntoResponse};
+use crate::{db::DbPool, modules::fleet::{kendaraan_model::{KendaraanPayload,AvailableVehicleFilter}, kendaraan_repo as repo}};
+use axum::{extract::{Path, State, Json,Query}, http::StatusCode, response::IntoResponse};
 use uuid::Uuid;
 
 pub async fn create_handler(State(pool): State<DbPool>, Json(payload): Json<KendaraanPayload>) -> impl IntoResponse {
@@ -33,6 +33,16 @@ pub async fn update_handler(State(pool): State<DbPool>, Path(id): Path<Uuid>, Js
 pub async fn delete_handler(State(pool): State<DbPool>, Path(id): Path<Uuid>) -> impl IntoResponse {
     match repo::delete_repo(&pool, id).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => e.into_response(),
+    }
+}
+
+pub async fn search_available_vehicles_handler(
+    State(pool): State<DbPool>,
+    Query(filter): Query<AvailableVehicleFilter>,
+) -> impl IntoResponse {
+    match repo::search_available_vehicles_repo(&pool, filter).await {
+        Ok(list) => Json(list).into_response(),
         Err(e) => e.into_response(),
     }
 }
