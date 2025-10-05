@@ -1,5 +1,6 @@
-use crate::{db::DbPool, errors::AppError, modules::fleet::booking_model::CreateBookingPayload};
+use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
+use super::booking_model::{BookingDetail, BookingFilter, StatusBooking,CreateBookingPayload};
 
 pub async fn create_booking_repo(pool: &DbPool, user_pemesan_id: Uuid, payload: CreateBookingPayload) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
@@ -21,5 +22,43 @@ pub async fn create_booking_repo(pool: &DbPool, user_pemesan_id: Uuid, payload: 
     ).execute(&mut *tx).await?;
 
     tx.commit().await?;
+    Ok(())
+}
+
+pub async fn get_all_bookings_repo(pool: &DbPool, filter: BookingFilter) -> Result<Vec<BookingDetail>, AppError> {
+    let mut query = sqlx::QueryBuilder::new(r#"
+        SELECT b.id, b.kendaraan_id, k.nama as nama_kendaraan, b.user_pemesan_id, u.full_name as nama_pemesan,
+        b.tujuan, b.waktu_berangkat, b.estimasi_waktu_kembali, b.status -- <-- PERBAIKI DI SINI
+        FROM booking_kendaraan b
+        JOIN kendaraan k ON b.kendaraan_id = k.id
+        JOIN users u ON b.user_pemesan_id = u.id
+    "#);
+
+    if let Some(status) = filter.status {
+        query.push(" WHERE b.status = CAST(");
+        query.push_bind(status.as_str());
+        query.push(" AS \"StatusBooking\")");
+    }
+    
+    query.push(" ORDER BY b.waktu_berangkat DESC");
+
+    let list = query.build_query_as::<BookingDetail>().fetch_all(pool).await?;
+    Ok(list)
+}
+
+
+pub async fn approve_booking_repo(pool: &DbPool, id: Uuid, user_approve_id: Uuid, catatan: Option<String>) -> Result<(), AppError> {
+    sqlx::query!(
+        "UPDATE booking_kendaraan SET status = 'Disetujui', user_approve_id = $1, catatan_approval = $2, updated_at = now() WHERE id = $3 AND status = 'Diajukan'",
+        user_approve_id, catatan, id
+    ).execute(pool).await?;
+    Ok(())
+}
+
+pub async fn reject_booking_repo(pool: &DbPool, id: Uuid, user_approve_id: Uuid, catatan: Option<String>) -> Result<(), AppError> {
+    sqlx::query!(
+        "UPDATE booking_kendaraan SET status = 'Ditolak', user_approve_id = $1, catatan_approval = $2, updated_at = now() WHERE id = $3 AND status = 'Diajukan'",
+        user_approve_id, catatan, id
+    ).execute(pool).await?;
     Ok(())
 }
