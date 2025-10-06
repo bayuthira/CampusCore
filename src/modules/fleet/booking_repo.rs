@@ -1,6 +1,6 @@
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
-use super::booking_model::{BookingDetail, BookingFilter, StatusBooking,CreateBookingPayload};
+use super::booking_model::{BookingDetail, BookingFilter, CreateBookingPayload};
 
 pub async fn create_booking_repo(pool: &DbPool, user_pemesan_id: Uuid, payload: CreateBookingPayload) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
