@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::Type;
 use time::OffsetDateTime;
 use uuid::Uuid;
+use rust_decimal::Decimal;
 
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
 #[sqlx(type_name = "StatusBooking")]
@@ -53,4 +54,32 @@ impl StatusBooking {
             StatusBooking::Selesai => "Selesai",
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StartTripPayload {
+    pub odometer_awal: i32,
+    #[serde(default, with = "time::serde::rfc3339::option")]
+    pub waktu_aktual_berangkat: Option<OffsetDateTime>, // Opsional
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EndTripPayload {
+    pub odometer_akhir: i32,
+    pub bahan_bakar_diisi: Option<Decimal>,
+    pub catatan_kondisi_kembali: Option<String>,
+    #[serde(default, with = "time::serde::rfc3339::option")]
+    pub waktu_aktual_kembali: Option<OffsetDateTime>, // Opsional
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct LogPenggunaanDetail {
+    pub odometer_awal: Option<i32>,
+    pub odometer_akhir: Option<i32>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub waktu_aktual_berangkat: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub waktu_aktual_kembali: Option<OffsetDateTime>,
+    pub bahan_bakar_diisi: Option<Decimal>,
+    pub catatan_kondisi_kembali: Option<String>,
 }

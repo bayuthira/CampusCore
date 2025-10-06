@@ -5,3 +5,7 @@ pub mod booking_model;
 pub mod booking_repo;
 pub mod booking_handler;
 pub mod routes;
+pub mod servis_handler;
+pub mod servis_model;
+pub mod servis_repo;
+pub mod servis_routes;

@@ -1,6 +1,7 @@
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
-use super::booking_model::{BookingDetail, BookingFilter, CreateBookingPayload};
+use super::booking_model::{BookingDetail, BookingFilter, CreateBookingPayload,StartTripPayload,EndTripPayload,LogPenggunaanDetail};
+use time::OffsetDateTime;
 
 pub async fn create_booking_repo(pool: &DbPool, user_pemesan_id: Uuid, payload: CreateBookingPayload) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
@@ -61,4 +62,136 @@ pub async fn reject_booking_repo(pool: &DbPool, id: Uuid, user_approve_id: Uuid,
         user_approve_id, catatan, id
     ).execute(pool).await?;
     Ok(())
+}
+
+pub async fn start_trip_repo(
+    pool: &DbPool,
+    booking_id: Uuid,
+    payload: StartTripPayload,
+) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+
+    let booking = sqlx::query!(
+        "SELECT kendaraan_id FROM booking_kendaraan WHERE id = $1 AND status = 'Disetujui'",
+        booking_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| {
+        AppError::Forbidden("Booking tidak ditemukan atau statusnya bukan 'Disetujui'.".to_string())
+    })?;
+
+    // Tentukan timestamp: gunakan dari payload, atau waktu sekarang jika tidak ada
+    let berangkat_timestamp = payload
+        .waktu_aktual_berangkat
+        .unwrap_or_else(OffsetDateTime::now_utc);
+
+    // Buat log penggunaan baru dengan timestamp yang sudah ditentukan
+    sqlx::query!(
+        "INSERT INTO log_penggunaan (booking_id, odometer_awal, waktu_aktual_berangkat) VALUES ($1, $2, $3)",
+        booking_id,
+        payload.odometer_awal,
+        berangkat_timestamp
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query!(
+        "UPDATE booking_kendaraan SET status = 'Berlangsung' WHERE id = $1",
+        booking_id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query!(
+        "UPDATE kendaraan SET status = 'Digunakan' WHERE id = $1",
+        booking.kendaraan_id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn end_trip_repo(
+    pool: &DbPool,
+    booking_id: Uuid,
+    payload: EndTripPayload,
+) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+
+    let booking = sqlx::query!(
+        "SELECT kendaraan_id FROM booking_kendaraan WHERE id = $1 AND status = 'Berlangsung'",
+        booking_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| {
+        AppError::Forbidden(
+            "Booking tidak ditemukan atau statusnya bukan 'Berlangsung'.".to_string(),
+        )
+    })?;
+
+    // Tentukan timestamp: gunakan dari payload, atau waktu sekarang jika tidak ada
+    let kembali_timestamp = payload
+        .waktu_aktual_kembali
+        .unwrap_or_else(OffsetDateTime::now_utc);
+
+    // Update log penggunaan dengan timestamp yang sudah ditentukan
+    sqlx::query!(
+        "UPDATE log_penggunaan SET odometer_akhir = $1, bahan_bakar_diisi = $2, catatan_kondisi_kembali = $3, waktu_aktual_kembali = $4 WHERE booking_id = $5",
+        payload.odometer_akhir,
+        payload.bahan_bakar_diisi,
+        payload.catatan_kondisi_kembali,
+        kembali_timestamp,
+        booking_id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query!(
+        "UPDATE booking_kendaraan SET status = 'Selesai' WHERE id = $1",
+        booking_id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query!(
+        "UPDATE kendaraan SET status = 'Tersedia' WHERE id = $1",
+        booking.kendaraan_id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn get_my_bookings_repo(pool: &DbPool, user_pemesan_id: Uuid) -> Result<Vec<BookingDetail>, AppError> {
+    let list = sqlx::query_as!(
+        BookingDetail,
+        r#"
+        SELECT b.id, b.kendaraan_id, k.nama as nama_kendaraan, b.user_pemesan_id, u.full_name as nama_pemesan,
+        b.tujuan, b.waktu_berangkat, b.estimasi_waktu_kembali, b.status as "status: _"
+        FROM booking_kendaraan b
+        JOIN kendaraan k ON b.kendaraan_id = k.id
+        JOIN users u ON b.user_pemesan_id = u.id
+        WHERE b.user_pemesan_id = $1
+        ORDER BY b.waktu_berangkat DESC
+        "#,
+        user_pemesan_id
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(list)
+}
+
+pub async fn get_log_by_booking_id_repo(pool: &DbPool, booking_id: Uuid) -> Result<LogPenggunaanDetail, AppError> {
+    let log = sqlx::query_as!(
+        LogPenggunaanDetail,
+        "SELECT odometer_awal, odometer_akhir, waktu_aktual_berangkat, waktu_aktual_kembali, bahan_bakar_diisi, catatan_kondisi_kembali FROM log_penggunaan WHERE booking_id = $1",
+        booking_id
+    ).fetch_one(pool).await?;
+    Ok(log)
 }

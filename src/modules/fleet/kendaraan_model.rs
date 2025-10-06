@@ -45,16 +45,6 @@ pub struct KendaraanPayload {
     pub tahun: Option<i16>,
 }
 
-impl StatusKendaraan {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            StatusKendaraan::Tersedia => "Tersedia",
-            StatusKendaraan::Digunakan => "Digunakan",
-            StatusKendaraan::Perawatan => "Perawatan",
-        }
-    }
-}
-
 
 // Untuk query parameter: ?start=...&end=...
 #[derive(Debug, Deserialize)]

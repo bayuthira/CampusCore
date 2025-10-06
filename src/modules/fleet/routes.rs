@@ -25,6 +25,9 @@ pub fn fleet_router() -> Router<DbPool> {
             "/fleet/bookings/{id}/reject",
             put(booking_handler::reject_booking_handler),
         )
+        .route("/fleet/bookings/{id}/start-trip", post(booking_handler::start_trip_handler))
+        .route("/fleet/bookings/{id}/end-trip", post(booking_handler::end_trip_handler))
+        .route("/fleet/bookings/{id}/log", get(booking_handler::get_log_by_booking_id_handler))
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),
             "STAF_BAUM".to_string(),
@@ -41,7 +44,8 @@ pub fn fleet_router() -> Router<DbPool> {
         .route(
             "/fleet/bookings",
             post(booking_handler::create_booking_handler),
-        );
+        )
+        .route("/fleet/my-bookings", get(booking_handler::get_my_bookings_handler));
 
     // Gabungkan kedua grup
     Router::new().merge(admin_routes).merge(all_user_routes)
