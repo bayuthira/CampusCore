@@ -1,5 +1,5 @@
 use super::{
-    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload,CreateHistoriPayload,PinjamAsetPayload, KembalikanAsetPayload,AsetFilter},
+    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload,CreateHistoriPayload,PinjamAsetPayload, KembalikanAsetPayload,AsetFilter,KondisiAsetSummary},
     repo as aset_repo,
     histori_repo as histori_aset_repo,
 };
@@ -128,4 +128,9 @@ pub async fn kembalikan_aset_handler(
     Ok(Json(SuccessResponse {
         message: "Aset berhasil dicatat sebagai dikembalikan.".to_string(),
     }))
+}
+
+pub async fn get_kondisi_summary_handler(State(pool): State<DbPool>) -> Result<Json<KondisiAsetSummary>, AppError> {
+    let summary = aset_repo::get_kondisi_summary_repo(&pool).await?;
+    Ok(Json(summary))
 }

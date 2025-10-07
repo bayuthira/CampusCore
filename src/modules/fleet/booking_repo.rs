@@ -1,6 +1,6 @@
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
-use super::booking_model::{BookingDetail, BookingFilter, CreateBookingPayload,StartTripPayload,EndTripPayload,LogPenggunaanDetail};
+use super::booking_model::{BookingDetail, BookingFilter, CreateBookingPayload,StartTripPayload,EndTripPayload,LogPenggunaanDetail,BookingSummary};
 use time::OffsetDateTime;
 
 pub async fn create_booking_repo(pool: &DbPool, user_pemesan_id: Uuid, payload: CreateBookingPayload) -> Result<(), AppError> {
@@ -194,4 +194,31 @@ pub async fn get_log_by_booking_id_repo(pool: &DbPool, booking_id: Uuid) -> Resu
         booking_id
     ).fetch_one(pool).await?;
     Ok(log)
+}
+
+
+pub async fn get_booking_summary_repo(pool: &DbPool) -> Result<BookingSummary, AppError> {
+    let summary = sqlx::query!(
+        r#"
+        SELECT
+            COUNT(*) FILTER (WHERE status = 'Diajukan') as "diajukan!",
+            COUNT(*) FILTER (WHERE status = 'Disetujui') as "disetujui!",
+            COUNT(*) FILTER (WHERE status = 'Ditolak') as "ditolak!",
+            COUNT(*) FILTER (WHERE status = 'Dibatalkan') as "dibatalkan!",
+            COUNT(*) FILTER (WHERE status = 'Berlangsung') as "berlangsung!",
+            COUNT(*) FILTER (WHERE status = 'Selesai') as "selesai!"
+        FROM booking_kendaraan
+        "#
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(BookingSummary {
+        diajukan: summary.diajukan,
+        disetujui: summary.disetujui,
+        ditolak: summary.ditolak,
+        dibatalkan: summary.dibatalkan,
+        berlangsung: summary.berlangsung,
+        selesai: summary.selesai,
+    })
 }

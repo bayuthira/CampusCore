@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Type,FromRow};
 use time::OffsetDateTime;
 use uuid::Uuid;
+use rust_decimal::Decimal;
 
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
 #[sqlx(type_name = "JenisKendaraan")]
@@ -62,4 +63,11 @@ pub struct KendaraanLookup {
     pub jenis: JenisKendaraan,
     pub nama: String,
     pub nomor_polisi: String,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct KendaraanSummary {
+    pub total_biaya_servis: Decimal,
+    pub total_jarak_tempuh: i64, // Jarak dalam kilometer
+    pub biaya_per_km: Decimal,
 }

@@ -2,11 +2,10 @@ use super::{
     model::{AsetHabisPakai, AsetHabisPakaiPayload,StokTransaksiPayload,StokOpnamePayload,HistoriStokDetail},
     repo, // kita akan panggil repo::...
 };
-use crate::modules::auth::middleware::TokenClaims; 
-use axum::Extension; 
-use crate::{db::DbPool, errors::AppError};
-use axum::{extract::{Path, State, Json}, http::StatusCode};
+use crate::{db::DbPool, errors::AppError,modules::auth::middleware::TokenClaims};
+use axum::{extract::{Path, State, Json}, http::StatusCode,Extension,response::IntoResponse};
 use uuid::Uuid;
+
 
 pub async fn create_handler(State(pool): State<DbPool>, Json(payload): Json<AsetHabisPakaiPayload>) -> Result<(StatusCode, Json<AsetHabisPakai>), AppError> {
     let item = repo::create_repo(&pool, payload).await?;
@@ -73,4 +72,11 @@ pub async fn stok_opname_handler(
     let user_id = claims.sub;
     let updated_item = repo::stok_opname_repo(&pool, id, payload, user_id).await?;
     Ok(Json(updated_item))
+}
+
+pub async fn get_low_stock_handler(State(pool): State<DbPool>) -> impl IntoResponse {
+    match repo::get_low_stock_repo(&pool).await {
+        Ok(list) => Json(list).into_response(),
+        Err(e) => e.into_response(),
+    }
 }

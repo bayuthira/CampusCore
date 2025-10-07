@@ -63,3 +63,12 @@ pub struct StokOpnamePayload {
     pub stok_fisik: i32,
     pub catatan: Option<String>,
 }
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct AsetLowStock {
+    pub id: Uuid,
+    pub nama_barang: String,
+    pub stok: i32,
+    pub batas_minimum_stok: i32,
+}
+

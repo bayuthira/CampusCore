@@ -1,4 +1,4 @@
-use super::model::{AsetHabisPakai, AsetHabisPakaiPayload,StokTransaksiPayload,HistoriStokDetail,StokOpnamePayload};
+use super::model::{AsetHabisPakai, AsetHabisPakaiPayload,StokTransaksiPayload,HistoriStokDetail,StokOpnamePayload,AsetLowStock};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
 use time::OffsetDateTime; 
@@ -156,4 +156,15 @@ pub async fn stok_opname_repo(pool: &DbPool, id: Uuid, payload: StokOpnamePayloa
 
     tx.commit().await?;
     Ok(updated_aset)
+}
+
+
+pub async fn get_low_stock_repo(pool: &DbPool) -> Result<Vec<AsetLowStock>, AppError> {
+    let list = sqlx::query_as!(
+        AsetLowStock,
+        "SELECT id, nama_barang, stok, batas_minimum_stok FROM aset_habis_pakai WHERE stok <= batas_minimum_stok ORDER BY nama_barang ASC"
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(list)
 }

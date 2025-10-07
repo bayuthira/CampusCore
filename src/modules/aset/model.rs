@@ -148,3 +148,13 @@ pub struct KembalikanAsetPayload {
 pub struct AsetFilter {
     pub ruangan_id: Option<Uuid>,
 }
+
+
+#[derive(Debug, Serialize, Default, sqlx::FromRow)]
+pub struct KondisiAsetSummary {
+    pub baik: i64,
+    pub rusak_ringan: i64,
+    pub rusak_berat: i64,
+    pub dalam_perbaikan: i64,
+    pub dihapuskan: i64,
+}

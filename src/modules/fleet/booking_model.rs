@@ -83,3 +83,13 @@ pub struct LogPenggunaanDetail {
     pub bahan_bakar_diisi: Option<Decimal>,
     pub catatan_kondisi_kembali: Option<String>,
 }
+
+#[derive(Debug, Serialize, Default)]
+pub struct BookingSummary {
+    pub diajukan: i64,
+    pub disetujui: i64,
+    pub ditolak: i64,
+    pub dibatalkan: i64,
+    pub berlangsung: i64,
+    pub selesai: i64,
+}

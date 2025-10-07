@@ -62,3 +62,10 @@ pub async fn get_log_by_booking_id_handler(State(pool): State<DbPool>, Path(id):
         Err(e) => e.into_response(),
     }
 }
+
+pub async fn get_booking_summary_handler(State(pool): State<DbPool>) -> impl IntoResponse {
+    match repo::get_booking_summary_repo(&pool).await {
+        Ok(summary) => Json(summary).into_response(),
+        Err(e) => e.into_response(),
+    }
+}

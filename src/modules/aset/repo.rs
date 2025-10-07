@@ -1,4 +1,4 @@
-use super::model::{AsetDetail, AsetPayload, KondisiAset,AsetFilter};
+use super::model::{AsetDetail, AsetPayload, KondisiAset,AsetFilter,KondisiAsetSummary};
 
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
@@ -180,4 +180,23 @@ pub async fn delete_aset_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
         return Err(sqlx::Error::RowNotFound.into());
     }
     Ok(())
+}
+
+pub async fn get_kondisi_summary_repo(pool: &DbPool) -> Result<KondisiAsetSummary, AppError> {
+    let summary = sqlx::query_as!(
+        KondisiAsetSummary,
+        r#"
+        SELECT
+            COUNT(*) FILTER (WHERE kondisi = 'Baik') as "baik!",
+            COUNT(*) FILTER (WHERE kondisi = 'Rusak Ringan') as "rusak_ringan!",
+            COUNT(*) FILTER (WHERE kondisi = 'Rusak Berat') as "rusak_berat!",
+            COUNT(*) FILTER (WHERE kondisi = 'Dalam Perbaikan') as "dalam_perbaikan!",
+            COUNT(*) FILTER (WHERE kondisi = 'Dihapuskan') as "dihapuskan!"
+        FROM aset
+        "#
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(summary)
 }

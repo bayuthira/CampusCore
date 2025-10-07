@@ -1,15 +1,15 @@
 // src/modules/aset/routes.rs
 use super::{
-    habis_pakai::handler as habis_pakai_handler, handler as aset_handler, jenis_aset_handler,
-    ruangan_handler,
-    biaya_handler,
-    jadwal_ruangan_handler,
+    biaya_handler, habis_pakai::handler as habis_pakai_handler, handler as aset_handler,
+    jadwal_ruangan_handler, jenis_aset_handler, ruangan_handler,
 };
 
-use crate::{db::DbPool, modules::auth::middleware::require_role, modules::akademik::jadwal_kuliah_handler};
+use crate::{
+    db::DbPool, modules::akademik::jadwal_kuliah_handler, modules::auth::middleware::require_role,
+};
 use axum::{
     Router, middleware,
-    routing::{get, post,put,delete},
+    routing::{delete, get, post, put},
 };
 
 pub fn aset_router() -> Router<DbPool> {
@@ -71,13 +71,13 @@ pub fn aset_router() -> Router<DbPool> {
             "/aset/biaya/{id}",
             put(biaya_handler::update_biaya_handler).delete(biaya_handler::delete_biaya_handler),
         )
-                .route(
+        .route(
             "/aset/biaya/{id}/update-bukti",
-            post(biaya_handler::update_bukti_handler)
+            post(biaya_handler::update_bukti_handler),
         )
         .route(
             "/aset/biaya/{id}/hapus-bukti",
-            delete(biaya_handler::delete_bukti_handler)
+            delete(biaya_handler::delete_bukti_handler),
         )
         .route(
             "/aset/konsumsi",
@@ -115,26 +115,36 @@ pub fn aset_router() -> Router<DbPool> {
         )
         .route(
             "/aset/ruangan/jadwal",
-            post(jadwal_ruangan_handler::create_jadwal_handler)
+            post(jadwal_ruangan_handler::create_jadwal_handler),
         )
         .route(
             "/aset/ruangan/jadwal/{id}",
-            delete(jadwal_ruangan_handler::delete_jadwal_handler)
+            delete(jadwal_ruangan_handler::delete_jadwal_handler),
         )
         .route(
             "/aset/ruangan/jadwal/recurring/{id}",
-            delete(jadwal_ruangan_handler::delete_recurring_jadwal_handler)
+            delete(jadwal_ruangan_handler::delete_recurring_jadwal_handler),
         )
         .route(
             "/aset/ruangan/{id}/jadwal",
-            get(jadwal_ruangan_handler::get_jadwal_by_ruangan_handler)
+            get(jadwal_ruangan_handler::get_jadwal_by_ruangan_handler),
         )
-        .route("/akademik/plot-jadwal-ruangan", post(jadwal_kuliah_handler::plot_jadwal_ruangan_handler))
+        .route(
+            "/akademik/plot-jadwal-ruangan",
+            post(jadwal_kuliah_handler::plot_jadwal_ruangan_handler),
+        )
         .route(
             "/akademik/plot-jadwal-ruangan/{id}",
-            delete(jadwal_kuliah_handler::unplot_jadwal_ruangan_handler)
+            delete(jadwal_kuliah_handler::unplot_jadwal_ruangan_handler),
         )
-
+        .route(
+            "/aset/summary-kondisi",
+            get(aset_handler::get_kondisi_summary_handler),
+        )
+        .route(
+            "/aset/konsumsi/low-stock",
+            get(habis_pakai_handler::get_low_stock_handler)
+        )
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),

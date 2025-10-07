@@ -1,5 +1,6 @@
-use crate::{db::DbPool, errors::AppError, modules::fleet::kendaraan_model::{Kendaraan, KendaraanPayload,AvailableVehicleFilter,KendaraanLookup}};
+use crate::{db::DbPool, errors::AppError, modules::fleet::kendaraan_model::{Kendaraan, KendaraanPayload,AvailableVehicleFilter,KendaraanLookup,KendaraanSummary}};
 use uuid::Uuid;
+use rust_decimal::Decimal;
 
 pub async fn create_repo(pool: &DbPool, payload: KendaraanPayload) -> Result<Kendaraan, AppError> {
     let jenis_str = payload.jenis.as_str();
@@ -94,4 +95,43 @@ pub async fn search_available_vehicles_repo(pool: &DbPool, filter: AvailableVehi
     .await?;
 
     Ok(available_vehicles)
+}
+
+pub async fn get_vehicle_summary_repo(pool: &DbPool, kendaraan_id: Uuid) -> Result<KendaraanSummary, AppError> {
+    // 1. Hitung total biaya servis
+    let total_biaya_record = sqlx::query!(
+        "SELECT SUM(biaya) as total FROM servis_kendaraan WHERE kendaraan_id = $1",
+        kendaraan_id
+    )
+    .fetch_one(pool)
+    .await?;
+    let total_biaya_servis = total_biaya_record.total.unwrap_or_else(|| Decimal::from(0));
+
+    // 2. Hitung total jarak tempuh
+    let total_jarak_record = sqlx::query!(
+        r#"
+        SELECT SUM(odometer_akhir - odometer_awal) as total
+        FROM log_penggunaan
+        WHERE booking_id IN (SELECT id FROM booking_kendaraan WHERE kendaraan_id = $1)
+        AND odometer_akhir IS NOT NULL AND odometer_awal IS NOT NULL
+        "#,
+        kendaraan_id
+    )
+    .fetch_one(pool)
+    .await?;
+    // Konversi dari Option<i64> ke i64, default ke 0
+    let total_jarak_tempuh = total_jarak_record.total.unwrap_or(0);
+
+    // 3. Hitung biaya per km
+    let biaya_per_km = if total_jarak_tempuh > 0 {
+        (total_biaya_servis / Decimal::from(total_jarak_tempuh)).round_dp(2)
+    } else {
+        Decimal::from(0)
+    };
+
+    Ok(KendaraanSummary {
+        total_biaya_servis,
+        total_jarak_tempuh,
+        biaya_per_km,
+    })
 }

@@ -46,3 +46,10 @@ pub async fn search_available_vehicles_handler(
         Err(e) => e.into_response(),
     }
 }
+
+pub async fn get_vehicle_summary_handler(State(pool): State<DbPool>, Path(id): Path<Uuid>) -> impl IntoResponse {
+    match repo::get_vehicle_summary_repo(&pool, id).await {
+        Ok(summary) => Json(summary).into_response(),
+        Err(e) => e.into_response(),
+    }
+}
