@@ -2,7 +2,7 @@ use crate::{
     db::DbPool,
     errors::AppError,
 };
-use super::biaya_model::{BiayaAset, BiayaAsetPayload};
+use super::biaya_model::{BiayaAset, BiayaAsetPayload, BiayaSummaryItem, BiayaSummaryFilter};
 use uuid::Uuid;
 
 
@@ -200,4 +200,21 @@ pub async fn delete_bukti_repo(pool: &DbPool, id: Uuid) -> Result<BiayaAset, App
 
     let updated_biaya = get_biaya_by_id_repo(pool, id).await?;
     Ok(updated_biaya)
+}
+
+pub async fn get_biaya_summary_repo(pool: &DbPool, filter: BiayaSummaryFilter) -> Result<Vec<BiayaSummaryItem>, AppError> {
+    let summary = sqlx::query_as!(
+        BiayaSummaryItem,
+        r#"
+        SELECT 
+            tipe_biaya::TEXT as "tipe_biaya!",
+            SUM(jumlah) as total
+        FROM biaya_aset
+        WHERE tanggal_transaksi BETWEEN $1 AND $2
+        GROUP BY tipe_biaya
+        "#,
+        filter.start_date,
+        filter.end_date
+    ).fetch_all(pool).await?;
+    Ok(summary)
 }

@@ -62,3 +62,15 @@ impl TipeBiaya {
         }
     }
 }
+
+#[derive(Debug, Deserialize)]
+pub struct BiayaSummaryFilter {
+    pub start_date: Date,
+    pub end_date: Date,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct BiayaSummaryItem {
+    pub tipe_biaya: String,
+    pub total: Option<Decimal>,
+}

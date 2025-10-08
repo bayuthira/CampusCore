@@ -3,14 +3,15 @@ use crate::{
     modules::auth::middleware::TokenClaims,
     db::DbPool,
     errors::AppError,
-    modules::aset::biaya_model::{BiayaAset, BiayaAsetPayload,TipeBiaya},
+    modules::aset::biaya_model::{BiayaAset, BiayaAsetPayload,TipeBiaya, BiayaSummaryFilter},
     modules::aset::biaya_repo,
     utils::file_validator::validate_file,
 };
 use axum::{
-    extract::{Path, State, Json,Multipart},
+    extract::{Path, State, Json,Multipart,Query},
     http::StatusCode,
     Extension,
+    response::IntoResponse,
 };
 use uuid::Uuid;
 use rust_decimal::Decimal;
@@ -146,4 +147,12 @@ pub async fn delete_bukti_handler(
 ) -> Result<Json<BiayaAset>, AppError> {
     let updated_biaya = biaya_repo::delete_bukti_repo(&pool, id).await?;
     Ok(Json(updated_biaya))
+}
+
+
+pub async fn get_biaya_summary_handler(State(pool): State<DbPool>, Query(filter): Query<BiayaSummaryFilter>) -> impl IntoResponse {
+    match biaya_repo::get_biaya_summary_repo(&pool, filter).await {
+        Ok(summary) => Json(summary).into_response(),
+        Err(e) => e.into_response(),
+    }
 }

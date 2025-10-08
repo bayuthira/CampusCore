@@ -143,7 +143,15 @@ pub fn aset_router() -> Router<DbPool> {
         )
         .route(
             "/aset/konsumsi/low-stock",
-            get(habis_pakai_handler::get_low_stock_handler)
+            get(habis_pakai_handler::get_low_stock_handler),
+        )
+        .route(
+            "/aset/biaya/summary",
+            get(biaya_handler::get_biaya_summary_handler),
+        )
+        .route(
+            "/aset/item/{id}/summary-aktivitas",
+            get(aset_handler::get_aktivitas_summary_handler),
         )
         // Terapkan middleware untuk semua rute di atas
         .route_layer(middleware::from_fn(require_role(vec![

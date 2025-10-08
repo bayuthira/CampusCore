@@ -1,7 +1,7 @@
 // src/modules/aset/histori_repo.rs
 use super::model::{
     AsetDetail, AsetHistoriStatus, CreateHistoriPayload, HistoriAsetDetail, KembalikanAsetPayload,
-    KondisiAset, PindahkanAsetPayload, PinjamAsetPayload, UpdateKondisiPayload,
+    KondisiAset, PindahkanAsetPayload, PinjamAsetPayload, UpdateKondisiPayload, AktivitasSummary
 };
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
@@ -359,4 +359,27 @@ pub async fn kembalikan_aset_repo(
 
     tx.commit().await?;
     Ok(())
+}
+
+pub async fn get_aktivitas_summary_repo(pool: &DbPool, aset_id: Uuid) -> Result<AktivitasSummary, AppError> {
+    let summary = sqlx::query_as!(
+        AktivitasSummary,
+        r#"
+        SELECT
+            COUNT(*) FILTER (WHERE status = 'Ditempatkan') as "ditempatkan!",
+            COUNT(*) FILTER (WHERE status = 'Dipindahkan') as "dipindahkan!",
+            COUNT(*) FILTER (WHERE status = 'Dipinjam') as "dipinjam!",
+            COUNT(*) FILTER (WHERE status = 'Dikembalikan') as "dikembalikan!",
+            COUNT(*) FILTER (WHERE status = 'Dalam Perbaikan') as "dalam_perbaikan!",
+            COUNT(*) FILTER (WHERE status = 'Perbaikan Selesai') as "perbaikan_selesai!",
+            COUNT(*) FILTER (WHERE status = 'Dihapuskan') as "dihapuskan!"
+        FROM histori_aset
+        WHERE aset_id = $1
+        "#,
+        aset_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(summary)
 }

@@ -1,5 +1,5 @@
 use super::{
-    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload,CreateHistoriPayload,PinjamAsetPayload, KembalikanAsetPayload,AsetFilter,KondisiAsetSummary},
+    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload,CreateHistoriPayload,PinjamAsetPayload, KembalikanAsetPayload,AsetFilter,KondisiAsetSummary,AktivitasSummary},
     repo as aset_repo,
     histori_repo as histori_aset_repo,
 };
@@ -13,6 +13,7 @@ use crate::{
 use axum::{
     extract::{Path, State, Json, Query},
     http::StatusCode,
+    response::IntoResponse,
 };
 use uuid::Uuid;
 use axum::Extension;
@@ -133,4 +134,11 @@ pub async fn kembalikan_aset_handler(
 pub async fn get_kondisi_summary_handler(State(pool): State<DbPool>) -> Result<Json<KondisiAsetSummary>, AppError> {
     let summary = aset_repo::get_kondisi_summary_repo(&pool).await?;
     Ok(Json(summary))
+}
+
+pub async fn get_aktivitas_summary_handler(State(pool): State<DbPool>, Path(id): Path<Uuid>) -> impl IntoResponse {
+    match histori_aset_repo::get_aktivitas_summary_repo(&pool, id).await {
+        Ok(summary) => Json(summary).into_response(),
+        Err(e) => e.into_response(),
+    }
 }

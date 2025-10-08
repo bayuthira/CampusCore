@@ -158,3 +158,14 @@ pub struct KondisiAsetSummary {
     pub dalam_perbaikan: i64,
     pub dihapuskan: i64,
 }
+
+#[derive(Debug, Serialize, Default, sqlx::FromRow)]
+pub struct AktivitasSummary {
+    pub ditempatkan: i64,
+    pub dipindahkan: i64,
+    pub dipinjam: i64,
+    pub dikembalikan: i64,
+    pub dalam_perbaikan: i64,
+    pub perbaikan_selesai: i64,
+    pub dihapuskan: i64,
+}
