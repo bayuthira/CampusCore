@@ -1,6 +1,14 @@
-use crate::{db::DbPool, errors::AppError, modules::fleet::kendaraan_model::{Kendaraan, KendaraanPayload,AvailableVehicleFilter,KendaraanLookup,KendaraanSummary}};
+use crate::{
+    db::DbPool,
+    errors::AppError,
+    modules::fleet::kendaraan_model::{
+        AvailableVehicleFilter, Kendaraan, KendaraanLookup, KendaraanPayload, KendaraanSummary,
+        SummaryFilter,
+    },
+};
+use rust_decimal::{Decimal, prelude::Zero};
+use sqlx::Row;
 use uuid::Uuid;
-use rust_decimal::Decimal;
 
 pub async fn create_repo(pool: &DbPool, payload: KendaraanPayload) -> Result<Kendaraan, AppError> {
     let jenis_str = payload.jenis.as_str();
@@ -19,7 +27,7 @@ pub async fn create_repo(pool: &DbPool, payload: KendaraanPayload) -> Result<Ken
     .bind(payload.tahun)
     .fetch_one(pool)
     .await?;
-    
+
     let new_item = get_by_id_repo(pool, id).await?;
     Ok(new_item)
 }
@@ -43,7 +51,11 @@ pub async fn get_by_id_repo(pool: &DbPool, id: Uuid) -> Result<Kendaraan, AppErr
     Ok(item)
 }
 
-pub async fn update_repo(pool: &DbPool, id: Uuid, payload: KendaraanPayload) -> Result<Kendaraan, AppError> {
+pub async fn update_repo(
+    pool: &DbPool,
+    id: Uuid,
+    payload: KendaraanPayload,
+) -> Result<Kendaraan, AppError> {
     let jenis_str = payload.jenis.as_str();
     sqlx::query(
         r#"
@@ -68,12 +80,19 @@ pub async fn update_repo(pool: &DbPool, id: Uuid, payload: KendaraanPayload) -> 
 
 pub async fn delete_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
     let rows_affected = sqlx::query!("DELETE FROM kendaraan WHERE id = $1", id)
-        .execute(pool).await?.rows_affected();
-    if rows_affected == 0 { return Err(sqlx::Error::RowNotFound.into()); }
+        .execute(pool)
+        .await?
+        .rows_affected();
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound.into());
+    }
     Ok(())
 }
 
-pub async fn search_available_vehicles_repo(pool: &DbPool, filter: AvailableVehicleFilter) -> Result<Vec<KendaraanLookup>, AppError> {
+pub async fn search_available_vehicles_repo(
+    pool: &DbPool,
+    filter: AvailableVehicleFilter,
+) -> Result<Vec<KendaraanLookup>, AppError> {
     let available_vehicles = sqlx::query_as!(
         KendaraanLookup,
         r#"
@@ -97,36 +116,55 @@ pub async fn search_available_vehicles_repo(pool: &DbPool, filter: AvailableVehi
     Ok(available_vehicles)
 }
 
-pub async fn get_vehicle_summary_repo(pool: &DbPool, kendaraan_id: Uuid) -> Result<KendaraanSummary, AppError> {
-    // 1. Hitung total biaya servis
-    let total_biaya_record = sqlx::query!(
-        "SELECT SUM(biaya) as total FROM servis_kendaraan WHERE kendaraan_id = $1",
-        kendaraan_id
-    )
-    .fetch_one(pool)
-    .await?;
-    let total_biaya_servis = total_biaya_record.total.unwrap_or_else(|| Decimal::from(0));
+pub async fn get_vehicle_summary_repo(
+    pool: &DbPool,
+    kendaraan_id: Uuid,
+    filter: SummaryFilter,
+) -> Result<KendaraanSummary, AppError> {
+    // 1. Hitung total biaya servis dengan filter tanggal
+    let mut biaya_query = sqlx::QueryBuilder::new(
+        "SELECT SUM(biaya) as total FROM servis_kendaraan WHERE kendaraan_id = ",
+    );
+    biaya_query.push_bind(kendaraan_id);
+    if let (Some(start), Some(end)) = (filter.start_date, filter.end_date) {
+        biaya_query.push(" AND tanggal_servis BETWEEN ");
+        biaya_query.push_bind(start);
+        biaya_query.push(" AND ");
+        biaya_query.push_bind(end);
+    }
+    let total_biaya_servis: Decimal = biaya_query
+        .build()
+        .fetch_one(pool)
+        .await?
+        .try_get("total")
+        .unwrap_or(Decimal::zero());
 
-    // 2. Hitung total jarak tempuh
-    let total_jarak_record = sqlx::query!(
-        r#"
-        SELECT SUM(odometer_akhir - odometer_awal) as total
-        FROM log_penggunaan
-        WHERE booking_id IN (SELECT id FROM booking_kendaraan WHERE kendaraan_id = $1)
-        AND odometer_akhir IS NOT NULL AND odometer_awal IS NOT NULL
-        "#,
-        kendaraan_id
-    )
-    .fetch_one(pool)
-    .await?;
-    // Konversi dari Option<i64> ke i64, default ke 0
-    let total_jarak_tempuh = total_jarak_record.total.unwrap_or(0);
+    // 2. Hitung total jarak tempuh dengan filter tanggal
+    let mut jarak_query = sqlx::QueryBuilder::new(
+        "SELECT SUM(odometer_akhir - odometer_awal) as total FROM log_penggunaan WHERE booking_id IN (SELECT id FROM booking_kendaraan WHERE kendaraan_id = ",
+    );
+    jarak_query.push_bind(kendaraan_id);
+    jarak_query.push(")");
+
+    if let (Some(start), Some(end)) = (filter.start_date, filter.end_date) {
+        // Filter berdasarkan tanggal aktual kembali
+        jarak_query.push(" AND DATE(waktu_aktual_kembali) BETWEEN ");
+        jarak_query.push_bind(start);
+        jarak_query.push(" AND ");
+        jarak_query.push_bind(end);
+    }
+    let total_jarak_tempuh: i64 = jarak_query
+        .build()
+        .fetch_one(pool)
+        .await?
+        .try_get("total")
+        .unwrap_or(0);
 
     // 3. Hitung biaya per km
     let biaya_per_km = if total_jarak_tempuh > 0 {
         (total_biaya_servis / Decimal::from(total_jarak_tempuh)).round_dp(2)
     } else {
-        Decimal::from(0)
+        Decimal::zero()
     };
 
     Ok(KendaraanSummary {

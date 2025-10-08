@@ -1,7 +1,7 @@
 use crate::{
     db::DbPool,
     errors::AppError,
-    modules::fleet::servis_model::{ServisDetail, ServisPayload},
+    modules::fleet::servis_model::{ServisDetail, ServisPayload,ServisFilter},
 };
 use uuid::Uuid;
 
@@ -20,21 +20,49 @@ pub async fn create_servis_repo(pool: &DbPool, kendaraan_id: Uuid, user_pencatat
     Ok(new_servis)
 }
 
-pub async fn get_all_servis_by_kendaraan_id_repo(pool: &DbPool, kendaraan_id: Uuid) -> Result<Vec<ServisDetail>, AppError> {
-    let list = sqlx::query_as!(
-        ServisDetail,
-        r#"
-        SELECT s.id, s.kendaraan_id, s.tanggal_servis, s.odometer_saat_servis, s.deskripsi, s.biaya, s.user_pencatat_id,
-               COALESCE(u.full_name, 'User Dihapus') as "nama_pencatat!"
-        FROM servis_kendaraan s
-        LEFT JOIN users u ON s.user_pencatat_id = u.id
-        WHERE s.kendaraan_id = $1
-        ORDER BY s.tanggal_servis DESC
-        "#,
-        kendaraan_id
-    ).fetch_all(pool).await?;
+pub async fn get_all_servis_by_kendaraan_id_repo(
+    pool: &DbPool,
+    kendaraan_id: Uuid,
+    filter: ServisFilter,
+) -> Result<Vec<ServisDetail>, AppError> {
+    
+    let list = if let (Some(start), Some(end)) = (filter.start_date, filter.end_date) {
+        // Query JIKA ADA filter tanggal
+        sqlx::query_as!(
+            ServisDetail,
+            r#"
+            SELECT s.id, s.kendaraan_id, s.tanggal_servis, s.odometer_saat_servis, s.deskripsi, s.biaya, s.user_pencatat_id,
+                   COALESCE(u.full_name, 'User Dihapus') as "nama_pencatat!"
+            FROM servis_kendaraan s
+            LEFT JOIN users u ON s.user_pencatat_id = u.id
+            WHERE s.kendaraan_id = $1 AND s.tanggal_servis BETWEEN $2 AND $3
+            ORDER BY s.tanggal_servis DESC
+            "#,
+            kendaraan_id, start, end
+        )
+        .fetch_all(pool)
+        .await?
+    } else {
+        // Query JIKA TIDAK ADA filter tanggal
+        sqlx::query_as!(
+            ServisDetail,
+            r#"
+            SELECT s.id, s.kendaraan_id, s.tanggal_servis, s.odometer_saat_servis, s.deskripsi, s.biaya, s.user_pencatat_id,
+                   COALESCE(u.full_name, 'User Dihapus') as "nama_pencatat!"
+            FROM servis_kendaraan s
+            LEFT JOIN users u ON s.user_pencatat_id = u.id
+            WHERE s.kendaraan_id = $1
+            ORDER BY s.tanggal_servis DESC
+            "#,
+            kendaraan_id
+        )
+        .fetch_all(pool)
+        .await?
+    };
+
     Ok(list)
 }
+
 
 pub async fn get_servis_by_id_repo(pool: &DbPool, id: Uuid) -> Result<ServisDetail, AppError> {
     let item = sqlx::query_as!(
@@ -67,3 +95,5 @@ pub async fn delete_servis_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError>
     if rows_affected == 0 { return Err(sqlx::Error::RowNotFound.into()); }
     Ok(())
 }
+
+

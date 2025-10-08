@@ -1,4 +1,4 @@
-use crate::{db::DbPool, modules::fleet::{kendaraan_model::{KendaraanPayload,AvailableVehicleFilter}, kendaraan_repo as repo}};
+use crate::{db::DbPool, modules::fleet::{kendaraan_model::{KendaraanPayload,AvailableVehicleFilter,SummaryFilter}, kendaraan_repo as repo}};
 use axum::{extract::{Path, State, Json,Query}, http::StatusCode, response::IntoResponse};
 use uuid::Uuid;
 
@@ -47,8 +47,12 @@ pub async fn search_available_vehicles_handler(
     }
 }
 
-pub async fn get_vehicle_summary_handler(State(pool): State<DbPool>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    match repo::get_vehicle_summary_repo(&pool, id).await {
+pub async fn get_vehicle_summary_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+    Query(filter): Query<SummaryFilter>,
+) -> impl IntoResponse {
+    match repo::get_vehicle_summary_repo(&pool, id, filter).await {
         Ok(summary) => Json(summary).into_response(),
         Err(e) => e.into_response(),
     }

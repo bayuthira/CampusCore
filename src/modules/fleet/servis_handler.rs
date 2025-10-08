@@ -1,5 +1,6 @@
-use crate::{modules::auth::middleware::TokenClaims, db::DbPool, modules::fleet::{servis_model::{ServisPayload}, servis_repo as repo}};
-use axum::{extract::{Path, State, Json}, http::StatusCode, response::IntoResponse, Extension};
+use crate::{modules::auth::middleware::TokenClaims, db::DbPool};
+use axum::{extract::{Path, State, Json, Query}, http::StatusCode, response::IntoResponse, Extension};
+use super:: {servis_model::{ServisPayload,ServisFilter}, servis_repo as repo};
 use uuid::Uuid;
 
 pub async fn create_servis_handler(State(pool): State<DbPool>, Extension(claims): Extension<TokenClaims>, Path(kendaraan_id): Path<Uuid>, Json(payload): Json<ServisPayload>) -> impl IntoResponse {
@@ -10,8 +11,12 @@ pub async fn create_servis_handler(State(pool): State<DbPool>, Extension(claims)
     }
 }
 
-pub async fn get_all_servis_by_kendaraan_id_handler(State(pool): State<DbPool>, Path(kendaraan_id): Path<Uuid>) -> impl IntoResponse {
-    match repo::get_all_servis_by_kendaraan_id_repo(&pool, kendaraan_id).await {
+pub async fn get_all_servis_by_kendaraan_id_handler(
+    State(pool): State<DbPool>,
+    Path(kendaraan_id): Path<Uuid>,
+    Query(filter): Query<ServisFilter>,
+) -> impl IntoResponse {
+    match repo::get_all_servis_by_kendaraan_id_repo(&pool, kendaraan_id, filter).await {
         Ok(list) => Json(list).into_response(),
         Err(e) => e.into_response(),
     }
@@ -37,3 +42,4 @@ pub async fn delete_servis_handler(State(pool): State<DbPool>, Path(id): Path<Uu
         Err(e) => e.into_response(),
     }
 }
+

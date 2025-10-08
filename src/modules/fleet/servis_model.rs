@@ -22,3 +22,9 @@ pub struct ServisPayload {
     pub deskripsi: String,
     pub biaya: Decimal,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ServisFilter {
+    pub start_date: Option<Date>,
+    pub end_date: Option<Date>,
+}

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Type,FromRow};
-use time::OffsetDateTime;
+use time::{OffsetDateTime,Date};
 use uuid::Uuid;
 use rust_decimal::Decimal;
 
@@ -70,4 +70,10 @@ pub struct KendaraanSummary {
     pub total_biaya_servis: Decimal,
     pub total_jarak_tempuh: i64, // Jarak dalam kilometer
     pub biaya_per_km: Decimal,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SummaryFilter {
+    pub start_date: Option<Date>,
+    pub end_date: Option<Date>,
 }
