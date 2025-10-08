@@ -1,5 +1,5 @@
 use super::{
-    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload,CreateHistoriPayload,PinjamAsetPayload, KembalikanAsetPayload,AsetFilter,KondisiAsetSummary,AktivitasSummary},
+    model::{AsetDetail, AsetPayload,HistoriAsetDetail,PindahkanAsetPayload,UpdateKondisiPayload,CreateHistoriPayload,PinjamAsetPayload, KembalikanAsetPayload,AsetFilter,KondisiAsetSummary},
     repo as aset_repo,
     histori_repo as histori_aset_repo,
 };

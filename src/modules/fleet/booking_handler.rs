@@ -69,3 +69,14 @@ pub async fn get_booking_summary_handler(State(pool): State<DbPool>) -> impl Int
         Err(e) => e.into_response(),
     }
 }
+
+pub async fn get_bookings_by_kendaraan_id_handler(
+    State(pool): State<DbPool>,
+    Path(kendaraan_id): Path<Uuid>,
+    Query(filter): Query<BookingFilter>,
+) -> impl IntoResponse {
+    match repo::get_bookings_by_kendaraan_id_repo(&pool, kendaraan_id, filter).await {
+        Ok(list) => Json(list).into_response(),
+        Err(e) => e.into_response(),
+    }
+}

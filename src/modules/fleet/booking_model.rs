@@ -36,8 +36,14 @@ pub struct BookingDetail {
 #[derive(Debug, Deserialize)]
 pub struct BookingFilter {
     pub status: Option<StatusBooking>,
+    
+    // --- TAMBAHKAN DUA FIELD INI ---
+    #[serde(default, with = "time::serde::rfc3339::option")]
+    pub start: Option<OffsetDateTime>,
+    
+    #[serde(default, with = "time::serde::rfc3339::option")]
+    pub end: Option<OffsetDateTime>,
 }
-
 #[derive(Debug, Deserialize)]
 pub struct ApprovalPayload {
     pub catatan: Option<String>,

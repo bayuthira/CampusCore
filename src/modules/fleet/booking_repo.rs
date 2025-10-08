@@ -1,9 +1,16 @@
+use super::booking_model::{
+    BookingDetail, BookingFilter, BookingSummary, CreateBookingPayload, EndTripPayload,
+    LogPenggunaanDetail, StartTripPayload,
+};
 use crate::{db::DbPool, errors::AppError};
-use uuid::Uuid;
-use super::booking_model::{BookingDetail, BookingFilter, CreateBookingPayload,StartTripPayload,EndTripPayload,LogPenggunaanDetail,BookingSummary};
 use time::OffsetDateTime;
+use uuid::Uuid;
 
-pub async fn create_booking_repo(pool: &DbPool, user_pemesan_id: Uuid, payload: CreateBookingPayload) -> Result<(), AppError> {
+pub async fn create_booking_repo(
+    pool: &DbPool,
+    user_pemesan_id: Uuid,
+    payload: CreateBookingPayload,
+) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
 
     // Cek konflik jadwal kendaraan
@@ -13,7 +20,9 @@ pub async fn create_booking_repo(pool: &DbPool, user_pemesan_id: Uuid, payload: 
     ).fetch_one(&mut *tx).await?;
 
     if conflict.unwrap_or(false) {
-        return Err(AppError::Forbidden("Kendaraan tidak tersedia pada rentang waktu tersebut.".to_string()));
+        return Err(AppError::Forbidden(
+            "Kendaraan tidak tersedia pada rentang waktu tersebut.".to_string(),
+        ));
     }
 
     // Insert booking baru
@@ -26,29 +35,63 @@ pub async fn create_booking_repo(pool: &DbPool, user_pemesan_id: Uuid, payload: 
     Ok(())
 }
 
-pub async fn get_all_bookings_repo(pool: &DbPool, filter: BookingFilter) -> Result<Vec<BookingDetail>, AppError> {
-    let mut query = sqlx::QueryBuilder::new(r#"
-        SELECT b.id, b.kendaraan_id, k.nama as nama_kendaraan, b.user_pemesan_id, u.full_name as nama_pemesan,
-        b.tujuan, b.waktu_berangkat, b.estimasi_waktu_kembali, b.status -- <-- PERBAIKI DI SINI
-        FROM booking_kendaraan b
-        JOIN kendaraan k ON b.kendaraan_id = k.id
-        JOIN users u ON b.user_pemesan_id = u.id
-    "#);
+pub async fn get_all_bookings_repo(
+    pool: &DbPool,
+    filter: BookingFilter,
+) -> Result<Vec<BookingDetail>, AppError> {
+    // Mulai dengan query dasar
+    let mut query = sqlx::QueryBuilder::new(
+        r#"
+    SELECT b.id, b.kendaraan_id, k.nama as nama_kendaraan, b.user_pemesan_id, u.full_name as nama_pemesan,
+    b.tujuan, b.waktu_berangkat, b.estimasi_waktu_kembali, b.status
+    FROM booking_kendaraan b
+    JOIN kendaraan k ON b.kendaraan_id = k.id
+    JOIN users u ON b.user_pemesan_id = u.id
+"#,
+    );
 
+    let mut where_clause_added = false;
+
+    // Tambahkan filter status jika ada
     if let Some(status) = filter.status {
+        // --- PERBAIKAN DI SINI ---
+        // Gunakan CAST untuk mencocokkan tipe ENUM di database
         query.push(" WHERE b.status = CAST(");
-        query.push_bind(status.as_str());
+        query.push_bind(status.as_str()); // Kirim sebagai string
         query.push(" AS \"StatusBooking\")");
+        // -------------------------
+        where_clause_added = true;
     }
-    
+
+    // Tambahkan filter rentang waktu jika ada
+    if let (Some(start), Some(end)) = (filter.start, filter.end) {
+        if where_clause_added {
+            query.push(" AND ");
+        } else {
+            query.push(" WHERE ");
+        }
+        query.push("(b.waktu_berangkat, b.estimasi_waktu_kembali) OVERLAPS (");
+        query.push_bind(start);
+        query.push(", ");
+        query.push_bind(end);
+        query.push(")");
+    }
+
     query.push(" ORDER BY b.waktu_berangkat DESC");
 
-    let list = query.build_query_as::<BookingDetail>().fetch_all(pool).await?;
+    let list = query
+        .build_query_as::<BookingDetail>()
+        .fetch_all(pool)
+        .await?;
     Ok(list)
 }
 
-
-pub async fn approve_booking_repo(pool: &DbPool, id: Uuid, user_approve_id: Uuid, catatan: Option<String>) -> Result<(), AppError> {
+pub async fn approve_booking_repo(
+    pool: &DbPool,
+    id: Uuid,
+    user_approve_id: Uuid,
+    catatan: Option<String>,
+) -> Result<(), AppError> {
     sqlx::query!(
         "UPDATE booking_kendaraan SET status = 'Disetujui', user_approve_id = $1, catatan_approval = $2, updated_at = now() WHERE id = $3 AND status = 'Diajukan'",
         user_approve_id, catatan, id
@@ -56,7 +99,12 @@ pub async fn approve_booking_repo(pool: &DbPool, id: Uuid, user_approve_id: Uuid
     Ok(())
 }
 
-pub async fn reject_booking_repo(pool: &DbPool, id: Uuid, user_approve_id: Uuid, catatan: Option<String>) -> Result<(), AppError> {
+pub async fn reject_booking_repo(
+    pool: &DbPool,
+    id: Uuid,
+    user_approve_id: Uuid,
+    catatan: Option<String>,
+) -> Result<(), AppError> {
     sqlx::query!(
         "UPDATE booking_kendaraan SET status = 'Ditolak', user_approve_id = $1, catatan_approval = $2, updated_at = now() WHERE id = $3 AND status = 'Diajukan'",
         user_approve_id, catatan, id
@@ -168,7 +216,10 @@ pub async fn end_trip_repo(
     Ok(())
 }
 
-pub async fn get_my_bookings_repo(pool: &DbPool, user_pemesan_id: Uuid) -> Result<Vec<BookingDetail>, AppError> {
+pub async fn get_my_bookings_repo(
+    pool: &DbPool,
+    user_pemesan_id: Uuid,
+) -> Result<Vec<BookingDetail>, AppError> {
     let list = sqlx::query_as!(
         BookingDetail,
         r#"
@@ -187,7 +238,10 @@ pub async fn get_my_bookings_repo(pool: &DbPool, user_pemesan_id: Uuid) -> Resul
     Ok(list)
 }
 
-pub async fn get_log_by_booking_id_repo(pool: &DbPool, booking_id: Uuid) -> Result<LogPenggunaanDetail, AppError> {
+pub async fn get_log_by_booking_id_repo(
+    pool: &DbPool,
+    booking_id: Uuid,
+) -> Result<LogPenggunaanDetail, AppError> {
     let log = sqlx::query_as!(
         LogPenggunaanDetail,
         "SELECT odometer_awal, odometer_akhir, waktu_aktual_berangkat, waktu_aktual_kembali, bahan_bakar_diisi, catatan_kondisi_kembali FROM log_penggunaan WHERE booking_id = $1",
@@ -195,7 +249,6 @@ pub async fn get_log_by_booking_id_repo(pool: &DbPool, booking_id: Uuid) -> Resu
     ).fetch_one(pool).await?;
     Ok(log)
 }
-
 
 pub async fn get_booking_summary_repo(pool: &DbPool) -> Result<BookingSummary, AppError> {
     let summary = sqlx::query!(
@@ -221,4 +274,48 @@ pub async fn get_booking_summary_repo(pool: &DbPool) -> Result<BookingSummary, A
         berlangsung: summary.berlangsung,
         selesai: summary.selesai,
     })
+}
+
+pub async fn get_bookings_by_kendaraan_id_repo(
+    pool: &DbPool,
+    kendaraan_id: Uuid,
+    filter: BookingFilter,
+) -> Result<Vec<BookingDetail>, AppError> {
+    // Query dasar dengan filter wajib untuk kendaraan_id
+    let mut query = sqlx::QueryBuilder::new(
+        r#"
+    SELECT b.id, b.kendaraan_id, k.nama as nama_kendaraan, b.user_pemesan_id, u.full_name as nama_pemesan,
+    b.tujuan, b.waktu_berangkat, b.estimasi_waktu_kembali, b.status
+    FROM booking_kendaraan b
+    JOIN kendaraan k ON b.kendaraan_id = k.id
+    JOIN users u ON b.user_pemesan_id = u.id
+    WHERE b.kendaraan_id = "#,
+    );
+
+    query.push_bind(kendaraan_id);
+
+    // --- TAMBAHKAN LOGIKA FILTER STATUS DI SINI ---
+    if let Some(status) = filter.status {
+        query.push(" AND b.status = CAST(");
+        query.push_bind(status.as_str()); // Kirim sebagai string
+        query.push(" AS \"StatusBooking\")");
+    }
+    // ---------------------------------------------
+
+    // Filter rentang waktu (tidak berubah)
+    if let (Some(start), Some(end)) = (filter.start, filter.end) {
+        query.push(" AND (b.waktu_berangkat, b.estimasi_waktu_kembali) OVERLAPS (");
+        query.push_bind(start);
+        query.push(", ");
+        query.push_bind(end);
+        query.push(")");
+    }
+
+    query.push(" ORDER BY b.waktu_berangkat DESC");
+
+    let list = query
+        .build_query_as::<BookingDetail>()
+        .fetch_all(pool)
+        .await?;
+    Ok(list)
 }

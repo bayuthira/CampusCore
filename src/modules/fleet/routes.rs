@@ -65,6 +65,10 @@ pub fn fleet_router() -> Router<DbPool> {
         .route(
             "/fleet/my-bookings",
             get(booking_handler::get_my_bookings_handler),
+        )
+        .route(
+            "/fleet/kendaraan/{id}/bookings",
+            get(booking_handler::get_bookings_by_kendaraan_id_handler),
         );
 
     // Gabungkan kedua grup
