@@ -35,7 +35,7 @@ pub struct BookingDetail {
 
 #[derive(Debug, Deserialize)]
 pub struct BookingFilter {
-    pub status: Option<StatusBooking>,
+    pub status: Option<String>,
     
     // --- TAMBAHKAN DUA FIELD INI ---
     #[serde(default, with = "time::serde::rfc3339::option")]

@@ -39,51 +39,45 @@ pub async fn get_all_bookings_repo(
     pool: &DbPool,
     filter: BookingFilter,
 ) -> Result<Vec<BookingDetail>, AppError> {
-    // Mulai dengan query dasar
-    let mut query = sqlx::QueryBuilder::new(
-        r#"
+    let base_query = r#"
     SELECT b.id, b.kendaraan_id, k.nama as nama_kendaraan, b.user_pemesan_id, u.full_name as nama_pemesan,
     b.tujuan, b.waktu_berangkat, b.estimasi_waktu_kembali, b.status
     FROM booking_kendaraan b
     JOIN kendaraan k ON b.kendaraan_id = k.id
     JOIN users u ON b.user_pemesan_id = u.id
-"#,
-    );
+"#;
 
+    let mut qb = sqlx::QueryBuilder::new(base_query);
     let mut where_clause_added = false;
 
-    // Tambahkan filter status jika ada
-    if let Some(status) = filter.status {
-        // --- PERBAIKAN DI SINI ---
-        // Gunakan CAST untuk mencocokkan tipe ENUM di database
-        query.push(" WHERE b.status = CAST(");
-        query.push_bind(status.as_str()); // Kirim sebagai string
-        query.push(" AS \"StatusBooking\")");
-        // -------------------------
+    // Variabel statuses dideklarasikan di sini
+    let statuses: Option<Vec<String>> = filter
+        .status
+        .map(|s| s.split(',').map(String::from).collect());
+
+    if let Some(s) = &statuses {
+        qb.push(" WHERE b.status = ANY(CAST(");
+        qb.push_bind(s);
+        qb.push(" AS \"StatusBooking\"[]))");
         where_clause_added = true;
     }
 
-    // Tambahkan filter rentang waktu jika ada
     if let (Some(start), Some(end)) = (filter.start, filter.end) {
         if where_clause_added {
-            query.push(" AND ");
+            qb.push(" AND ");
         } else {
-            query.push(" WHERE ");
+            qb.push(" WHERE ");
         }
-        query.push("(b.waktu_berangkat, b.estimasi_waktu_kembali) OVERLAPS (");
-        query.push_bind(start);
-        query.push(", ");
-        query.push_bind(end);
-        query.push(")");
+        qb.push("(b.waktu_berangkat, b.estimasi_waktu_kembali) OVERLAPS (");
+        qb.push_bind(start);
+        qb.push(", ");
+        qb.push_bind(end);
+        qb.push(")");
     }
 
-    query.push(" ORDER BY b.waktu_berangkat DESC");
+    qb.push(" ORDER BY b.waktu_berangkat DESC");
 
-    let list = query
-        .build_query_as::<BookingDetail>()
-        .fetch_all(pool)
-        .await?;
-    Ok(list)
+    Ok(qb.build_query_as::<BookingDetail>().fetch_all(pool).await?)
 }
 
 pub async fn approve_booking_repo(
@@ -281,41 +275,39 @@ pub async fn get_bookings_by_kendaraan_id_repo(
     kendaraan_id: Uuid,
     filter: BookingFilter,
 ) -> Result<Vec<BookingDetail>, AppError> {
-    // Query dasar dengan filter wajib untuk kendaraan_id
-    let mut query = sqlx::QueryBuilder::new(
-        r#"
+    let base_query = r#"
     SELECT b.id, b.kendaraan_id, k.nama as nama_kendaraan, b.user_pemesan_id, u.full_name as nama_pemesan,
     b.tujuan, b.waktu_berangkat, b.estimasi_waktu_kembali, b.status
     FROM booking_kendaraan b
     JOIN kendaraan k ON b.kendaraan_id = k.id
     JOIN users u ON b.user_pemesan_id = u.id
-    WHERE b.kendaraan_id = "#,
-    );
+"#;
 
-    query.push_bind(kendaraan_id);
+    let mut qb = sqlx::QueryBuilder::new(base_query);
 
-    // --- TAMBAHKAN LOGIKA FILTER STATUS DI SINI ---
-    if let Some(status) = filter.status {
-        query.push(" AND b.status = CAST(");
-        query.push_bind(status.as_str()); // Kirim sebagai string
-        query.push(" AS \"StatusBooking\")");
+    // Variabel statuses dideklarasikan di sini
+    let statuses: Option<Vec<String>> = filter
+        .status
+        .map(|s| s.split(',').map(String::from).collect());
+
+    qb.push(" WHERE b.kendaraan_id = ");
+    qb.push_bind(kendaraan_id);
+
+    if let Some(s) = &statuses {
+        qb.push(" AND b.status = ANY(CAST(");
+        qb.push_bind(s);
+        qb.push(" AS \"StatusBooking\"[]))");
     }
-    // ---------------------------------------------
 
-    // Filter rentang waktu (tidak berubah)
     if let (Some(start), Some(end)) = (filter.start, filter.end) {
-        query.push(" AND (b.waktu_berangkat, b.estimasi_waktu_kembali) OVERLAPS (");
-        query.push_bind(start);
-        query.push(", ");
-        query.push_bind(end);
-        query.push(")");
+        qb.push(" AND (b.waktu_berangkat, b.estimasi_waktu_kembali) OVERLAPS (");
+        qb.push_bind(start);
+        qb.push(", ");
+        qb.push_bind(end);
+        qb.push(")");
     }
 
-    query.push(" ORDER BY b.waktu_berangkat DESC");
+    qb.push(" ORDER BY b.waktu_berangkat DESC");
 
-    let list = query
-        .build_query_as::<BookingDetail>()
-        .fetch_all(pool)
-        .await?;
-    Ok(list)
+    Ok(qb.build_query_as::<BookingDetail>().fetch_all(pool).await?)
 }
