@@ -49,18 +49,18 @@ pub struct ApprovalPayload {
     pub catatan: Option<String>,
 }
 
-impl StatusBooking {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            StatusBooking::Diajukan => "Diajukan",
-            StatusBooking::Disetujui => "Disetujui",
-            StatusBooking::Ditolak => "Ditolak",
-            StatusBooking::Dibatalkan => "Dibatalkan",
-            StatusBooking::Berlangsung => "Berlangsung",
-            StatusBooking::Selesai => "Selesai",
-        }
-    }
-}
+// impl StatusBooking {
+//    pub fn as_str(&self) -> &'static str {
+//        match self {
+//            StatusBooking::Diajukan => "Diajukan",
+//            StatusBooking::Disetujui => "Disetujui",
+//            StatusBooking::Ditolak => "Ditolak",
+//           StatusBooking::Dibatalkan => "Dibatalkan",
+//            StatusBooking::Berlangsung => "Berlangsung",
+//            StatusBooking::Selesai => "Selesai",
+//        }
+//    }
+//}
 
 #[derive(Debug, Deserialize)]
 pub struct StartTripPayload {

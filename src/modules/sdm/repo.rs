@@ -1,0 +1,249 @@
+// src/modules/sdm/repo.rs
+
+use super::model::{
+    Pegawai, PegawaiPayload, KategoriPegawai
+};
+use crate::{db::DbPool, errors::AppError};
+use uuid::Uuid;
+
+/// Helper function untuk mendapatkan detail satu pegawai berdasarkan ID
+pub async fn get_pegawai_by_id_repo(pool: &DbPool, id: Uuid) -> Result<Pegawai, AppError> {
+    get_pegawai_by_id_repo_inner(pool, id).await
+}
+
+/// Membuat data pegawai baru dan akun user terkait dalam satu transaksi
+pub async fn create_pegawai_repo(
+    pool: &DbPool,
+    payload: PegawaiPayload,
+) -> Result<Pegawai, AppError> {
+    let mut tx = pool.begin().await?;
+    
+    // 1. Create user and get the new user's ID
+    let new_user_id: Option<Uuid> = if let Some(password) = payload.password {
+        let hashed_password = bcrypt::hash(password, bcrypt::DEFAULT_COST)?;
+        match sqlx::query!(
+            "INSERT INTO users (username, password_hash, full_name, email) VALUES ($1, $2, $3, $4) RETURNING id",
+            payload.nik,
+            hashed_password,
+            payload.nama_lengkap,
+            payload.email
+        ).fetch_one(&mut *tx).await {
+            Ok(rec) => Some(rec.id),
+            Err(e) => {
+                tx.rollback().await?;
+                if let Some(db_err) = e.as_database_error() {
+                    if db_err.is_unique_violation() {
+                        let constraint = db_err.constraint().unwrap_or_default();
+                        if constraint.contains("users_username_key") {
+                            return Err(AppError::DuplicateEntry(format!("NIK '{}' sudah terdaftar sebagai username.", payload.nik)));
+                        } else if constraint.contains("users_email_key") {
+                            return Err(AppError::DuplicateEntry(format!("Email '{}' sudah terdaftar.", payload.email.as_deref().unwrap_or_default())));
+                        }
+                    }
+                }
+                return Err(e.into());
+            }
+        }
+    } else {
+        None
+    };
+
+    // Konversi semua enum opsional ke string opsional
+    let jenis_kelamin_str = payload.jenis_kelamin.as_ref().map(|e| e.as_str());
+    let status_nikah_str = payload.status_nikah.as_ref().map(|e| e.as_str());
+    let kategori_pegawai_str = payload.kategori_pegawai.as_ref().map(|e| e.as_str());
+    let status_pegawai_str = payload.status_pegawai.as_ref().map(|e| e.as_str());
+
+    // 2. Insert data ke tabel pegawai
+    let new_pegawai_id: Uuid = sqlx::query_scalar(
+        r#"
+        INSERT INTO pegawai (
+            user_id, nik, no_ktp, gelar_depan, nama_lengkap, gelar_belakang, tempat_lahir, 
+            tanggal_lahir, jenis_kelamin, status_nikah, agama, alamat_domisili, nomor_hp, 
+            email, kategori_pegawai, status_pegawai, unit_kerja, bagian, jabatan, tanggal_masuk
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9::"JenisKelamin", $10::"StatusNikah", $11, $12, 
+            $13, $14, $15::"KategoriPegawai", $16::"StatusPegawai", $17, $18, $19, $20
+        ) RETURNING id
+        "#,
+    )
+    .bind(new_user_id)
+    .bind(&payload.nik)
+    .bind(&payload.no_ktp)
+    .bind(&payload.gelar_depan)
+    .bind(&payload.nama_lengkap)
+    .bind(&payload.gelar_belakang)
+    .bind(&payload.tempat_lahir)
+    .bind(payload.tanggal_lahir)
+    .bind(jenis_kelamin_str)
+    .bind(status_nikah_str)
+    .bind(&payload.agama)
+    .bind(&payload.alamat_domisili)
+    .bind(&payload.nomor_hp)
+    .bind(&payload.email)
+    .bind(kategori_pegawai_str)
+    .bind(status_pegawai_str)
+    .bind(&payload.unit_kerja)
+    .bind(&payload.bagian)
+    .bind(&payload.jabatan)
+    .bind(&payload.tanggal_masuk)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    // 3. Jika Tenaga Pendidik, buat atau tautkan data Dosen
+    if let Some(KategoriPegawai::TenagaPendidik) = &payload.kategori_pegawai {
+        let nidn = payload.nidn.as_ref().ok_or_else(|| AppError::Forbidden("NIDN wajib diisi untuk Tenaga Pendidik.".to_string()))?;
+        let prodi_id = payload.prodi_id.ok_or_else(|| AppError::Forbidden("Prodi ID wajib diisi untuk Tenaga Pendidik.".to_string()))?;
+        
+        let existing_dosen = sqlx::query!("SELECT id FROM dosen WHERE nidn = $1", nidn)
+            .fetch_optional(&mut *tx).await?;
+
+        if let Some(dosen) = existing_dosen {
+            sqlx::query!(
+                "UPDATE dosen SET pegawai_id = $1, user_id = $2 WHERE id = $3",
+                new_pegawai_id, new_user_id, dosen.id
+            ).execute(&mut *tx).await?;
+        } else {
+            sqlx::query!(
+                "INSERT INTO dosen (nidn, nama_dosen, email, prodi_id, user_id, pegawai_id) VALUES ($1, $2, $3, $4, $5, $6)",
+                nidn, &payload.nama_lengkap, payload.email.as_deref(), prodi_id, new_user_id, new_pegawai_id
+            ).execute(&mut *tx).await?;
+        }
+        
+        if let Some(user_id) = new_user_id {
+            sqlx::query!(
+                "INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'DOSEN')) ON CONFLICT DO NOTHING",
+                user_id
+            ).execute(&mut *tx).await?;
+        }
+    }
+
+    tx.commit().await?;
+
+    // Ambil dan kembalikan detail pegawai yang baru dibuat
+    let new_pegawai = get_pegawai_by_id_repo(pool, new_pegawai_id).await?;
+    Ok(new_pegawai)
+}
+
+
+
+
+/// Mengambil semua data pegawai
+pub async fn get_all_pegawai_repo(pool: &DbPool) -> Result<Vec<Pegawai>, AppError> {
+    let pegawai_list = sqlx::query_as!(
+        Pegawai,
+        r#"
+        SELECT 
+            id, user_id, nik, no_ktp, gelar_depan, nama_lengkap, gelar_belakang,
+            tempat_lahir, tanggal_lahir, jenis_kelamin as "jenis_kelamin: _",
+            status_nikah as "status_nikah: _", agama, alamat_domisili, nomor_hp, email,
+            kategori_pegawai as "kategori_pegawai: _", status_pegawai as "status_pegawai: _",
+            unit_kerja, bagian, jabatan, tanggal_masuk,
+            created_at, updated_at
+        FROM pegawai
+        ORDER BY nama_lengkap ASC
+        "#
+    ).fetch_all(pool).await?;
+
+    Ok(pegawai_list)
+}
+
+/// Memperbarui data pegawai
+pub async fn update_pegawai_repo(pool: &DbPool, id: Uuid, payload: PegawaiPayload) -> Result<Pegawai, AppError> {
+    // Konversi enum ke string
+    let jenis_kelamin_str = payload.jenis_kelamin.as_ref().map(|e| e.as_str());
+    let status_nikah_str = payload.status_nikah.as_ref().map(|e| e.as_str());
+    let kategori_pegawai_str = payload.kategori_pegawai.as_ref().map(|e| e.as_str());
+    let status_pegawai_str = payload.status_pegawai.as_ref().map(|e| e.as_str());
+    
+    // Gunakan sqlx::query() dengan CAST
+    sqlx::query(
+        r#"
+        UPDATE pegawai SET
+            nik = $1, no_ktp = $2, gelar_depan = $3, nama_lengkap = $4, gelar_belakang = $5,
+            tempat_lahir = $6, tanggal_lahir = $7, jenis_kelamin = $8::"JenisKelamin", 
+            status_nikah = $9::"StatusNikah", agama = $10, alamat_domisili = $11, nomor_hp = $12, 
+            email = $13, kategori_pegawai = $14::"KategoriPegawai", status_pegawai = $15::"StatusPegawai", 
+            unit_kerja = $16, bagian = $17, jabatan = $18, tanggal_masuk = $19, updated_at = now()
+        WHERE id = $20
+        "#,
+    )
+    .bind(payload.nik).bind(payload.no_ktp).bind(payload.gelar_depan).bind(payload.nama_lengkap)
+    .bind(payload.gelar_belakang).bind(payload.tempat_lahir).bind(payload.tanggal_lahir)
+    .bind(jenis_kelamin_str).bind(status_nikah_str).bind(payload.agama).bind(payload.alamat_domisili)
+    .bind(payload.nomor_hp).bind(payload.email).bind(kategori_pegawai_str).bind(status_pegawai_str)
+    .bind(payload.unit_kerja).bind(payload.bagian).bind(payload.jabatan).bind(payload.tanggal_masuk).bind(id)
+    .execute(pool)
+    .await?;
+
+    get_pegawai_by_id_repo(pool, id).await
+}
+
+async fn get_pegawai_by_id_repo_inner<'a, E>(executor: E, id: Uuid) -> Result<Pegawai, AppError>
+where
+    E: sqlx::Executor<'a, Database = sqlx::Postgres>,
+{
+    let pegawai = sqlx::query_as!(
+        Pegawai,
+        r#"
+        SELECT 
+            id, user_id, nik, no_ktp, gelar_depan, nama_lengkap, gelar_belakang,
+            tempat_lahir, tanggal_lahir, jenis_kelamin as "jenis_kelamin: _",
+            status_nikah as "status_nikah: _", agama, alamat_domisili, nomor_hp, email,
+            kategori_pegawai as "kategori_pegawai: _", status_pegawai as "status_pegawai: _",
+            unit_kerja, bagian, jabatan, tanggal_masuk,
+            created_at, updated_at
+        FROM pegawai
+        WHERE id = $1
+        "#,
+        id
+    )
+    .fetch_one(executor)
+    .await?;
+
+    Ok(pegawai)
+}
+
+/// Menghapus data pegawai
+pub async fn delete_pegawai_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+
+    // 1. Ambil detail pegawai yang akan dihapus menggunakan FUNGSI INNER
+    let pegawai_to_delete = get_pegawai_by_id_repo_inner(&mut *tx, id).await?;
+
+    // 2. LOGIKA BARU: Jika pegawai adalah dosen, periksa keterkaitan data
+    if let Some(KategoriPegawai::TenagaPendidik) = pegawai_to_delete.kategori_pegawai {
+        // Cari ID dosen yang terkait dengan pegawai ini
+        let dosen_id_rec = sqlx::query!("SELECT id FROM dosen WHERE pegawai_id = $1", id)
+            .fetch_optional(&mut *tx).await?;
+
+        if let Some(rec) = dosen_id_rec {
+            // Periksa apakah dosen_id ini digunakan di jadwal_dosen_pengampu
+            let is_linked = sqlx::query_scalar!(
+                "SELECT EXISTS(SELECT 1 FROM jadwal_dosen_pengampu WHERE dosen_id = $1)",
+                rec.id
+            ).fetch_one(&mut *tx).await?.unwrap_or(false);
+
+            if is_linked {
+                // Jika terikat, batalkan penghapusan
+                tx.rollback().await?;
+                return Err(AppError::Forbidden("Pegawai ini tidak dapat dihapus karena terikat dengan data jadwal akademik.".to_string()));
+            } else {
+                // Jika tidak terikat, hapus dari tabel dosen terlebih dahulu
+                sqlx::query!("DELETE FROM dosen WHERE id = $1", rec.id).execute(&mut *tx).await?;
+            }
+        }
+    }
+
+    // 3. Hapus dari tabel pegawai
+    sqlx::query!("DELETE FROM pegawai WHERE id = $1", id).execute(&mut *tx).await?;
+
+    // 4. Hapus user terkait jika ada
+    if let Some(user_id) = pegawai_to_delete.user_id {
+        sqlx::query!("DELETE FROM users WHERE id = $1", user_id).execute(&mut *tx).await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+

@@ -16,3 +16,4 @@ pub mod lookup;
 pub mod files;
 pub mod akademik;
 pub mod fleet;
+pub mod sdm;
