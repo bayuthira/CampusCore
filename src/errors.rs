@@ -155,6 +155,9 @@ impl IntoResponse for AppError {
                 } else if err_string.contains("violates foreign key constraint") {
                     // <-- TAMBAHKAN BLOK INI
                     // Kode untuk 23503 (foreign key)
+                    // --- TAMBAHKAN BARIS INI UNTUK DEBUGGING ---
+                    println!("--> DEBUG Foreign Key Error: {}", err_string);
+
                     let message = if err_string.contains("dosen_user_id_fkey")
                         || err_string.contains("mahasiswa_user_id_fkey")
                     {

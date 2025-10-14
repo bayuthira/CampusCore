@@ -162,13 +162,62 @@ pub async fn get_all_pegawai_repo(pool: &DbPool) -> Result<Vec<Pegawai>, AppErro
 
 /// Memperbarui data pegawai
 pub async fn update_pegawai_repo(pool: &DbPool, id: Uuid, payload: PegawaiPayload) -> Result<Pegawai, AppError> {
-    // Konversi enum ke string
+    let mut tx = pool.begin().await?;
+
+    // Tahap 1: Ambil data pegawai saat ini dari database
+    let old_pegawai = get_pegawai_by_id_repo_inner(&mut *tx, id).await?;
+
+    // Tahap 2: Cek apakah ada perubahan pada kategori pegawai
+    if old_pegawai.kategori_pegawai != payload.kategori_pegawai {
+        
+        // Skenario 1: Berubah menjadi Tenaga Pendidik
+        if let Some(KategoriPegawai::TenagaPendidik) = &payload.kategori_pegawai {
+            let nidn = payload.nidn.as_ref().ok_or_else(|| AppError::Forbidden("NIDN wajib diisi untuk mengubah status menjadi Tenaga Pendidik.".to_string()))?;
+            let prodi_id = payload.prodi_id.ok_or_else(|| AppError::Forbidden("Prodi ID wajib diisi untuk mengubah status menjadi Tenaga Pendidik.".to_string()))?;
+
+            let existing_dosen = sqlx::query!("SELECT id FROM dosen WHERE nidn = $1", nidn)
+                .fetch_optional(&mut *tx).await?;
+
+            if let Some(dosen) = existing_dosen {
+                // Jika dosen sudah ada, tautkan ke pegawai ini
+                sqlx::query!(
+                    "UPDATE dosen SET pegawai_id = $1, user_id = $2 WHERE id = $3",
+                    id, old_pegawai.user_id, dosen.id
+                ).execute(&mut *tx).await?;
+            } else {
+                // Jika dosen belum ada, buat baru
+                sqlx::query!(
+                    "INSERT INTO dosen (nidn, nama_dosen, email, prodi_id, pegawai_id, user_id) VALUES ($1, $2, $3, $4, $5, $6)",
+                    nidn,                           // -> $1 (nidn)
+                    &payload.nama_lengkap,          // -> $2 (nama_dosen)
+                    payload.email.as_deref(),       // -> $3 (email)
+                    prodi_id,                       // -> $4 (prodi_id)
+                    id,                             // -> $5 (pegawai_id) <-- BENAR
+                    old_pegawai.user_id             // -> $6 (user_id)     <-- BENAR
+                ).execute(&mut *tx).await?;
+            }
+
+            // Pastikan user memiliki peran DOSEN
+            if let Some(user_id) = old_pegawai.user_id {
+                sqlx::query!(
+                    "INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'DOSEN')) ON CONFLICT DO NOTHING",
+                    user_id
+                ).execute(&mut *tx).await?;
+            }
+        }
+
+        // Skenario 2: Berubah menjadi Tenaga Kependidikan (tidak ada aksi)
+        if let Some(KategoriPegawai::TenagaKependidikan) = &payload.kategori_pegawai {
+            // No action needed
+        }
+    }
+
+    // Tahap 3: Lakukan UPDATE utama pada tabel pegawai (tidak berubah)
     let jenis_kelamin_str = payload.jenis_kelamin.as_ref().map(|e| e.as_str());
     let status_nikah_str = payload.status_nikah.as_ref().map(|e| e.as_str());
     let kategori_pegawai_str = payload.kategori_pegawai.as_ref().map(|e| e.as_str());
     let status_pegawai_str = payload.status_pegawai.as_ref().map(|e| e.as_str());
     
-    // Gunakan sqlx::query() dengan CAST
     sqlx::query(
         r#"
         UPDATE pegawai SET
@@ -185,10 +234,11 @@ pub async fn update_pegawai_repo(pool: &DbPool, id: Uuid, payload: PegawaiPayloa
     .bind(jenis_kelamin_str).bind(status_nikah_str).bind(payload.agama).bind(payload.alamat_domisili)
     .bind(payload.nomor_hp).bind(payload.email).bind(kategori_pegawai_str).bind(status_pegawai_str)
     .bind(payload.unit_kerja).bind(payload.bagian).bind(payload.jabatan).bind(payload.tanggal_masuk).bind(id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
-    get_pegawai_by_id_repo(pool, id).await
+    tx.commit().await?;
+    get_pegawai_by_id_repo_inner(pool, id).await
 }
 
 async fn get_pegawai_by_id_repo_inner<'a, E>(executor: E, id: Uuid) -> Result<Pegawai, AppError>
