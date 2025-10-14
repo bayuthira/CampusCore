@@ -98,6 +98,7 @@ impl IntoResponse for AppError {
 
                 // Cek apakah ini adalah error unique constraint
                 if err_string.contains("violates unique constraint") {
+                    println!("--> DEBUG: Raw unique constraint error: {}", err_string);
                     // Jika ya, cari tahu constraint mana yang dilanggar
                     let message = if err_string.contains("users_username_key") {
                         "Username ini sudah terdaftar.".to_string()
@@ -135,6 +136,15 @@ impl IntoResponse for AppError {
                         "Jadwal untuk mata kuliah ini di kelas dan tahun akademik yang sama sudah ada.".to_string()
                     } else if err_string.contains("kendaraan_nomor_polisi_key") {
                         "Nomor Polisi ini sudah terdaftar.".to_string()
+                    } else if err_string.contains("pegawai_nik_key") {
+                        "NIK Pegawai ini sudah terdaftar.".to_string()
+                    } else if err_string.contains("pegawai_no_ktp_key") {
+                        "No KTP ini sudah terdaftar.".to_string()
+                    } else if err_string.contains("pegawai_email_key") {
+                        "Email ini sudah terdaftar untuk pegawai lain.".to_string()
+                    } else if err_string.contains("pegawai_user_id_key") {
+                        "Akun user dengan email ini sudah terhubung dengan data pegawai lain."
+                            .to_string()
                     } else {
                         // Pesan fallback jika constraint tidak dikenali
                         "Data yang Anda masukkan sudah ada di sistem (nilai duplikat).".to_string()

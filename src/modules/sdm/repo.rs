@@ -18,30 +18,42 @@ pub async fn create_pegawai_repo(
 ) -> Result<Pegawai, AppError> {
     let mut tx = pool.begin().await?;
     
-    // 1. Create user and get the new user's ID
+    // Tahap 1: Tentukan User ID (Cari Berdasarkan Email, atau Buat Baru)
     let new_user_id: Option<Uuid> = if let Some(password) = payload.password {
-        let hashed_password = bcrypt::hash(password, bcrypt::DEFAULT_COST)?;
-        match sqlx::query!(
-            "INSERT INTO users (username, password_hash, full_name, email) VALUES ($1, $2, $3, $4) RETURNING id",
-            payload.nik,
-            hashed_password,
-            payload.nama_lengkap,
-            payload.email
-        ).fetch_one(&mut *tx).await {
-            Ok(rec) => Some(rec.id),
-            Err(e) => {
-                tx.rollback().await?;
-                if let Some(db_err) = e.as_database_error() {
-                    if db_err.is_unique_violation() {
-                        let constraint = db_err.constraint().unwrap_or_default();
-                        if constraint.contains("users_username_key") {
+        // Cek dulu apakah user dengan email ini sudah ada (jika email diisi)
+        let existing_user = if let Some(email) = &payload.email {
+            sqlx::query!("SELECT id FROM users WHERE email = $1", email)
+                .fetch_optional(&mut *tx)
+                .await?
+        } else {
+            None
+        };
+
+        if let Some(user) = existing_user {
+            // Jika user dengan email tersebut sudah ada, gunakan ID-nya.
+            // Abaikan password yang diinput karena akun sudah ada.
+            Some(user.id)
+        } else {
+            // Jika user belum ada, buat baru.
+            let hashed_password = bcrypt::hash(password, bcrypt::DEFAULT_COST)?;
+            match sqlx::query!(
+                "INSERT INTO users (username, password_hash, full_name, email) VALUES ($1, $2, $3, $4) RETURNING id",
+                &payload.nik, // username tetap pakai NIK yang unik
+                hashed_password,
+                &payload.nama_lengkap,
+                payload.email.as_deref()
+            ).fetch_one(&mut *tx).await {
+                Ok(rec) => Some(rec.id),
+                Err(e) => {
+                    // Penanganan error jika NIK duplikat (bukan email)
+                    tx.rollback().await?;
+                    if let Some(db_err) = e.as_database_error() {
+                        if db_err.is_unique_violation() && db_err.constraint().unwrap_or_default().contains("users_username_key") {
                             return Err(AppError::DuplicateEntry(format!("NIK '{}' sudah terdaftar sebagai username.", payload.nik)));
-                        } else if constraint.contains("users_email_key") {
-                            return Err(AppError::DuplicateEntry(format!("Email '{}' sudah terdaftar.", payload.email.as_deref().unwrap_or_default())));
                         }
                     }
+                    return Err(e.into());
                 }
-                return Err(e.into());
             }
         }
     } else {
