@@ -70,35 +70,45 @@ pub async fn create_pegawai_repo(
     let new_pegawai_id: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO pegawai (
-            user_id, nik, no_ktp, gelar_depan, nama_lengkap, gelar_belakang, tempat_lahir, 
-            tanggal_lahir, jenis_kelamin, status_nikah, agama, alamat_domisili, nomor_hp, 
-            email, kategori_pegawai, status_pegawai, unit_kerja, bagian, jabatan, tanggal_masuk
+            user_id, nik, no_ktp, nama_lengkap, gelar_depan, gelar_belakang, tempat_lahir, tanggal_lahir, 
+            jenis_kelamin, status_nikah, agama, gol_darah, alamat_domisili, kota, kode_pos, 
+            nomor_hp, email, kategori_pegawai, status_pegawai, is_active, unit_kerja, bagian, 
+            jabatan, tanggal_masuk, tanggal_pensiun, no_kk, no_npwp, no_bpjs_kesehatan, no_bpjs_ketenagakerjaan
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9::"JenisKelamin", $10::"StatusNikah", $11, $12, 
-            $13, $14, $15::"KategoriPegawai", $16::"StatusPegawai", $17, $18, $19, $20
+            $1, $2, $3, $4, $5, $6, $7, $8, $9::"JenisKelamin", $10::"StatusNikah", $11, $12, $13, $14, $15, 
+            $16, $17, $18::"KategoriPegawai", $19::"StatusPegawai", $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
         ) RETURNING id
         "#,
     )
     .bind(new_user_id)
     .bind(&payload.nik)
     .bind(&payload.no_ktp)
-    .bind(&payload.gelar_depan)
     .bind(&payload.nama_lengkap)
+    .bind(&payload.gelar_depan)
     .bind(&payload.gelar_belakang)
     .bind(&payload.tempat_lahir)
     .bind(payload.tanggal_lahir)
     .bind(jenis_kelamin_str)
     .bind(status_nikah_str)
     .bind(&payload.agama)
+    .bind(&payload.gol_darah)
     .bind(&payload.alamat_domisili)
+    .bind(&payload.kota)
+    .bind(&payload.kode_pos)
     .bind(&payload.nomor_hp)
     .bind(&payload.email)
     .bind(kategori_pegawai_str)
     .bind(status_pegawai_str)
+    .bind(payload.is_active.unwrap_or(true))
     .bind(&payload.unit_kerja)
     .bind(&payload.bagian)
     .bind(&payload.jabatan)
     .bind(&payload.tanggal_masuk)
+    .bind(payload.tanggal_pensiun)
+    .bind(&payload.no_kk)
+    .bind(&payload.no_npwp)
+    .bind(&payload.no_bpjs_kesehatan)
+    .bind(&payload.no_bpjs_ketenagakerjaan)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -145,14 +155,19 @@ pub async fn get_all_pegawai_repo(pool: &DbPool) -> Result<Vec<Pegawai>, AppErro
     let pegawai_list = sqlx::query_as!(
         Pegawai,
         r#"
-        SELECT 
-            id, user_id, nik, no_ktp, gelar_depan, nama_lengkap, gelar_belakang,
-            tempat_lahir, tanggal_lahir, jenis_kelamin as "jenis_kelamin: _",
-            status_nikah as "status_nikah: _", agama, alamat_domisili, nomor_hp, email,
-            kategori_pegawai as "kategori_pegawai: _", status_pegawai as "status_pegawai: _",
-            unit_kerja, bagian, jabatan, tanggal_masuk,
-            created_at, updated_at
-        FROM pegawai
+        SELECT
+            p.id, p.user_id, p.nik, p.no_ktp, p.nama_lengkap, p.gelar_depan, p.gelar_belakang,
+            p.tempat_lahir, p.tanggal_lahir, p.jenis_kelamin as "jenis_kelamin: _",
+            p.status_nikah as "status_nikah: _", p.agama, p.gol_darah, p.alamat_domisili,
+            p.kota, p.kode_pos, p.nomor_hp, p.email, p.kategori_pegawai as "kategori_pegawai: _",
+            p.status_pegawai as "status_pegawai: _", p.is_active, p.unit_kerja, p.bagian,
+            p.jabatan, p.tanggal_masuk, p.tanggal_pensiun, p.no_kk, p.no_npwp,
+            p.no_bpjs_kesehatan, p.no_bpjs_ketenagakerjaan,
+            d.nidn, d.prodi_id, prodi.nama_prodi,
+            p.created_at, p.updated_at
+        FROM pegawai p
+        LEFT JOIN dosen d ON p.id = d.pegawai_id
+        LEFT JOIN prodi ON d.prodi_id = prodi.id
         ORDER BY nama_lengkap ASC
         "#
     ).fetch_all(pool).await?;
@@ -221,19 +236,39 @@ pub async fn update_pegawai_repo(pool: &DbPool, id: Uuid, payload: PegawaiPayloa
     sqlx::query(
         r#"
         UPDATE pegawai SET
-            nik = $1, no_ktp = $2, gelar_depan = $3, nama_lengkap = $4, gelar_belakang = $5,
-            tempat_lahir = $6, tanggal_lahir = $7, jenis_kelamin = $8::"JenisKelamin", 
-            status_nikah = $9::"StatusNikah", agama = $10, alamat_domisili = $11, nomor_hp = $12, 
-            email = $13, kategori_pegawai = $14::"KategoriPegawai", status_pegawai = $15::"StatusPegawai", 
-            unit_kerja = $16, bagian = $17, jabatan = $18, tanggal_masuk = $19, updated_at = now()
-        WHERE id = $20
+            nik = $1, no_ktp = $2, nama_lengkap = $3, gelar_depan = $4, gelar_belakang = $5,
+            tempat_lahir = $6, tanggal_lahir = $7, jenis_kelamin = $8::"JenisKelamin", status_nikah = $9::"StatusNikah",
+            agama = $10, gol_darah = $11, alamat_domisili = $12, kota = $13, kode_pos = $14, nomor_hp = $15,
+            email = $16, kategori_pegawai = $17::"KategoriPegawai", status_pegawai = $18::"StatusPegawai",
+            is_active = $19, unit_kerja = $20, bagian = $21, jabatan = $22, tanggal_masuk = $23,
+            tanggal_pensiun = $24, no_kk = $25, no_npwp = $26, no_bpjs_kesehatan = $27,
+            no_bpjs_ketenagakerjaan = $28, updated_at = now()
+        WHERE id = $29
         "#,
     )
-    .bind(payload.nik).bind(payload.no_ktp).bind(payload.gelar_depan).bind(payload.nama_lengkap)
-    .bind(payload.gelar_belakang).bind(payload.tempat_lahir).bind(payload.tanggal_lahir)
-    .bind(jenis_kelamin_str).bind(status_nikah_str).bind(payload.agama).bind(payload.alamat_domisili)
-    .bind(payload.nomor_hp).bind(payload.email).bind(kategori_pegawai_str).bind(status_pegawai_str)
-    .bind(payload.unit_kerja).bind(payload.bagian).bind(payload.jabatan).bind(payload.tanggal_masuk).bind(id)
+    .bind(&payload.nik)
+    .bind(&payload.no_ktp)
+    .bind(&payload.nama_lengkap)
+    .bind(&payload.gelar_depan)
+    .bind(&payload.gelar_belakang)
+    .bind(&payload.tempat_lahir)
+    .bind(payload.tanggal_lahir)
+    .bind(jenis_kelamin_str)
+    .bind(status_nikah_str)
+    .bind(&payload.agama)
+    .bind(&payload.gol_darah)
+    .bind(&payload.alamat_domisili)
+    .bind(&payload.kota)
+    .bind(&payload.kode_pos)
+    .bind(&payload.nomor_hp)
+    .bind(&payload.email)
+    .bind(kategori_pegawai_str)
+    .bind(status_pegawai_str)
+    .bind(payload.is_active.unwrap_or(old_pegawai.is_active))
+    .bind(&payload.unit_kerja).bind(&payload.bagian).bind(&payload.jabatan).bind(payload.tanggal_masuk)
+    .bind(payload.tanggal_pensiun).bind(&payload.no_kk).bind(&payload.no_npwp)
+    .bind(&payload.no_bpjs_kesehatan).bind(&payload.no_bpjs_ketenagakerjaan)
+    .bind(id)
     .execute(&mut *tx)
     .await?;
 
@@ -248,15 +283,20 @@ where
     let pegawai = sqlx::query_as!(
         Pegawai,
         r#"
-        SELECT 
-            id, user_id, nik, no_ktp, gelar_depan, nama_lengkap, gelar_belakang,
-            tempat_lahir, tanggal_lahir, jenis_kelamin as "jenis_kelamin: _",
-            status_nikah as "status_nikah: _", agama, alamat_domisili, nomor_hp, email,
-            kategori_pegawai as "kategori_pegawai: _", status_pegawai as "status_pegawai: _",
-            unit_kerja, bagian, jabatan, tanggal_masuk,
-            created_at, updated_at
-        FROM pegawai
-        WHERE id = $1
+        SELECT
+            p.id, p.user_id, p.nik, p.no_ktp, p.nama_lengkap, p.gelar_depan, p.gelar_belakang,
+            p.tempat_lahir, p.tanggal_lahir, p.jenis_kelamin as "jenis_kelamin: _",
+            p.status_nikah as "status_nikah: _", p.agama, p.gol_darah, p.alamat_domisili,
+            p.kota, p.kode_pos, p.nomor_hp, p.email, p.kategori_pegawai as "kategori_pegawai: _",
+            p.status_pegawai as "status_pegawai: _", p.is_active, p.unit_kerja, p.bagian,
+            p.jabatan, p.tanggal_masuk, p.tanggal_pensiun, p.no_kk, p.no_npwp,
+            p.no_bpjs_kesehatan, p.no_bpjs_ketenagakerjaan,
+            d.nidn, d.prodi_id, prodi.nama_prodi,
+            p.created_at, p.updated_at
+        FROM pegawai p
+        LEFT JOIN dosen d ON p.id = d.pegawai_id
+        LEFT JOIN prodi ON d.prodi_id = prodi.id
+        WHERE p.id = $1
         "#,
         id
     )
