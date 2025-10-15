@@ -1,6 +1,6 @@
 // src/modules/sdm/model.rs
 use serde::{Deserialize, Serialize};
-use sqlx::Type;
+use sqlx::{Type,FromRow};
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
@@ -47,29 +47,42 @@ pub enum StatusPegawai {
 
 // --- Struct untuk Respons API ---
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, FromRow)]
 pub struct Pegawai {
     pub id: Uuid,
     pub user_id: Option<Uuid>,
     pub nik: String,
     pub no_ktp: Option<String>,
-    pub gelar_depan: Option<String>,
     pub nama_lengkap: String,
+    pub gelar_depan: Option<String>,
     pub gelar_belakang: Option<String>,
     pub tempat_lahir: Option<String>,
     pub tanggal_lahir: Option<Date>,
     pub jenis_kelamin: Option<JenisKelamin>,
     pub status_nikah: Option<StatusNikah>,
     pub agama: Option<String>,
+    pub gol_darah: Option<String>,
     pub alamat_domisili: Option<String>,
+    pub kota: Option<String>,
+    pub kode_pos: Option<String>,
     pub nomor_hp: Option<String>,
     pub email: Option<String>,
     pub kategori_pegawai: Option<KategoriPegawai>,
     pub status_pegawai: Option<StatusPegawai>,
+    pub is_active: bool,
     pub unit_kerja: Option<String>,
     pub bagian: Option<String>,
     pub jabatan: Option<String>,
     pub tanggal_masuk: Option<Date>,
+    pub tanggal_pensiun: Option<Date>,
+    pub no_kk: Option<String>,
+    pub no_npwp: Option<String>,
+    pub no_bpjs_kesehatan: Option<String>,
+    pub no_bpjs_ketenagakerjaan: Option<String>,
+    // Data Dosen (jika ada)
+    pub nidn: Option<String>,
+    pub prodi_id: Option<Uuid>,
+    pub nama_prodi: Option<String>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
 }
@@ -80,29 +93,37 @@ pub struct Pegawai {
 pub struct PegawaiPayload {
     pub nik: String,
     pub no_ktp: Option<String>,
-    pub gelar_depan: Option<String>,
     pub nama_lengkap: String,
+    pub gelar_depan: Option<String>,
     pub gelar_belakang: Option<String>,
     pub tempat_lahir: Option<String>,
     pub tanggal_lahir: Option<Date>,
     pub jenis_kelamin: Option<JenisKelamin>,
     pub status_nikah: Option<StatusNikah>,
     pub agama: Option<String>,
+    pub gol_darah: Option<String>,
     pub alamat_domisili: Option<String>,
+    pub kota: Option<String>,
+    pub kode_pos: Option<String>,
     pub nomor_hp: Option<String>,
     pub email: Option<String>,
     pub kategori_pegawai: Option<KategoriPegawai>,
     pub status_pegawai: Option<StatusPegawai>,
+    pub is_active: Option<bool>,
     pub unit_kerja: Option<String>,
     pub bagian: Option<String>,
     pub jabatan: Option<String>,
     pub tanggal_masuk: Option<Date>,
-    // Opsional, tapi wajib jika kategori = Tenaga Pendidik
+    pub tanggal_pensiun: Option<Date>,
+    pub no_kk: Option<String>,
+    pub no_npwp: Option<String>,
+    pub no_bpjs_kesehatan: Option<String>,
+    pub no_bpjs_ketenagakerjaan: Option<String>,
     pub nidn: Option<String>, 
-    pub prodi_id: Option<Uuid>,
-    // Untuk pembuatan user otomatis
+    pub prodi_id: Option<Uuid>, 
     pub password: Option<String>, 
 }
+
 
 impl JenisKelamin {
     pub fn as_str(&self) -> &'static str {
@@ -141,4 +162,9 @@ impl StatusPegawai {
             StatusPegawai::Honorer => "Honorer",
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateUserForPegawaiPayload {
+    pub password: String,
 }

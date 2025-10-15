@@ -1,7 +1,7 @@
 // src/modules/sdm/repo.rs
 
 use super::model::{
-    Pegawai, PegawaiPayload, KategoriPegawai
+    Pegawai, PegawaiPayload, KategoriPegawai,CreateUserForPegawaiPayload
 };
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
@@ -309,3 +309,54 @@ pub async fn delete_pegawai_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError
     Ok(())
 }
 
+pub async fn create_user_for_pegawai_repo(
+    pool: &DbPool,
+    pegawai_id: Uuid,
+    payload: CreateUserForPegawaiPayload,
+) -> Result<Pegawai, AppError> {
+    let mut tx = pool.begin().await?;
+
+    // 1. Ambil data pegawai dan pastikan belum punya user
+    let pegawai = get_pegawai_by_id_repo_inner(&mut *tx, pegawai_id).await?;
+    if pegawai.user_id.is_some() {
+        return Err(AppError::Forbidden("Pegawai ini sudah memiliki akun user.".to_string()));
+    }
+
+    // 2. Buat user baru
+    let hashed_password = bcrypt::hash(payload.password, bcrypt::DEFAULT_COST)?;
+    let new_user_id = sqlx::query_scalar!(
+        "INSERT INTO users (username, password_hash, full_name, email) VALUES ($1, $2, $3, $4) RETURNING id",
+        pegawai.nik, // Gunakan NIK dari data pegawai sebagai username
+        hashed_password,
+        pegawai.nama_lengkap,
+        pegawai.email
+    ).fetch_one(&mut *tx).await?;
+
+    // 3. Tautkan user_id baru ke data pegawai
+    sqlx::query!(
+        "UPDATE pegawai SET user_id = $1 WHERE id = $2",
+        new_user_id,
+        pegawai_id
+    ).execute(&mut *tx).await?;
+
+    // 4. Jika pegawai adalah Dosen, tautkan juga user_id ke data dosen
+    if let Some(KategoriPegawai::TenagaPendidik) = pegawai.kategori_pegawai {
+        sqlx::query!(
+            "UPDATE dosen SET user_id = $1 WHERE pegawai_id = $2",
+            new_user_id,
+            pegawai_id
+        ).execute(&mut *tx).await?;
+        
+        // Berikan peran DOSEN
+        sqlx::query!(
+            "INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'DOSEN')) ON CONFLICT DO NOTHING",
+            new_user_id
+        ).execute(&mut *tx).await?;
+    }
+    // Anda bisa tambahkan logika `else` untuk memberikan peran default 'PEGAWAI' jika perlu
+
+    tx.commit().await?;
+
+    // Ambil dan kembalikan data pegawai terbaru yang sudah memiliki user_id
+    get_pegawai_by_id_repo_inner(pool, pegawai_id).await
+}

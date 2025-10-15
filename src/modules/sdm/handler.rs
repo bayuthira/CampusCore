@@ -1,7 +1,7 @@
 // src/modules/sdm/handler.rs
 
 use super::{
-    model::{Pegawai, PegawaiPayload},
+    model::{Pegawai, PegawaiPayload, CreateUserForPegawaiPayload},
     repo, // Mengacu pada src/modules/sdm/repo.rs
 };
 use crate::{db::DbPool, errors::AppError};
@@ -54,4 +54,14 @@ pub async fn delete_pegawai_handler(
 ) -> Result<StatusCode, AppError> {
     repo::delete_pegawai_repo(&pool, id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+
+pub async fn create_user_for_pegawai_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<CreateUserForPegawaiPayload>,
+) -> Result<Json<Pegawai>, AppError> {
+    let updated_pegawai = repo::create_user_for_pegawai_repo(&pool, id, payload).await?;
+    Ok(Json(updated_pegawai))
 }
