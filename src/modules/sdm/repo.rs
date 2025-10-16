@@ -1,8 +1,6 @@
 // src/modules/sdm/repo.rs
 
-use super::model::{
-    Pegawai, PegawaiPayload, KategoriPegawai,CreateUserForPegawaiPayload
-};
+use super::model::{CreateUserForPegawaiPayload, KategoriPegawai, Pegawai, PegawaiPayload,JenisKelamin, StatusNikah, StatusPegawai};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
 
@@ -17,7 +15,7 @@ pub async fn create_pegawai_repo(
     payload: PegawaiPayload,
 ) -> Result<Pegawai, AppError> {
     let mut tx = pool.begin().await?;
-    
+
     // Tahap 1: Tentukan User ID (Cari Berdasarkan Email, atau Buat Baru)
     let new_user_id: Option<Uuid> = if let Some(password) = payload.password {
         // Cek dulu apakah user dengan email ini sudah ada (jika email diisi)
@@ -114,24 +112,33 @@ pub async fn create_pegawai_repo(
 
     // 3. Jika Tenaga Pendidik, buat atau tautkan data Dosen
     if let Some(KategoriPegawai::TenagaPendidik) = &payload.kategori_pegawai {
-        let nidn = payload.nidn.as_ref().ok_or_else(|| AppError::Forbidden("NIDN wajib diisi untuk Tenaga Pendidik.".to_string()))?;
-        let prodi_id = payload.prodi_id.ok_or_else(|| AppError::Forbidden("Prodi ID wajib diisi untuk Tenaga Pendidik.".to_string()))?;
-        
+        let nidn = payload.nidn.as_ref().ok_or_else(|| {
+            AppError::Forbidden("NIDN wajib diisi untuk Tenaga Pendidik.".to_string())
+        })?;
+        let prodi_id = payload.prodi_id.ok_or_else(|| {
+            AppError::Forbidden("Prodi ID wajib diisi untuk Tenaga Pendidik.".to_string())
+        })?;
+
         let existing_dosen = sqlx::query!("SELECT id FROM dosen WHERE nidn = $1", nidn)
-            .fetch_optional(&mut *tx).await?;
+            .fetch_optional(&mut *tx)
+            .await?;
 
         if let Some(dosen) = existing_dosen {
             sqlx::query!(
                 "UPDATE dosen SET pegawai_id = $1, user_id = $2 WHERE id = $3",
-                new_pegawai_id, new_user_id, dosen.id
-            ).execute(&mut *tx).await?;
+                new_pegawai_id,
+                new_user_id,
+                dosen.id
+            )
+            .execute(&mut *tx)
+            .await?;
         } else {
             sqlx::query!(
                 "INSERT INTO dosen (nidn, nama_dosen, email, prodi_id, user_id, pegawai_id) VALUES ($1, $2, $3, $4, $5, $6)",
                 nidn, &payload.nama_lengkap, payload.email.as_deref(), prodi_id, new_user_id, new_pegawai_id
             ).execute(&mut *tx).await?;
         }
-        
+
         if let Some(user_id) = new_user_id {
             sqlx::query!(
                 "INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'DOSEN')) ON CONFLICT DO NOTHING",
@@ -147,36 +154,75 @@ pub async fn create_pegawai_repo(
     Ok(new_pegawai)
 }
 
-
-
-
 /// Mengambil semua data pegawai
 pub async fn get_all_pegawai_repo(pool: &DbPool) -> Result<Vec<Pegawai>, AppError> {
-    let pegawai_list = sqlx::query_as!(
-        Pegawai,
+    let records = sqlx::query!(
         r#"
         SELECT
             p.id, p.user_id, p.nik, p.no_ktp, p.nama_lengkap, p.gelar_depan, p.gelar_belakang,
-            p.tempat_lahir, p.tanggal_lahir, p.jenis_kelamin as "jenis_kelamin: _",
-            p.status_nikah as "status_nikah: _", p.agama, p.gol_darah, p.alamat_domisili,
-            p.kota, p.kode_pos, p.nomor_hp, p.email, p.kategori_pegawai as "kategori_pegawai: _",
-            p.status_pegawai as "status_pegawai: _", p.is_active, p.unit_kerja, p.bagian,
+            p.tempat_lahir, p.tanggal_lahir, p.jenis_kelamin as "jenis_kelamin: JenisKelamin",
+            p.status_nikah as "status_nikah: StatusNikah", p.agama, p.gol_darah, p.alamat_domisili,
+            p.kota, p.kode_pos, p.nomor_hp, p.email,
+            p.kategori_pegawai as "kategori_pegawai: KategoriPegawai",
+            p.status_pegawai as "status_pegawai: StatusPegawai",
+            p.is_active, p.unit_kerja, p.bagian,
             p.jabatan, p.tanggal_masuk, p.tanggal_pensiun, p.no_kk, p.no_npwp,
             p.no_bpjs_kesehatan, p.no_bpjs_ketenagakerjaan,
-            d.nidn, d.prodi_id, prodi.nama_prodi,
+            d.nidn as "nidn?", d.prodi_id as "prodi_id?", pr.nama_prodi as "nama_prodi?",
             p.created_at, p.updated_at
         FROM pegawai p
         LEFT JOIN dosen d ON p.id = d.pegawai_id
-        LEFT JOIN prodi ON d.prodi_id = prodi.id
-        ORDER BY nama_lengkap ASC
+        LEFT JOIN prodi pr ON d.prodi_id = pr.id
+        ORDER BY p.nama_lengkap ASC
         "#
     ).fetch_all(pool).await?;
 
+    let pegawai_list = records.into_iter().map(|rec| Pegawai {
+        id: rec.id,
+        user_id: rec.user_id,
+        nik: rec.nik,
+        no_ktp: rec.no_ktp,
+        nama_lengkap: rec.nama_lengkap,
+        gelar_depan: rec.gelar_depan,
+        gelar_belakang: rec.gelar_belakang,
+        tempat_lahir: rec.tempat_lahir,
+        tanggal_lahir: rec.tanggal_lahir,
+        jenis_kelamin: rec.jenis_kelamin,
+        status_nikah: rec.status_nikah,
+        agama: rec.agama,
+        gol_darah: rec.gol_darah,
+        alamat_domisili: rec.alamat_domisili,
+        kota: rec.kota,
+        kode_pos: rec.kode_pos,
+        nomor_hp: rec.nomor_hp,
+        email: rec.email,
+        kategori_pegawai: rec.kategori_pegawai,
+        status_pegawai: rec.status_pegawai,
+        is_active: rec.is_active,
+        unit_kerja: rec.unit_kerja,
+        bagian: rec.bagian,
+        jabatan: rec.jabatan,
+        tanggal_masuk: rec.tanggal_masuk,
+        tanggal_pensiun: rec.tanggal_pensiun,
+        no_kk: rec.no_kk,
+        no_npwp: rec.no_npwp,
+        no_bpjs_kesehatan: rec.no_bpjs_kesehatan,
+        no_bpjs_ketenagakerjaan: rec.no_bpjs_ketenagakerjaan,
+        nidn: rec.nidn,
+        prodi_id: rec.prodi_id,
+        nama_prodi: rec.nama_prodi,
+        created_at: rec.created_at,
+        updated_at: rec.updated_at,
+    }).collect();
+
     Ok(pegawai_list)
 }
-
 /// Memperbarui data pegawai
-pub async fn update_pegawai_repo(pool: &DbPool, id: Uuid, payload: PegawaiPayload) -> Result<Pegawai, AppError> {
+pub async fn update_pegawai_repo(
+    pool: &DbPool,
+    id: Uuid,
+    payload: PegawaiPayload,
+) -> Result<Pegawai, AppError> {
     let mut tx = pool.begin().await?;
 
     // Tahap 1: Ambil data pegawai saat ini dari database
@@ -184,21 +230,34 @@ pub async fn update_pegawai_repo(pool: &DbPool, id: Uuid, payload: PegawaiPayloa
 
     // Tahap 2: Cek apakah ada perubahan pada kategori pegawai
     if old_pegawai.kategori_pegawai != payload.kategori_pegawai {
-        
         // Skenario 1: Berubah menjadi Tenaga Pendidik
         if let Some(KategoriPegawai::TenagaPendidik) = &payload.kategori_pegawai {
-            let nidn = payload.nidn.as_ref().ok_or_else(|| AppError::Forbidden("NIDN wajib diisi untuk mengubah status menjadi Tenaga Pendidik.".to_string()))?;
-            let prodi_id = payload.prodi_id.ok_or_else(|| AppError::Forbidden("Prodi ID wajib diisi untuk mengubah status menjadi Tenaga Pendidik.".to_string()))?;
+            let nidn = payload.nidn.as_ref().ok_or_else(|| {
+                AppError::Forbidden(
+                    "NIDN wajib diisi untuk mengubah status menjadi Tenaga Pendidik.".to_string(),
+                )
+            })?;
+            let prodi_id = payload.prodi_id.ok_or_else(|| {
+                AppError::Forbidden(
+                    "Prodi ID wajib diisi untuk mengubah status menjadi Tenaga Pendidik."
+                        .to_string(),
+                )
+            })?;
 
             let existing_dosen = sqlx::query!("SELECT id FROM dosen WHERE nidn = $1", nidn)
-                .fetch_optional(&mut *tx).await?;
+                .fetch_optional(&mut *tx)
+                .await?;
 
             if let Some(dosen) = existing_dosen {
                 // Jika dosen sudah ada, tautkan ke pegawai ini
                 sqlx::query!(
                     "UPDATE dosen SET pegawai_id = $1, user_id = $2 WHERE id = $3",
-                    id, old_pegawai.user_id, dosen.id
-                ).execute(&mut *tx).await?;
+                    id,
+                    old_pegawai.user_id,
+                    dosen.id
+                )
+                .execute(&mut *tx)
+                .await?;
             } else {
                 // Jika dosen belum ada, buat baru
                 sqlx::query!(
@@ -225,6 +284,30 @@ pub async fn update_pegawai_repo(pool: &DbPool, id: Uuid, payload: PegawaiPayloa
         if let Some(KategoriPegawai::TenagaKependidikan) = &payload.kategori_pegawai {
             // No action needed
         }
+    } else {
+        // Tahap 2b: Kategori tetap sama, tapi cek perubahan prodi jika TenagaPendidik
+        if let Some(KategoriPegawai::TenagaPendidik) = &old_pegawai.kategori_pegawai {
+            // Ambil data dosen yang terkait dengan pegawai ini
+            let existing_dosen = sqlx::query!("SELECT id, prodi_id FROM dosen WHERE pegawai_id = $1", id)
+                .fetch_optional(&mut *tx)
+                .await?;
+
+            if let Some(dosen) = existing_dosen {
+                // Jika ada prodi baru di payload, lakukan update
+                if let Some(new_prodi_id) = payload.prodi_id {
+                    // Cek apakah prodi_id berbeda
+                    if Some(new_prodi_id) != Some(dosen.prodi_id) {
+                        sqlx::query!(
+                            "UPDATE dosen SET prodi_id = $1 WHERE id = $2",
+                            new_prodi_id,
+                            dosen.id
+                        )
+                        .execute(&mut *tx)
+                        .await?;
+                    }
+                }
+            }
+        }
     }
 
     // Tahap 3: Lakukan UPDATE utama pada tabel pegawai (tidak berubah)
@@ -232,7 +315,7 @@ pub async fn update_pegawai_repo(pool: &DbPool, id: Uuid, payload: PegawaiPayloa
     let status_nikah_str = payload.status_nikah.as_ref().map(|e| e.as_str());
     let kategori_pegawai_str = payload.kategori_pegawai.as_ref().map(|e| e.as_str());
     let status_pegawai_str = payload.status_pegawai.as_ref().map(|e| e.as_str());
-    
+
     sqlx::query(
         r#"
         UPDATE pegawai SET
@@ -265,9 +348,15 @@ pub async fn update_pegawai_repo(pool: &DbPool, id: Uuid, payload: PegawaiPayloa
     .bind(kategori_pegawai_str)
     .bind(status_pegawai_str)
     .bind(payload.is_active.unwrap_or(old_pegawai.is_active))
-    .bind(&payload.unit_kerja).bind(&payload.bagian).bind(&payload.jabatan).bind(payload.tanggal_masuk)
-    .bind(payload.tanggal_pensiun).bind(&payload.no_kk).bind(&payload.no_npwp)
-    .bind(&payload.no_bpjs_kesehatan).bind(&payload.no_bpjs_ketenagakerjaan)
+    .bind(&payload.unit_kerja)
+    .bind(&payload.bagian)
+    .bind(&payload.jabatan)
+    .bind(payload.tanggal_masuk)
+    .bind(payload.tanggal_pensiun)
+    .bind(&payload.no_kk)
+    .bind(&payload.no_npwp)
+    .bind(&payload.no_bpjs_kesehatan)
+    .bind(&payload.no_bpjs_ketenagakerjaan)
     .bind(id)
     .execute(&mut *tx)
     .await?;
@@ -280,28 +369,67 @@ async fn get_pegawai_by_id_repo_inner<'a, E>(executor: E, id: Uuid) -> Result<Pe
 where
     E: sqlx::Executor<'a, Database = sqlx::Postgres>,
 {
-    let pegawai = sqlx::query_as!(
-        Pegawai,
+    let rec = sqlx::query!(
         r#"
         SELECT
             p.id, p.user_id, p.nik, p.no_ktp, p.nama_lengkap, p.gelar_depan, p.gelar_belakang,
-            p.tempat_lahir, p.tanggal_lahir, p.jenis_kelamin as "jenis_kelamin: _",
-            p.status_nikah as "status_nikah: _", p.agama, p.gol_darah, p.alamat_domisili,
-            p.kota, p.kode_pos, p.nomor_hp, p.email, p.kategori_pegawai as "kategori_pegawai: _",
-            p.status_pegawai as "status_pegawai: _", p.is_active, p.unit_kerja, p.bagian,
+            p.tempat_lahir, p.tanggal_lahir, p.jenis_kelamin as "jenis_kelamin: JenisKelamin",
+            p.status_nikah as "status_nikah: StatusNikah", p.agama, p.gol_darah, p.alamat_domisili,
+            p.kota, p.kode_pos, p.nomor_hp, p.email,
+            p.kategori_pegawai as "kategori_pegawai: KategoriPegawai",
+            p.status_pegawai as "status_pegawai: StatusPegawai",
+            p.is_active, p.unit_kerja, p.bagian,
             p.jabatan, p.tanggal_masuk, p.tanggal_pensiun, p.no_kk, p.no_npwp,
             p.no_bpjs_kesehatan, p.no_bpjs_ketenagakerjaan,
-            d.nidn, d.prodi_id, prodi.nama_prodi,
+            d.nidn as "nidn?", d.prodi_id as "prodi_id?", pr.nama_prodi as "nama_prodi?",
             p.created_at, p.updated_at
         FROM pegawai p
         LEFT JOIN dosen d ON p.id = d.pegawai_id
-        LEFT JOIN prodi ON d.prodi_id = prodi.id
+        LEFT JOIN prodi pr ON d.prodi_id = pr.id
         WHERE p.id = $1
         "#,
         id
     )
     .fetch_one(executor)
     .await?;
+
+    let pegawai = Pegawai {
+        id: rec.id,
+        user_id: rec.user_id,
+        nik: rec.nik,
+        no_ktp: rec.no_ktp,
+        nama_lengkap: rec.nama_lengkap,
+        gelar_depan: rec.gelar_depan,
+        gelar_belakang: rec.gelar_belakang,
+        tempat_lahir: rec.tempat_lahir,
+        tanggal_lahir: rec.tanggal_lahir,
+        jenis_kelamin: rec.jenis_kelamin,
+        status_nikah: rec.status_nikah,
+        agama: rec.agama,
+        gol_darah: rec.gol_darah,
+        alamat_domisili: rec.alamat_domisili,
+        kota: rec.kota,
+        kode_pos: rec.kode_pos,
+        nomor_hp: rec.nomor_hp,
+        email: rec.email,
+        kategori_pegawai: rec.kategori_pegawai,
+        status_pegawai: rec.status_pegawai,
+        is_active: rec.is_active,
+        unit_kerja: rec.unit_kerja,
+        bagian: rec.bagian,
+        jabatan: rec.jabatan,
+        tanggal_masuk: rec.tanggal_masuk,
+        tanggal_pensiun: rec.tanggal_pensiun,
+        no_kk: rec.no_kk,
+        no_npwp: rec.no_npwp,
+        no_bpjs_kesehatan: rec.no_bpjs_kesehatan,
+        no_bpjs_ketenagakerjaan: rec.no_bpjs_ketenagakerjaan,
+        nidn: rec.nidn,
+        prodi_id: rec.prodi_id,
+        nama_prodi: rec.nama_prodi,
+        created_at: rec.created_at,
+        updated_at: rec.updated_at,
+    };
 
     Ok(pegawai)
 }
@@ -317,32 +445,45 @@ pub async fn delete_pegawai_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError
     if let Some(KategoriPegawai::TenagaPendidik) = pegawai_to_delete.kategori_pegawai {
         // Cari ID dosen yang terkait dengan pegawai ini
         let dosen_id_rec = sqlx::query!("SELECT id FROM dosen WHERE pegawai_id = $1", id)
-            .fetch_optional(&mut *tx).await?;
+            .fetch_optional(&mut *tx)
+            .await?;
 
         if let Some(rec) = dosen_id_rec {
             // Periksa apakah dosen_id ini digunakan di jadwal_dosen_pengampu
             let is_linked = sqlx::query_scalar!(
                 "SELECT EXISTS(SELECT 1 FROM jadwal_dosen_pengampu WHERE dosen_id = $1)",
                 rec.id
-            ).fetch_one(&mut *tx).await?.unwrap_or(false);
+            )
+            .fetch_one(&mut *tx)
+            .await?
+            .unwrap_or(false);
 
             if is_linked {
                 // Jika terikat, batalkan penghapusan
                 tx.rollback().await?;
-                return Err(AppError::Forbidden("Pegawai ini tidak dapat dihapus karena terikat dengan data jadwal akademik.".to_string()));
+                return Err(AppError::Forbidden(
+                    "Pegawai ini tidak dapat dihapus karena terikat dengan data jadwal akademik."
+                        .to_string(),
+                ));
             } else {
                 // Jika tidak terikat, hapus dari tabel dosen terlebih dahulu
-                sqlx::query!("DELETE FROM dosen WHERE id = $1", rec.id).execute(&mut *tx).await?;
+                sqlx::query!("DELETE FROM dosen WHERE id = $1", rec.id)
+                    .execute(&mut *tx)
+                    .await?;
             }
         }
     }
 
     // 3. Hapus dari tabel pegawai
-    sqlx::query!("DELETE FROM pegawai WHERE id = $1", id).execute(&mut *tx).await?;
+    sqlx::query!("DELETE FROM pegawai WHERE id = $1", id)
+        .execute(&mut *tx)
+        .await?;
 
     // 4. Hapus user terkait jika ada
     if let Some(user_id) = pegawai_to_delete.user_id {
-        sqlx::query!("DELETE FROM users WHERE id = $1", user_id).execute(&mut *tx).await?;
+        sqlx::query!("DELETE FROM users WHERE id = $1", user_id)
+            .execute(&mut *tx)
+            .await?;
     }
 
     tx.commit().await?;
@@ -359,7 +500,9 @@ pub async fn create_user_for_pegawai_repo(
     // 1. Ambil data pegawai dan pastikan belum punya user
     let pegawai = get_pegawai_by_id_repo_inner(&mut *tx, pegawai_id).await?;
     if pegawai.user_id.is_some() {
-        return Err(AppError::Forbidden("Pegawai ini sudah memiliki akun user.".to_string()));
+        return Err(AppError::Forbidden(
+            "Pegawai ini sudah memiliki akun user.".to_string(),
+        ));
     }
 
     // 2. Buat user baru
@@ -377,7 +520,9 @@ pub async fn create_user_for_pegawai_repo(
         "UPDATE pegawai SET user_id = $1 WHERE id = $2",
         new_user_id,
         pegawai_id
-    ).execute(&mut *tx).await?;
+    )
+    .execute(&mut *tx)
+    .await?;
 
     // 4. Jika pegawai adalah Dosen, tautkan juga user_id ke data dosen
     if let Some(KategoriPegawai::TenagaPendidik) = pegawai.kategori_pegawai {
@@ -385,8 +530,10 @@ pub async fn create_user_for_pegawai_repo(
             "UPDATE dosen SET user_id = $1 WHERE pegawai_id = $2",
             new_user_id,
             pegawai_id
-        ).execute(&mut *tx).await?;
-        
+        )
+        .execute(&mut *tx)
+        .await?;
+
         // Berikan peran DOSEN
         sqlx::query!(
             "INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'DOSEN')) ON CONFLICT DO NOTHING",
