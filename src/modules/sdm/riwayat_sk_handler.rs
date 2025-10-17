@@ -1,0 +1,31 @@
+// src/modules/sdm/riwayat_sk_handler.rs
+use super::{
+    model::{RiwayatSk, RiwayatSkPayload},
+    riwayat_sk_repo as repo,
+};
+use crate::{db::DbPool, errors::AppError};
+use axum::{
+    extract::{Path, State, Json},
+    http::StatusCode,
+};
+use uuid::Uuid;
+
+pub async fn create_handler(State(pool): State<DbPool>, Path(pegawai_id): Path<Uuid>, Json(payload): Json<RiwayatSkPayload>) -> Result<(StatusCode, Json<RiwayatSk>), AppError> {
+    let item = repo::create_repo(&pool, pegawai_id, payload).await?;
+    Ok((StatusCode::CREATED, Json(item)))
+}
+
+pub async fn get_all_by_pegawai_id_handler(State(pool): State<DbPool>, Path(pegawai_id): Path<Uuid>) -> Result<Json<Vec<RiwayatSk>>, AppError> {
+    let list = repo::get_all_by_pegawai_id_repo(&pool, pegawai_id).await?;
+    Ok(Json(list))
+}
+
+pub async fn update_handler(State(pool): State<DbPool>, Path(id): Path<Uuid>, Json(payload): Json<RiwayatSkPayload>) -> Result<Json<RiwayatSk>, AppError> {
+    let item = repo::update_repo(&pool, id, payload).await?;
+    Ok(Json(item))
+}
+
+pub async fn delete_handler(State(pool): State<DbPool>, Path(id): Path<Uuid>) -> Result<StatusCode, AppError> {
+    repo::delete_repo(&pool, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}

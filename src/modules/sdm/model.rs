@@ -168,3 +168,45 @@ impl StatusPegawai {
 pub struct CreateUserForPegawaiPayload {
     pub password: String,
 }
+
+// --- Struct untuk Riwayat Pendidikan ---
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct RiwayatPendidikan {
+    pub id: Uuid,
+    pub pegawai_id: Uuid,
+    pub jenjang: String,
+    pub institusi: String,
+    pub jurusan: Option<String>,
+    pub tahun_lulus: Option<i16>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RiwayatPendidikanPayload {
+    pub jenjang: String,
+    pub institusi: String,
+    pub jurusan: Option<String>,
+    pub tahun_lulus: Option<i16>,
+}
+
+// --- Struct untuk Riwayat SK ---
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct RiwayatSk {
+    pub id: Uuid,
+    pub pegawai_id: Uuid,
+    pub nomor_sk: String,
+    pub tanggal_sk: Date,
+    pub jenis_sk: String,
+    pub jabatan: Option<String>,
+    pub keterangan: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RiwayatSkPayload {
+    pub nomor_sk: String,
+    pub tanggal_sk: Date,
+    pub jenis_sk: String,
+    pub jabatan: Option<String>,
+    pub keterangan: Option<String>,
+}
