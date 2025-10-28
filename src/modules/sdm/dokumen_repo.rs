@@ -1,5 +1,5 @@
 // src/modules/sdm/dokumen_repo.rs
-use super::dokumen_model::{DokumenSdmDetail, KategoriDokumen, SdmEntityType};
+use super::dokumen_model::{DokumenFilter, DokumenSdmDetail, KategoriDokumen, SdmEntityType};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
 
@@ -46,7 +46,9 @@ pub async fn get_dokumen_by_id_repo(pool: &DbPool, id: Uuid) -> Result<DokumenSd
         WHERE d.id = $1
         "#,
         id
-    ).fetch_one(pool).await?;
+    )
+    .fetch_one(pool)
+    .await?;
     Ok(doc)
 }
 
@@ -55,6 +57,8 @@ pub async fn get_all_dokumen_by_entity_repo(
     entity_id: Uuid,
     entity_type: SdmEntityType,
 ) -> Result<Vec<DokumenSdmDetail>, AppError> {
+    let entity_type_str = entity_type.as_str(); // Ambil string dari enum
+
     let docs = sqlx::query_as!(
         DokumenSdmDetail,
         r#"
@@ -65,11 +69,11 @@ pub async fn get_all_dokumen_by_entity_repo(
             d.created_at
         FROM dokumen_sdm d
         LEFT JOIN users u ON d.user_uploader_id = u.id
-        WHERE d.entity_id = $1 AND d.entity_type = $2::"SdmEntityType"
+        WHERE d.entity_id = $1 AND d.entity_type::TEXT = $2 -- <-- UBAH DI SINI
         ORDER BY d.created_at DESC
         "#,
         entity_id,
-        entity_type.as_str()
+        entity_type_str // Kirim sebagai string
     )
     .fetch_all(pool)
     .await?;
@@ -90,8 +94,44 @@ pub async fn delete_dokumen_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError
 
     // 3. Hapus file fisik dari server
     if let Err(e) = tokio::fs::remove_file(&doc_to_delete.path_file).await {
-        tracing::error!("Gagal menghapus file fisik '{}': {}", doc_to_delete.path_file, e);
+        tracing::error!(
+            "Gagal menghapus file fisik '{}': {}",
+            doc_to_delete.path_file,
+            e
+        );
     }
 
     Ok(())
+}
+
+pub async fn get_all_dokumen_repo(
+    pool: &DbPool,
+    filter: DokumenFilter,
+) -> Result<Vec<DokumenSdmDetail>, AppError> {
+let mut query = sqlx::QueryBuilder::new(r#"
+        SELECT 
+            d.id, d.pegawai_id,
+            COALESCE(p.nama_lengkap, 'Pegawai Dihapus') as "nama_pegawai!", -- <-- TAMBAHKAN INI
+            d.entity_id, d.entity_type,
+            d.kategori, d.nama_file_asli, d.path_file, d.tipe_mime,
+            d.user_uploader_id, COALESCE(u.full_name, 'User Dihapus') as nama_uploader,
+            d.created_at
+        FROM dokumen_sdm d
+        LEFT JOIN users u ON d.user_uploader_id = u.id
+        LEFT JOIN pegawai p ON d.pegawai_id = p.id -- <-- TAMBAHKAN JOIN INI
+        WHERE 1=1
+    "#);
+
+    if let Some(pegawai_id) = filter.pegawai_id {
+        query.push(" AND d.pegawai_id = ");
+        query.push_bind(pegawai_id);
+    }
+    if let Some(kategori) = filter.kategori {
+        query.push(" AND d.kategori = ");
+        query.push_bind(kategori.as_str());
+    }
+    // ... filter lainnya ...
+
+    query.push(" ORDER BY d.created_at DESC");
+    Ok(query.build_query_as().fetch_all(pool).await?)
 }

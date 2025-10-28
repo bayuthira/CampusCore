@@ -1,5 +1,5 @@
 use super::{
-    model::{RiwayatPendidikan, RiwayatPendidikanPayload},
+    model::{RiwayatPendidikanPayload, RiwayatPendidikanDetail},
     riwayat_pendidikan_repo as repo,
 };
 use crate::{db::DbPool, errors::AppError};
@@ -9,17 +9,28 @@ use axum::{
 };
 use uuid::Uuid;
 
-pub async fn create_handler(State(pool): State<DbPool>, Path(pegawai_id): Path<Uuid>, Json(payload): Json<RiwayatPendidikanPayload>) -> Result<(StatusCode, Json<RiwayatPendidikan>), AppError> {
+pub async fn create_handler(
+    State(pool): State<DbPool>, 
+    Path(pegawai_id): Path<Uuid>, 
+    Json(payload): Json<RiwayatPendidikanPayload>
+) -> Result<(StatusCode, Json<RiwayatPendidikanDetail>), AppError> {
     let item = repo::create_riwayat_pendidikan_repo(&pool, pegawai_id, payload).await?;
     Ok((StatusCode::CREATED, Json(item)))
 }
 
-pub async fn get_all_by_pegawai_id_handler(State(pool): State<DbPool>, Path(pegawai_id): Path<Uuid>) -> Result<Json<Vec<RiwayatPendidikan>>, AppError> {
+pub async fn get_all_by_pegawai_id_handler(
+    State(pool): State<DbPool>,
+    Path(pegawai_id): Path<Uuid>,
+) -> Result<Json<Vec<RiwayatPendidikanDetail>>, AppError> { // <-- Ubah ke RiwayatPendidikanDetail
     let list = repo::get_all_riwayat_pendidikan_by_pegawai_id_repo(&pool, pegawai_id).await?;
     Ok(Json(list))
 }
 
-pub async fn update_handler(State(pool): State<DbPool>, Path(id): Path<Uuid>, Json(payload): Json<RiwayatPendidikanPayload>) -> Result<Json<RiwayatPendidikan>, AppError> {
+pub async fn update_handler(
+    State(pool): State<DbPool>, 
+    Path(id): Path<Uuid>, 
+    Json(payload): Json<RiwayatPendidikanPayload>
+) -> Result<Json<RiwayatPendidikanDetail>, AppError> {
     let item = repo::update_riwayat_pendidikan_repo(&pool, id, payload).await?;
     Ok(Json(item))
 }

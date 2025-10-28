@@ -26,7 +26,7 @@ let protected_routes = Router::<DbPool>::new() // <-- Perlu tipe state <DbPool>
     .merge(modules::fleet::routes::fleet_router())
     .merge(modules::fleet::servis_routes::servis_router())
     .merge(modules::sdm::routes::sdm_router())    
-    .route("/files/{folder}/{filename}", get(modules::files::handler::serve_file_handler))
+    .route("/files/{*path}", get(modules::files::handler::serve_file_handler))
     .route_layer(middleware::from_fn_with_state(
         pool.clone(),
         auth_middleware,

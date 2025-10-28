@@ -1,6 +1,6 @@
 // src/modules/sdm/routes.rs
 
-use super::{handler, riwayat_pendidikan_handler,riwayat_sk_handler,dokumen_handler};
+use super::{dokumen_handler, handler, riwayat_pendidikan_handler, riwayat_sk_handler};
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
     Router, middleware,
@@ -38,10 +38,20 @@ pub fn sdm_router() -> Router<DbPool> {
         .route(
             "/sdm/riwayat-sk/{id}",
             put(riwayat_sk_handler::update_handler).delete(riwayat_sk_handler::delete_handler),
-        ).route(
-        "/sdm/{entity_type}/{entity_id}/dokumen",
-        post(dokumen_handler::upload_dokumen_handler)
-    )
+        )
+        .route(
+            "/sdm/{entity_type}/{entity_id}/dokumen",
+            post(dokumen_handler::upload_dokumen_handler)
+                .get(dokumen_handler::get_all_dokumen_handler)
+        )
+        .route(
+            "/sdm/dokumen",
+            get(dokumen_handler::get_all_dokumen_admin_handler)
+        )
+        .route(
+            "/sdm/dokumen/{id}",
+            delete(dokumen_handler::delete_dokumen_handler)
+        )
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),
             "STAF_BASDM".to_string(),

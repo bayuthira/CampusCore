@@ -1,8 +1,8 @@
 // src/modules/sdm/dokumen_model.rs
 use serde::{Deserialize, Serialize};
-use sqlx::Type;
 use time::OffsetDateTime;
 use uuid::Uuid;
+use sqlx::{FromRow, Type};
 
 // --- ENUM untuk Entitas Induk ---
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
@@ -92,4 +92,20 @@ pub struct DokumenSdmDetail {
     pub user_uploader_id: Uuid,
     pub nama_uploader: String, // dari join
     pub created_at: OffsetDateTime,
+}
+
+/// Struct ringan untuk disematkan di list lain (Riwayat SK, dll)
+#[derive(Debug, Serialize, FromRow)]
+pub struct DokumenSdmSimple {
+    pub id: Uuid,
+    pub path_file: String,
+    #[sqlx(rename = "kategori")] // Ganti nama agar `FromRow` bisa memetakan
+    pub kategori: KategoriDokumen,
+    pub nama_file_asli: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DokumenFilter {
+    pub pegawai_id: Option<Uuid>,
+    pub kategori: Option<KategoriDokumen>,
 }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Type,FromRow};
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
-
+use super::dokumen_model::{DokumenSdmSimple};
 // --- ENUM untuk tipe data kustom ---
 
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
@@ -171,14 +171,25 @@ pub struct CreateUserForPegawaiPayload {
 
 // --- Struct untuk Riwayat Pendidikan ---
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-pub struct RiwayatPendidikan {
+#[derive(Debug, sqlx::FromRow)] // Ini adalah struct untuk DB
+pub struct RiwayatPendidikanDb {
     pub id: Uuid,
     pub pegawai_id: Uuid,
     pub jenjang: String,
     pub institusi: String,
     pub jurusan: Option<String>,
     pub tahun_lulus: Option<i16>,
+}
+
+#[derive(Debug, Serialize)] // Ini adalah struct untuk respons API
+pub struct RiwayatPendidikanDetail {
+    pub id: Uuid,
+    pub pegawai_id: Uuid,
+    pub jenjang: String,
+    pub institusi: String,
+    pub jurusan: Option<String>,
+    pub tahun_lulus: Option<i16>,
+    pub dokumen: Vec<DokumenSdmSimple>, // <-- Daftar dokumen
 }
 
 #[derive(Debug, Deserialize)]
@@ -189,10 +200,11 @@ pub struct RiwayatPendidikanPayload {
     pub tahun_lulus: Option<i16>,
 }
 
+
 // --- Struct untuk Riwayat SK ---
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-pub struct RiwayatSk {
+#[derive(Debug, sqlx::FromRow)] // Ini adalah struct untuk DB
+pub struct RiwayatSkDb {
     pub id: Uuid,
     pub pegawai_id: Uuid,
     pub nomor_sk: String,
@@ -200,6 +212,18 @@ pub struct RiwayatSk {
     pub jenis_sk: String,
     pub jabatan: Option<String>,
     pub keterangan: Option<String>,
+}
+
+#[derive(Debug, Serialize)] // Ini adalah struct untuk respons API
+pub struct RiwayatSkDetail {
+    pub id: Uuid,
+    pub pegawai_id: Uuid,
+    pub nomor_sk: String,
+    pub tanggal_sk: Date,
+    pub jenis_sk: String,
+    pub jabatan: Option<String>,
+    pub keterangan: Option<String>,
+    pub dokumen: Vec<DokumenSdmSimple>, // <-- Daftar dokumen
 }
 
 #[derive(Debug, Deserialize)]
