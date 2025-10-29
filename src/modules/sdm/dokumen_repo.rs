@@ -1,7 +1,8 @@
 // src/modules/sdm/dokumen_repo.rs
-use super::dokumen_model::{DokumenFilter, DokumenSdmDetail, KategoriDokumen, SdmEntityType};
+use super::dokumen_model::{DokumenFilter, DokumenSdmDetail, KategoriDokumen, SdmEntityType,DokumenSdmDetailAll};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
+use sqlx::Row;
 
 pub async fn create_dokumen_repo(
     pool: &DbPool,
@@ -107,18 +108,24 @@ pub async fn delete_dokumen_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError
 pub async fn get_all_dokumen_repo(
     pool: &DbPool,
     filter: DokumenFilter,
-) -> Result<Vec<DokumenSdmDetail>, AppError> {
-let mut query = sqlx::QueryBuilder::new(r#"
+) -> Result<Vec<DokumenSdmDetailAll>, AppError> {
+    let mut query = sqlx::QueryBuilder::new(r#"
         SELECT 
-            d.id, d.pegawai_id,
-            COALESCE(p.nama_lengkap, 'Pegawai Dihapus') as "nama_pegawai!", -- <-- TAMBAHKAN INI
-            d.entity_id, d.entity_type,
-            d.kategori, d.nama_file_asli, d.path_file, d.tipe_mime,
-            d.user_uploader_id, COALESCE(u.full_name, 'User Dihapus') as nama_uploader,
+            d.id, 
+            d.pegawai_id,
+            COALESCE(p.nama_lengkap, 'Pegawai Dihapus') as nama_pegawai,
+            d.entity_id, 
+            d.entity_type,
+            d.kategori,
+            d.nama_file_asli, 
+            d.path_file, 
+            d.tipe_mime,
+            d.user_uploader_id, 
+            COALESCE(u.full_name, 'User Dihapus') as nama_uploader,
             d.created_at
         FROM dokumen_sdm d
         LEFT JOIN users u ON d.user_uploader_id = u.id
-        LEFT JOIN pegawai p ON d.pegawai_id = p.id -- <-- TAMBAHKAN JOIN INI
+        LEFT JOIN pegawai p ON d.pegawai_id = p.id
         WHERE 1=1
     "#);
 
@@ -126,12 +133,35 @@ let mut query = sqlx::QueryBuilder::new(r#"
         query.push(" AND d.pegawai_id = ");
         query.push_bind(pegawai_id);
     }
+
     if let Some(kategori) = filter.kategori {
         query.push(" AND d.kategori = ");
         query.push_bind(kategori.as_str());
     }
+
     // ... filter lainnya ...
 
     query.push(" ORDER BY d.created_at DESC");
-    Ok(query.build_query_as().fetch_all(pool).await?)
+
+    let rows = query.build().fetch_all(pool).await?;
+    
+    // Manual mapping
+    let results: Result<Vec<DokumenSdmDetailAll>, sqlx::Error> = rows.into_iter().map(|row| {
+        Ok(DokumenSdmDetailAll {
+            id: row.try_get("id")?,
+            pegawai_id: row.try_get("pegawai_id")?,
+            nama_pegawai: row.try_get("nama_pegawai")?,
+            entity_id: row.try_get("entity_id")?,
+            entity_type: row.try_get("entity_type")?,
+            kategori: row.try_get("kategori")?,
+            nama_file_asli: row.try_get("nama_file_asli")?,
+            path_file: row.try_get("path_file")?,
+            tipe_mime: row.try_get("tipe_mime")?,
+            user_uploader_id: row.try_get("user_uploader_id")?,
+            nama_uploader: row.try_get("nama_uploader")?,
+            created_at: row.try_get("created_at")?,
+        })
+    }).collect();
+
+    Ok(results?)
 }

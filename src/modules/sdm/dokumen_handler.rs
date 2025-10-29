@@ -1,5 +1,5 @@
 // src/modules/sdm/dokumen_handler.rs
-use super::dokumen_model::{DokumenSdmDetail, KategoriDokumen, SdmEntityType, DokumenFilter};
+use super::dokumen_model::{DokumenSdmDetail, KategoriDokumen, SdmEntityType, DokumenFilter,DokumenSdmDetailAll};
 use super::dokumen_repo;
 use crate::{modules::auth::middleware::TokenClaims, db::DbPool, errors::AppError, utils::file_validator::validate_file};
 use axum::{
@@ -130,7 +130,7 @@ pub async fn delete_dokumen_handler(
 pub async fn get_all_dokumen_admin_handler(
     State(pool): State<DbPool>,
     Query(filter): Query<DokumenFilter>,
-) -> Result<Json<Vec<DokumenSdmDetail>>, AppError> {
+) -> Result<Json<Vec<DokumenSdmDetailAll>>, AppError> {
     let list = dokumen_repo::get_all_dokumen_repo(&pool, filter).await?;
     Ok(Json(list))
 }

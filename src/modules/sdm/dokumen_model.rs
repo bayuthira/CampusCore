@@ -109,3 +109,20 @@ pub struct DokumenFilter {
     pub pegawai_id: Option<Uuid>,
     pub kategori: Option<KategoriDokumen>,
 }
+
+// --- Struct untuk Respons GET ---
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct DokumenSdmDetailAll {
+    pub id: Uuid,
+    pub pegawai_id: Uuid,
+    pub nama_pegawai: String,
+    pub entity_id: Uuid,
+    pub entity_type: SdmEntityType,
+    pub kategori: KategoriDokumen,
+    pub nama_file_asli: String,
+    pub path_file: String,
+    pub tipe_mime: Option<String>,
+    pub user_uploader_id: Uuid,
+    pub nama_uploader: String, // dari join
+    pub created_at: OffsetDateTime,
+}
