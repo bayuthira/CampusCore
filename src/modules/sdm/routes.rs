@@ -1,6 +1,6 @@
 // src/modules/sdm/routes.rs
 
-use super::{dokumen_handler, handler, riwayat_pendidikan_handler, riwayat_sk_handler};
+use super::{dokumen_handler, handler, riwayat_pendidikan_handler, riwayat_sk_handler, cuti_routes};
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
     Router, middleware,
@@ -77,4 +77,5 @@ pub fn sdm_router() -> Router<DbPool> {
     Router::new()
         .merge(sdm_staff_routes)
         .merge(super_admin_routes)
+        .merge(cuti_routes::cuti_router())
 }

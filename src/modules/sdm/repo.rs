@@ -547,3 +547,18 @@ pub async fn create_user_for_pegawai_repo(
     // Ambil dan kembalikan data pegawai terbaru yang sudah memiliki user_id
     get_pegawai_by_id_repo_inner(pool, pegawai_id).await
 }
+
+pub async fn get_pegawai_id_from_user_id_repo(pool: &DbPool, user_id: Uuid) -> Result<Uuid, AppError> {
+    let pegawai_id = sqlx::query_scalar!(
+        "SELECT id FROM pegawai WHERE user_id = $1",
+        user_id
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::RowNotFound => AppError::Forbidden("Tidak ada data pegawai yang terhubung dengan akun Anda.".to_string()),
+        _ => e.into(),
+    })?;
+
+    Ok(pegawai_id)
+}

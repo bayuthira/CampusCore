@@ -9,3 +9,7 @@ pub mod riwayat_sk_handler;
 pub mod dokumen_model;
 pub mod dokumen_repo;
 pub mod dokumen_handler;
+pub mod cuti_model;
+pub mod cuti_repo;
+pub mod cuti_handler;
+pub mod cuti_routes;
