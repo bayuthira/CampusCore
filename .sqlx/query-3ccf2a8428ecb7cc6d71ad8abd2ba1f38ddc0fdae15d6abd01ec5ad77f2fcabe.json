@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            h.id,\n            h.status::TEXT as status,\n            h.catatan,\n            h.tanggal_kejadian,\n            h.user_aksi_id,\n            COALESCE(u_aksi.full_name, 'User Dihapus') as \"nama_user_aksi!\",\n            COALESCE(dari.nama_ruangan, '-') as \"dari_ruangan!\",\n            COALESCE(ke.nama_ruangan, '-') as \"ke_ruangan!\",\n            -- Subquery untuk mengambil nama peminjam HANYA jika statusnya relevan\n            (\n                SELECT peminjam.full_name\n                FROM peminjaman_aset pa\n                JOIN users peminjam ON pa.user_peminjam_id = peminjam.id\n                WHERE pa.aset_id = h.aset_id \n                  AND pa.tanggal_pinjam = h.tanggal_kejadian\n                  AND (h.status = 'Dipinjam' OR h.status = 'Dikembalikan')\n                LIMIT 1\n            ) as nama_peminjam\n        FROM histori_aset h\n        JOIN users u_aksi ON h.user_aksi_id = u_aksi.id\n        LEFT JOIN ruangan dari ON h.dari_ruangan_id = dari.id\n        LEFT JOIN ruangan ke ON h.ke_ruangan_id = ke.id\n        WHERE h.aset_id = $1\n        ORDER BY h.tanggal_kejadian DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "catatan",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "tanggal_kejadian",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_aksi_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "nama_user_aksi!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "dari_ruangan!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "ke_ruangan!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "nama_peminjam",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "3ccf2a8428ecb7cc6d71ad8abd2ba1f38ddc0fdae15d6abd01ec5ad77f2fcabe"
+}

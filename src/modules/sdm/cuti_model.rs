@@ -104,3 +104,21 @@ pub struct KuotaCutiDetail {
     pub sisa_cuti: i32,
     pub tahun: i16,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct JatahCutiFilter {
+    pub tahun: Option<i16>,
+    pub pegawai_id: Option<Uuid>,
+}
+
+// Struct baru untuk respons admin, menyertakan nama pegawai
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct JatahCutiDetail {
+    pub id: Uuid,
+    pub pegawai_id: Uuid,
+    pub nama_pegawai: String, // Dari join ke tabel pegawai
+    pub nik: String,         // Dari join ke tabel pegawai
+    pub tahun: i16,
+    pub kuota_total: i32,
+    pub kuota_terpakai: i32,
+}

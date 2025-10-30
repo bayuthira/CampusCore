@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            COUNT(*) FILTER (WHERE kondisi = 'Baik') as \"baik!\",\n            COUNT(*) FILTER (WHERE kondisi = 'Rusak Ringan') as \"rusak_ringan!\",\n            COUNT(*) FILTER (WHERE kondisi = 'Rusak Berat') as \"rusak_berat!\",\n            COUNT(*) FILTER (WHERE kondisi = 'Dalam Perbaikan') as \"dalam_perbaikan!\",\n            COUNT(*) FILTER (WHERE kondisi = 'Dihapuskan') as \"dihapuskan!\"\n        FROM aset\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "baik!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "rusak_ringan!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "rusak_berat!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "dalam_perbaikan!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "dihapuskan!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "959c55096c6b5deda505b09fbed3ae95f76601b3578d5dd76d787b3b6b77b91c"
+}

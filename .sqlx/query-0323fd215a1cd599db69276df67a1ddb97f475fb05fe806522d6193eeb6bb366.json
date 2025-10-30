@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM booking_kendaraan WHERE kendaraan_id = $1 AND status IN ('Disetujui', 'Berlangsung', 'Diajukan') AND (waktu_berangkat, estimasi_waktu_kembali) OVERLAPS ($2, $3))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0323fd215a1cd599db69276df67a1ddb97f475fb05fe806522d6193eeb6bb366"
+}

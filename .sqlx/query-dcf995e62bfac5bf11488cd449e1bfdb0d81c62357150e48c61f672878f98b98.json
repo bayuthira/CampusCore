@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE mahasiswa SET nama_mahasiswa = $1, angkatan = $2, email = $3, prodi_id = $4, updated_at = now() WHERE id = $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int4",
+        "Varchar",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dcf995e62bfac5bf11488cd449e1bfdb0d81c62357150e48c61f672878f98b98"
+}

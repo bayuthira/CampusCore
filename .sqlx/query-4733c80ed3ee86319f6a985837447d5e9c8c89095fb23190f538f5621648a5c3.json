@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    WITH new_user AS (\n                        INSERT INTO users (username, password_hash, full_name, email)\n                        VALUES ($1, $2, $3, $4) RETURNING id\n                    ), new_user_role AS (\n                        INSERT INTO user_roles (user_id, role_id)\n                        VALUES ((SELECT id FROM new_user), (SELECT id FROM roles WHERE name = 'MAHASISWA'))\n                    )\n                    INSERT INTO mahasiswa (nim, nama_mahasiswa, angkatan, email, prodi_id, user_id)\n                    VALUES ($1, $3, $5, $4, $6, (SELECT id FROM new_user))\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4733c80ed3ee86319f6a985837447d5e9c8c89095fb23190f538f5621648a5c3"
+}

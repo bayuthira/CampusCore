@@ -1,6 +1,7 @@
 // src/modules/sdm/cuti_repo.rs
 use super::cuti_model::{
-    ApprovalCutiPayload, CreateJatahCutiPayload, CreatePengajuanCutiPayload, JatahCuti,KuotaCutiDetail,PengajuanCuti, StatusCuti, TipeCuti
+    ApprovalCutiPayload, CreateJatahCutiPayload, CreatePengajuanCutiPayload, JatahCuti,KuotaCutiDetail,PengajuanCuti, StatusCuti, TipeCuti,
+    JatahCutiDetail, JatahCutiFilter    
 };
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
@@ -256,4 +257,37 @@ pub async fn get_kuota_cuti_repo(pool: &DbPool, pegawai_id: Uuid, tahun: i16) ->
             tahun,
         })
     }
+}
+
+pub async fn get_all_jatah_cuti_repo(
+    pool: &DbPool,
+    filter: JatahCutiFilter,
+) -> Result<Vec<JatahCutiDetail>, AppError> {
+    
+    // Query dasar dengan JOIN ke tabel pegawai
+    let mut query = sqlx::QueryBuilder::new(r#"
+        SELECT 
+            jc.id, jc.pegawai_id, p.nama_lengkap as nama_pegawai, p.nik,
+            jc.tahun, jc.kuota_total, jc.kuota_terpakai
+        FROM jatah_cuti jc
+        JOIN pegawai p ON jc.pegawai_id = p.id
+        WHERE 1=1
+    "#);
+
+    // Tambahkan filter pegawai_id jika ada
+    if let Some(pegawai_id) = filter.pegawai_id {
+        query.push(" AND jc.pegawai_id = ");
+        query.push_bind(pegawai_id);
+    }
+
+    // Tambahkan filter tahun jika ada
+    if let Some(tahun) = filter.tahun {
+        query.push(" AND jc.tahun = ");
+        query.push_bind(tahun);
+    }
+
+    query.push(" ORDER BY jc.tahun DESC, p.nama_lengkap ASC");
+
+    let list = query.build_query_as::<JatahCutiDetail>().fetch_all(pool).await?;
+    Ok(list)
 }

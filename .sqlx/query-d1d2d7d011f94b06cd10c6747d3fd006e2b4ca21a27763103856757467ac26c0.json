@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM aset_habis_pakai ORDER BY nama_barang ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "nama_barang",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "deskripsi",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "satuan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "stok",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "batas_minimum_stok",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d1d2d7d011f94b06cd10c6747d3fd006e2b4ca21a27763103856757467ac26c0"
+}

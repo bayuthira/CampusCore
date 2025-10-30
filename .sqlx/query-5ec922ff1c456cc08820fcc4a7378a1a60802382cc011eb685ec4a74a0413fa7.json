@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT kuota_total, kuota_terpakai FROM jatah_cuti WHERE pegawai_id = $1 AND tahun = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kuota_total",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "kuota_terpakai",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "5ec922ff1c456cc08820fcc4a7378a1a60802382cc011eb685ec4a74a0413fa7"
+}

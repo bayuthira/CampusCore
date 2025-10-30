@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM jatah_cuti WHERE pegawai_id = $1 AND tahun = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pegawai_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "tahun",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "kuota_total",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "kuota_terpakai",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b5badcde7d47b8293525244ba12540423ea963ea88e93a9202c905e779966049"
+}

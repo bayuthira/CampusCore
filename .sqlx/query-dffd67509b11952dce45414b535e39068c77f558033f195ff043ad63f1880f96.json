@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, path_file, kategori as \"kategori: _\", nama_file_asli \n                   FROM dokumen_sdm \n                   WHERE entity_id = $1 AND entity_type = 'RiwayatPendidikan'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "path_file",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "kategori: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"KategoriDokumen\"",
+            "kind": {
+              "Enum": [
+                "FotoProfil",
+                "KTP",
+                "KK",
+                "Ijazah",
+                "Transkrip",
+                "SK",
+                "Sertifikat",
+                "Lainnya"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "nama_file_asli",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "dffd67509b11952dce45414b535e39068c77f558033f195ff043ad63f1880f96"
+}

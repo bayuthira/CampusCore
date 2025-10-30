@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            b.id, b.aset_id, b.tipe_biaya as \"tipe_biaya: _\", b.deskripsi, b.jumlah, \n            b.tanggal_transaksi, b.vendor, b.user_pencatat_id,\n            COALESCE(u.full_name, 'User Tidak Ditemukan') as \"nama_pencatat!\",\n            b.bukti_url, -- <-- TAMBAHKAN INI\n            b.created_at, b.updated_at\n        FROM biaya_aset b\n        LEFT JOIN users u ON b.user_pencatat_id = u.id\n        WHERE b.aset_id = $1\n        ORDER BY b.tanggal_transaksi DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "aset_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "tipe_biaya: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"TipeBiaya\"",
+            "kind": {
+              "Enum": [
+                "Pembelian",
+                "Perawatan",
+                "Perbaikan",
+                "Upgrade",
+                "Lain-lain"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "deskripsi",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "jumlah",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "tanggal_transaksi",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "vendor",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "user_pencatat_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "nama_pencatat!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "bukti_url",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "db549a38ea84cc8336018857441c70285efced1af1699e37d72d7cfffc9a1655"
+}

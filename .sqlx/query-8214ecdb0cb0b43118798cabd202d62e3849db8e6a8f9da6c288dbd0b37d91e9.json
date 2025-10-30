@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO kurikulum_matakuliah (kurikulum_id, matakuliah_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8214ecdb0cb0b43118798cabd202d62e3849db8e6a8f9da6c288dbd0b37d91e9"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM kurikulum_matakuliah WHERE kurikulum_id = $1 AND matakuliah_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "26d2e53570d4e575de16bc29a764297e6a64071afe583d0c263083dda861d88a"
+}

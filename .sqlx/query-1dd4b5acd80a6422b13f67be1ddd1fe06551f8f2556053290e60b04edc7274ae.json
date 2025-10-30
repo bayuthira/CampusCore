@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT kendaraan_id FROM booking_kendaraan WHERE id = $1 AND status = 'Berlangsung'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kendaraan_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1dd4b5acd80a6422b13f67be1ddd1fe06551f8f2556053290e60b04edc7274ae"
+}

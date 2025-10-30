@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ruangan (kode_ruangan, nama_ruangan, kapasitas, panjang, lebar) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kode_ruangan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nama_ruangan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "kapasitas",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "panjang",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "lebar",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Numeric",
+        "Numeric"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fa1429bbdc4a1487554613d841c1366167f101fe7c4fadd7bb0f0b2e6a9b314c"
+}

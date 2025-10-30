@@ -2,7 +2,7 @@
 use super::{
     cuti_model::{
         ApprovalCutiPayload, CreateJatahCutiPayload, CreatePengajuanCutiPayload, JatahCuti, KuotaCutiDetail,KuotaFilter,
-        PengajuanCuti,
+        PengajuanCuti,JatahCutiDetail, JatahCutiFilter
     },
     cuti_repo as repo,
     repo as pegawai_repo,
@@ -98,4 +98,12 @@ pub async fn get_my_kuota_cuti_handler(
     
     let kuota = repo::get_kuota_cuti_repo(&pool, pegawai_id, filter.tahun).await?;
     Ok(Json(kuota))
+}
+
+pub async fn get_all_jatah_cuti_handler(
+    State(pool): State<DbPool>,
+    Query(filter): Query<JatahCutiFilter>,
+) -> Result<Json<Vec<JatahCutiDetail>>, AppError> {
+    let list = repo::get_all_jatah_cuti_repo(&pool, filter).await?;
+    Ok(Json(list))
 }

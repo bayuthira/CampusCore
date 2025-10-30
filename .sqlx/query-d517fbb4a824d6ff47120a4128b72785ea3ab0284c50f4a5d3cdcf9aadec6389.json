@@ -1,0 +1,269 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            p.id, p.user_id, p.nik, p.no_ktp, p.nama_lengkap, p.gelar_depan, p.gelar_belakang,\n            p.tempat_lahir, p.tanggal_lahir, p.jenis_kelamin as \"jenis_kelamin: JenisKelamin\",\n            p.status_nikah as \"status_nikah: StatusNikah\", p.agama, p.gol_darah, p.alamat_domisili,\n            p.kota, p.kode_pos, p.nomor_hp, p.email,\n            p.kategori_pegawai as \"kategori_pegawai: KategoriPegawai\",\n            p.status_pegawai as \"status_pegawai: StatusPegawai\",\n            p.is_active, p.unit_kerja, p.bagian,\n            p.jabatan, p.tanggal_masuk, p.tanggal_pensiun, p.no_kk, p.no_npwp,\n            p.no_bpjs_kesehatan, p.no_bpjs_ketenagakerjaan,\n            d.nidn as \"nidn?\", d.prodi_id as \"prodi_id?\", pr.nama_prodi as \"nama_prodi?\",\n            p.created_at, p.updated_at\n        FROM pegawai p\n        LEFT JOIN dosen d ON p.id = d.pegawai_id\n        LEFT JOIN prodi pr ON d.prodi_id = pr.id\n        WHERE p.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "nik",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "no_ktp",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "nama_lengkap",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "gelar_depan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "gelar_belakang",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "tempat_lahir",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "tanggal_lahir",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 9,
+        "name": "jenis_kelamin: JenisKelamin",
+        "type_info": {
+          "Custom": {
+            "name": "\"JenisKelamin\"",
+            "kind": {
+              "Enum": [
+                "L",
+                "P"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "status_nikah: StatusNikah",
+        "type_info": {
+          "Custom": {
+            "name": "\"StatusNikah\"",
+            "kind": {
+              "Enum": [
+                "Menikah",
+                "Belum Menikah",
+                "Cerai Hidup",
+                "Cerai Mati"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "agama",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "gol_darah",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "alamat_domisili",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "kota",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 15,
+        "name": "kode_pos",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 16,
+        "name": "nomor_hp",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 17,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 18,
+        "name": "kategori_pegawai: KategoriPegawai",
+        "type_info": {
+          "Custom": {
+            "name": "\"KategoriPegawai\"",
+            "kind": {
+              "Enum": [
+                "Tenaga Pendidik",
+                "Tenaga Kependidikan"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "status_pegawai: StatusPegawai",
+        "type_info": {
+          "Custom": {
+            "name": "\"StatusPegawai\"",
+            "kind": {
+              "Enum": [
+                "Tetap",
+                "Kontrak",
+                "Honorer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 21,
+        "name": "unit_kerja",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 22,
+        "name": "bagian",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 23,
+        "name": "jabatan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 24,
+        "name": "tanggal_masuk",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 25,
+        "name": "tanggal_pensiun",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 26,
+        "name": "no_kk",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 27,
+        "name": "no_npwp",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 28,
+        "name": "no_bpjs_kesehatan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 29,
+        "name": "no_bpjs_ketenagakerjaan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 30,
+        "name": "nidn?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 31,
+        "name": "prodi_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 32,
+        "name": "nama_prodi?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 33,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 34,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d517fbb4a824d6ff47120a4128b72785ea3ab0284c50f4a5d3cdcf9aadec6389"
+}

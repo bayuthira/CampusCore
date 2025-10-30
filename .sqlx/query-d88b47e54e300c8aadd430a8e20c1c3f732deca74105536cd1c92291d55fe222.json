@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE log_penggunaan SET odometer_akhir = $1, bahan_bakar_diisi = $2, catatan_kondisi_kembali = $3, waktu_aktual_kembali = $4 WHERE booking_id = $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Numeric",
+        "Text",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d88b47e54e300c8aadd430a8e20c1c3f732deca74105536cd1c92291d55fe222"
+}

@@ -30,9 +30,10 @@ pub fn cuti_router() -> Router<DbPool> {
             "/sdm/cuti/semua", // Endpoint untuk admin melihat semua
             get(handler::get_all_cuti_handler),
         )
-        .route(
-            "/sdm/cuti/jatah", // Endpoint untuk generate jatah
-            post(handler::create_jatah_cuti_handler),
+.route(
+            "/sdm/cuti/jatah",
+            post(handler::create_jatah_cuti_handler)
+                .get(handler::get_all_jatah_cuti_handler)
         )
         .route(
             "/sdm/cuti/{id}/setujui",

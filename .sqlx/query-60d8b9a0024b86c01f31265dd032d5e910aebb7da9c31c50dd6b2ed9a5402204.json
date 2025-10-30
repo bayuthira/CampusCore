@@ -1,0 +1,81 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            h.id,\n            h.tipe_transaksi as \"tipe_transaksi: _\",\n            h.jumlah,\n            h.saldo_sebelum,\n            h.saldo_setelah,\n            h.catatan,\n            h.tanggal_transaksi,\n            h.user_aksi_id,\n            u.full_name as \"nama_user_aksi!\"\n        FROM histori_stok h\n        JOIN users u ON h.user_aksi_id = u.id\n        WHERE h.aset_id = $1\n        ORDER BY h.tanggal_transaksi DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "tipe_transaksi: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"TipeTransaksiStok\"",
+            "kind": {
+              "Enum": [
+                "Pembelian",
+                "Pengambilan",
+                "Stok Opname"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "jumlah",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "saldo_sebelum",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "saldo_setelah",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "catatan",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "tanggal_transaksi",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "user_aksi_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "nama_user_aksi!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "60d8b9a0024b86c01f31265dd032d5e910aebb7da9c31c50dd6b2ed9a5402204"
+}

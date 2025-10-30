@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO enrollments (mahasiswa_id, matakuliah_id, tahun_akademik_id) VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b110286b4751f3a7e3ec4ceed8a7afbda28c53aff0ad68a154653cf21cd0b59e"
+}

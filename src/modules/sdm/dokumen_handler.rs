@@ -45,10 +45,19 @@ pub async fn upload_dokumen_handler(
             sqlx::query_scalar!(
                 "SELECT pegawai_id FROM riwayat_sk WHERE id = $1",
                 entity_id
-            )
+            )            
             .fetch_optional(&pool)
             .await?
             .ok_or_else(|| AppError::Forbidden("Riwayat SK tidak ditemukan.".to_string()))?
+        }
+        SdmEntityType::RiwayatSertifikat => {
+            sqlx::query_scalar!(
+                "SELECT pegawai_id FROM riwayat_sertifikat WHERE id = $1",
+                entity_id
+            )
+            .fetch_optional(&pool)
+            .await?
+            .ok_or_else(|| AppError::Forbidden("Riwayat Sertifikat tidak ditemukan.".to_string()))?
         }
     };
 

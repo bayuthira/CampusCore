@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE mata_kuliah SET nama_mk = $1, sks = $2, semester_target = $3, prodi_id = $4, updated_at = now() WHERE id = $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int4",
+        "Int4",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "095210624f72bbac5a70a8e0aecf0f93b2cb7dd0d164a8c45b8ccec1858fc17b"
+}

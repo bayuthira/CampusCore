@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM jadwal_ruangan WHERE recurring_event_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e2b115ee2aaabc27ce347458b9c35e6022ecc40c98135606cf56510a04990e04"
+}

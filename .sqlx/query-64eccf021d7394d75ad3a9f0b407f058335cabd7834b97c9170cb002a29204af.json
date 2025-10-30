@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            COUNT(*) FILTER (WHERE status = 'Ditempatkan') as \"ditempatkan!\",\n            COUNT(*) FILTER (WHERE status = 'Dipindahkan') as \"dipindahkan!\",\n            COUNT(*) FILTER (WHERE status = 'Dipinjam') as \"dipinjam!\",\n            COUNT(*) FILTER (WHERE status = 'Dikembalikan') as \"dikembalikan!\",\n            COUNT(*) FILTER (WHERE status = 'Dalam Perbaikan') as \"dalam_perbaikan!\",\n            COUNT(*) FILTER (WHERE status = 'Perbaikan Selesai') as \"perbaikan_selesai!\",\n            COUNT(*) FILTER (WHERE status = 'Dihapuskan') as \"dihapuskan!\"\n        FROM histori_aset\n        WHERE aset_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ditempatkan!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "dipindahkan!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "dipinjam!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "dikembalikan!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "dalam_perbaikan!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "perbaikan_selesai!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "dihapuskan!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "64eccf021d7394d75ad3a9f0b407f058335cabd7834b97c9170cb002a29204af"
+}

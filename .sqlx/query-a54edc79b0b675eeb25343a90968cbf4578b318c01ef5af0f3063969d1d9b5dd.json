@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM peminjaman_aset WHERE aset_id = $1 AND status = 'Dipinjam'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a54edc79b0b675eeb25343a90968cbf4578b318c01ef5af0f3063969d1d9b5dd"
+}

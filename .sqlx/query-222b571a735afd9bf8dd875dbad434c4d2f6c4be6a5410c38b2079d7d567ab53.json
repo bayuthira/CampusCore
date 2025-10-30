@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE peminjaman_aset SET status = 'Dikembalikan', tanggal_kembali_aktual = now(), catatan_kembali = $1, user_approve_kembali_id = $2 WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "222b571a735afd9bf8dd875dbad434c4d2f6c4be6a5410c38b2079d7d567ab53"
+}

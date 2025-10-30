@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            id,\n            nama_jenis,\n            deskripsi,\n            kelompok::TEXT as \"kelompok\",\n            created_at,\n            updated_at\n        FROM jenis_aset WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "nama_jenis",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "deskripsi",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "kelompok",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "a67b8371c91f80ed7258d13a9ee8bf5e701f8dd808ae8513b5d42327253ca547"
+}

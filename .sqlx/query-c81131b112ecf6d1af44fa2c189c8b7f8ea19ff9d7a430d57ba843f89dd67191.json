@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO histori_stok (aset_id, tipe_transaksi, jumlah, saldo_sebelum, saldo_setelah, user_aksi_id, catatan) VALUES ($1, 'Stok Opname', $2, $3, $4, $5, $6)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c81131b112ecf6d1af44fa2c189c8b7f8ea19ff9d7a430d57ba843f89dd67191"
+}

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT k.id, k.jenis as \"jenis: _\", k.nama, k.nomor_polisi\n        FROM kendaraan k\n        WHERE k.status = 'Tersedia' AND NOT EXISTS (\n            SELECT 1\n            FROM booking_kendaraan bk\n            WHERE bk.kendaraan_id = k.id\n            AND bk.status IN ('Disetujui', 'Berlangsung', 'Diajukan')\n            AND (bk.waktu_berangkat, bk.estimasi_waktu_kembali) OVERLAPS ($1, $2)\n        )\n        ORDER BY k.nama\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "jenis: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"JenisKendaraan\"",
+            "kind": {
+              "Enum": [
+                "Mobil",
+                "Motor",
+                "Bus"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "nama",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "nomor_polisi",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1241e72897a2298ff82776dcd5f4cbd779b2bd5ffee51af9284122e546ff6c96"
+}

@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            j.id, j.ruangan_id, j.judul_kegiatan, j.deskripsi,\n            j.waktu_mulai, j.waktu_selesai, j.recurring_event_id,j.jadwal_kuliah_id,\n            j.user_pembuat_id, u.full_name as \"nama_pembuat!\"\n        FROM jadwal_ruangan j\n        JOIN users u ON j.user_pembuat_id = u.id\n        WHERE j.id = ANY($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "ruangan_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "judul_kegiatan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "deskripsi",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "waktu_mulai",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "waktu_selesai",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "recurring_event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "jadwal_kuliah_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "user_pembuat_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "nama_pembuat!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "2d01f97db939672d118233e6fd117855671065a44022f1a93014c46c37233954"
+}

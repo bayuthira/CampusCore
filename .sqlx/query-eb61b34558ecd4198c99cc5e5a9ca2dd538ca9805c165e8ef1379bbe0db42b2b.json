@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dosen SET user_id = $1 WHERE pegawai_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eb61b34558ecd4198c99cc5e5a9ca2dd538ca9805c165e8ef1379bbe0db42b2b"
+}

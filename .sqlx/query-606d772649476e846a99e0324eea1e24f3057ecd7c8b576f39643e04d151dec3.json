@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tahun_akademik SET is_active = false WHERE is_active = true AND id != $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "606d772649476e846a99e0324eea1e24f3057ecd7c8b576f39643e04d151dec3"
+}

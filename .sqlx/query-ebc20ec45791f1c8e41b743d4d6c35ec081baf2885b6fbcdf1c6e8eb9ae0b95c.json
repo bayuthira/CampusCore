@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM riwayat_sk WHERE pegawai_id = $1 ORDER BY tanggal_sk DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pegawai_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "nomor_sk",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "tanggal_sk",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "jenis_sk",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "jabatan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "keterangan",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "ebc20ec45791f1c8e41b743d4d6c35ec081baf2885b6fbcdf1c6e8eb9ae0b95c"
+}

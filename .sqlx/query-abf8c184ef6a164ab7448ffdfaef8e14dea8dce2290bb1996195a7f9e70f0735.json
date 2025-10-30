@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO dosen (nidn, nama_dosen, email, prodi_id) VALUES ($1, $2, $3, $4) RETURNING id",
+  "query": "INSERT INTO mata_kuliah (kode_mk, nama_mk, sks, semester_target, prodi_id) VALUES ($1, $2, $3, $4, $5) RETURNING id",
   "describe": {
     "columns": [
       {
@@ -13,7 +13,8 @@
       "Left": [
         "Varchar",
         "Varchar",
-        "Varchar",
+        "Int4",
+        "Int4",
         "Uuid"
       ]
     },
@@ -21,5 +22,5 @@
       false
     ]
   },
-  "hash": "bd95348c9bf31e58562b9bab03e5e95e2ac846bc26682b9ef2bb9119e2a9313b"
+  "hash": "abf8c184ef6a164ab7448ffdfaef8e14dea8dce2290bb1996195a7f9e70f0735"
 }

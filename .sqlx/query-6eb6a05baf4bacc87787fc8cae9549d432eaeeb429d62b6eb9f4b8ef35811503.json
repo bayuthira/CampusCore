@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO log_penggunaan (booking_id, odometer_awal, waktu_aktual_berangkat) VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6eb6a05baf4bacc87787fc8cae9549d432eaeeb429d62b6eb9f4b8ef35811503"
+}

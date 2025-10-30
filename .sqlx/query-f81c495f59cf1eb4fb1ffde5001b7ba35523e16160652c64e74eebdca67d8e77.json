@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT b.id, b.kendaraan_id, k.nama as nama_kendaraan, b.user_pemesan_id, u.full_name as nama_pemesan,\n        b.tujuan, b.waktu_berangkat, b.estimasi_waktu_kembali, b.status as \"status: _\"\n        FROM booking_kendaraan b\n        JOIN kendaraan k ON b.kendaraan_id = k.id\n        JOIN users u ON b.user_pemesan_id = u.id\n        WHERE b.user_pemesan_id = $1\n        ORDER BY b.waktu_berangkat DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kendaraan_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "nama_kendaraan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_pemesan_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "nama_pemesan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "tujuan",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "waktu_berangkat",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "estimasi_waktu_kembali",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "status: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"StatusBooking\"",
+            "kind": {
+              "Enum": [
+                "Diajukan",
+                "Disetujui",
+                "Ditolak",
+                "Dibatalkan",
+                "Berlangsung",
+                "Selesai"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f81c495f59cf1eb4fb1ffde5001b7ba35523e16160652c64e74eebdca67d8e77"
+}

@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            m.id, m.nim, m.nama_mahasiswa, m.angkatan, m.email,\n            m.prodi_id, p.nama_prodi,\n            m.user_id, u.username\n        FROM mahasiswa m\n        LEFT JOIN prodi p ON m.prodi_id = p.id\n        LEFT JOIN users u ON m.user_id = u.id\n        WHERE m.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "nim",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nama_mahasiswa",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "angkatan",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "prodi_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "nama_prodi",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "username",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "df05000fd4fe90d882aa64e257f566d251ceae6671d688cf0ef6b8a74262e7a6"
+}

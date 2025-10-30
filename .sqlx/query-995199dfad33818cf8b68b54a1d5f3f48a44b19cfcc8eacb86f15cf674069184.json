@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ruangan SET kode_ruangan = $1, nama_ruangan = $2, kapasitas = $3, panjang = $4, lebar = $5, updated_at = now() WHERE id = $6 RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kode_ruangan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nama_ruangan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "kapasitas",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "panjang",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "lebar",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Numeric",
+        "Numeric",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "995199dfad33818cf8b68b54a1d5f3f48a44b19cfcc8eacb86f15cf674069184"
+}

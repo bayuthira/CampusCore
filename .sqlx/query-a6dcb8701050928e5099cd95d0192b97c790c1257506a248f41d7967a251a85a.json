@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.id as dosen_id, d.nama_dosen, jdp.peran as \"peran: _\"\n            FROM jadwal_dosen_pengampu jdp\n            JOIN dosen d ON jdp.dosen_id = d.id\n            WHERE jdp.jadwal_kuliah_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "dosen_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "nama_dosen",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "peran: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"PeranDosenPengampu\"",
+            "kind": {
+              "Enum": [
+                "Koordinator",
+                "Anggota"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a6dcb8701050928e5099cd95d0192b97c790c1257506a248f41d7967a251a85a"
+}

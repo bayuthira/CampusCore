@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            e.id, \n            e.mahasiswa_id,\n            COALESCE(ta.nama, '') as \"tahun_akademik!\",\n            COALESCE(mk.kode_mk, '') as \"kode_mk!\",\n            COALESCE(mk.nama_mk, '') as \"nama_mk!\",\n            COALESCE(mk.sks, 0) as \"sks!\",\n            e.status_approval::TEXT as \"status_approval\", \n            e.nilai_huruf\n        FROM enrollments e\n        LEFT JOIN mata_kuliah mk ON e.matakuliah_id = mk.id\n        LEFT JOIN tahun_akademik ta ON e.tahun_akademik_id = ta.id\n        WHERE e.mahasiswa_id = $1 AND e.tahun_akademik_id = $2\n        ORDER BY mk.kode_mk\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "mahasiswa_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "tahun_akademik!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "kode_mk!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "nama_mk!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "sks!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "status_approval",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "nilai_huruf",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "ca0dc7fc13f9f86b5cfd242b5b22dcfdc3b2a651c04b95bea7fc501a66068dcb"
+}

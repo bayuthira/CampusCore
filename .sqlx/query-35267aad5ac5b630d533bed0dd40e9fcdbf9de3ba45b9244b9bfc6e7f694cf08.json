@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM ruangan WHERE kode_ruangan ILIKE $1 OR nama_ruangan ILIKE $1 ORDER BY kode_ruangan ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kode_ruangan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nama_ruangan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "kapasitas",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "panjang",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "lebar",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "35267aad5ac5b630d533bed0dd40e9fcdbf9de3ba45b9244b9bfc6e7f694cf08"
+}

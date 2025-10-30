@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE kendaraan SET status = 'Tersedia' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb471db812aedafd37e6ea7053f0b7ccaf989d14f68e636f3267abb92579f456"
+}

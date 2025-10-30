@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO histori_aset (aset_id, user_aksi_id, status, catatan) VALUES ($1, $2, 'Dipinjam', $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c3e33065964bb4dc50038d3cd26f4cdb54c7a2de9cd3e17c530be86fbbc6e032"
+}

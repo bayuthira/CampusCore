@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM jadwal_ruangan WHERE jadwal_kuliah_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3620f2afe01acbae55b8415ca4fce31d05adb5ecea93bfe83a47706ae0f75b0c"
+}

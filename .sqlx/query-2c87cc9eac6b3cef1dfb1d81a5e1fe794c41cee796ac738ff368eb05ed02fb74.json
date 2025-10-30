@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            COUNT(*) FILTER (WHERE status = 'Diajukan') as \"diajukan!\",\n            COUNT(*) FILTER (WHERE status = 'Disetujui') as \"disetujui!\",\n            COUNT(*) FILTER (WHERE status = 'Ditolak') as \"ditolak!\",\n            COUNT(*) FILTER (WHERE status = 'Dibatalkan') as \"dibatalkan!\",\n            COUNT(*) FILTER (WHERE status = 'Berlangsung') as \"berlangsung!\",\n            COUNT(*) FILTER (WHERE status = 'Selesai') as \"selesai!\"\n        FROM booking_kendaraan\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "diajukan!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "disetujui!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "ditolak!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "dibatalkan!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "berlangsung!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "selesai!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "2c87cc9eac6b3cef1dfb1d81a5e1fe794c41cee796ac738ff368eb05ed02fb74"
+}

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM riwayat_pendidikan WHERE pegawai_id = $1 ORDER BY tahun_lulus DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pegawai_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "jenjang",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "institusi",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "jurusan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "tahun_lulus",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "298ef306bcae121d3bc7da5de908f69e7d7661b03443017b487928bf03a8955c"
+}

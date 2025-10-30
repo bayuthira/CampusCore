@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE booking_kendaraan SET status = 'Disetujui', user_approve_id = $1, catatan_approval = $2, updated_at = now() WHERE id = $3 AND status = 'Diajukan'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cbb91e52b9bb7e98ac65852ce8f3f2bfedd09ebe49640fe24a44659f1fa81ab9"
+}

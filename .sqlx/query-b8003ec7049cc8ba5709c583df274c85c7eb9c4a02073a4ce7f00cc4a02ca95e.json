@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            m.id, m.nim, m.nama_mahasiswa, m.angkatan, m.email,\n            m.prodi_id,\n            -- Jika nama prodi NULL, gunakan string default. Tanda '!' memberitahu sqlx hasilnya tidak akan NULL.\n            COALESCE(p.nama_prodi, 'Prodi Tidak Ada') as \"nama_prodi!\",\n            m.user_id,\n            -- Jika username NULL (karena user_id NULL), gunakan string default.\n            COALESCE(u.username, 'Akun Tidak Terhubung') as \"username!\"\n        FROM mahasiswa m\n        LEFT JOIN prodi p ON m.prodi_id = p.id\n        LEFT JOIN users u ON m.user_id = u.id\n        ORDER BY m.nama_mahasiswa ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "nim",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nama_mahasiswa",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "angkatan",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "prodi_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "nama_prodi!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "username!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      true,
+      null
+    ]
+  },
+  "hash": "b8003ec7049cc8ba5709c583df274c85c7eb9c4a02073a4ce7f00cc4a02ca95e"
+}

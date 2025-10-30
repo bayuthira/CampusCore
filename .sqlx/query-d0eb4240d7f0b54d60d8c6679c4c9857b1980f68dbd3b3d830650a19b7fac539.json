@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET username = $1 WHERE id = (SELECT user_id FROM mahasiswa WHERE id = $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d0eb4240d7f0b54d60d8c6679c4c9857b1980f68dbd3b3d830650a19b7fac539"
+}

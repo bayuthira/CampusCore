@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.id,\n            m.nim,\n            m.nama_mahasiswa,\n            m.angkatan,\n            m.email,\n            p.nama_prodi\n        FROM mahasiswa m\n        JOIN prodi p ON m.prodi_id = p.id\n        WHERE m.dosen_pa_id = $1\n        ORDER BY m.nim ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "nim",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nama_mahasiswa",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "angkatan",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "nama_prodi",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "f2475c4d7cb84afde70ee08ed81d7c85186d442b7c356e073ed66cfe70cc5533"
+}

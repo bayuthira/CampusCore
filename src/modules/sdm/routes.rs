@@ -1,6 +1,9 @@
 // src/modules/sdm/routes.rs
 
-use super::{dokumen_handler, handler, riwayat_pendidikan_handler, riwayat_sk_handler, cuti_routes};
+use super::{
+    cuti_routes, dokumen_handler, handler, riwayat_pendidikan_handler, riwayat_sertifikat_handler,
+    riwayat_sk_handler,
+};
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
     Router, middleware,
@@ -42,15 +45,25 @@ pub fn sdm_router() -> Router<DbPool> {
         .route(
             "/sdm/{entity_type}/{entity_id}/dokumen",
             post(dokumen_handler::upload_dokumen_handler)
-                .get(dokumen_handler::get_all_dokumen_handler)
+                .get(dokumen_handler::get_all_dokumen_handler),
         )
         .route(
             "/sdm/dokumen",
-            get(dokumen_handler::get_all_dokumen_admin_handler)
+            get(dokumen_handler::get_all_dokumen_admin_handler),
         )
         .route(
             "/sdm/dokumen/{id}",
-            delete(dokumen_handler::delete_dokumen_handler)
+            delete(dokumen_handler::delete_dokumen_handler),
+        )
+        .route(
+            "/sdm/pegawai/{pegawai_id}/sertifikat",
+            get(riwayat_sertifikat_handler::get_all_by_pegawai_id_handler)
+                .post(riwayat_sertifikat_handler::create_handler),
+        )
+        .route(
+            "/sdm/sertifikat/{id}",
+            put(riwayat_sertifikat_handler::update_handler)
+                .delete(riwayat_sertifikat_handler::delete_handler),
         )
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),

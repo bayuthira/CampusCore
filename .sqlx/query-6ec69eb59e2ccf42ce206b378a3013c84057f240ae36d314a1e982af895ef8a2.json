@@ -1,0 +1,109 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            d.id, d.pegawai_id, d.entity_id, d.entity_type as \"entity_type: _\",\n            d.kategori as \"kategori: _\", d.nama_file_asli, d.path_file, d.tipe_mime,\n            d.user_uploader_id, COALESCE(u.full_name, 'User Dihapus') as \"nama_uploader!\",\n            d.created_at\n        FROM dokumen_sdm d\n        LEFT JOIN users u ON d.user_uploader_id = u.id\n        WHERE d.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pegawai_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_type: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"SdmEntityType\"",
+            "kind": {
+              "Enum": [
+                "Pegawai",
+                "RiwayatPendidikan",
+                "RiwayatSk"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "kategori: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"KategoriDokumen\"",
+            "kind": {
+              "Enum": [
+                "FotoProfil",
+                "KTP",
+                "KK",
+                "Ijazah",
+                "Transkrip",
+                "SK",
+                "Sertifikat",
+                "Lainnya"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "nama_file_asli",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "path_file",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "tipe_mime",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "user_uploader_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "nama_uploader!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "6ec69eb59e2ccf42ce206b378a3013c84057f240ae36d314a1e982af895ef8a2"
+}

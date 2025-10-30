@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id, s.kendaraan_id, s.tanggal_servis, s.odometer_saat_servis, s.deskripsi, s.biaya, s.user_pencatat_id,\n                   COALESCE(u.full_name, 'User Dihapus') as \"nama_pencatat!\"\n            FROM servis_kendaraan s\n            LEFT JOIN users u ON s.user_pencatat_id = u.id\n            WHERE s.kendaraan_id = $1\n            ORDER BY s.tanggal_servis DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kendaraan_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "tanggal_servis",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "odometer_saat_servis",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "deskripsi",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "biaya",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "user_pencatat_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "nama_pencatat!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "585ada0637b4aabd2ff707dfa8f38eb0d03f671508cbce843c6f3a057c630417"
+}

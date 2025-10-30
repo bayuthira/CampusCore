@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE riwayat_pendidikan SET jenjang = $1, institusi = $2, jurusan = $3, tahun_lulus = $4 WHERE id = $5 RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pegawai_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "jenjang",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "institusi",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "jurusan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "tahun_lulus",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int2",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "e0e17061666b8aa00087ac7a2a6b3ad718525691855bc9f555be234fc35f86a6"
+}

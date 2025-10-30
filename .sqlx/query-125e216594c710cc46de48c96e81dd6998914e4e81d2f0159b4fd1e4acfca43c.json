@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE aset_habis_pakai SET nama_barang = $1, deskripsi = $2, satuan = $3, batas_minimum_stok = $4, updated_at = now() WHERE id = $5 RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "nama_barang",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "deskripsi",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "satuan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "stok",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "batas_minimum_stok",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "125e216594c710cc46de48c96e81dd6998914e4e81d2f0159b4fd1e4acfca43c"
+}

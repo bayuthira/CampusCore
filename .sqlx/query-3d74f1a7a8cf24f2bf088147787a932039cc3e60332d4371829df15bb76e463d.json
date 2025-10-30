@@ -1,0 +1,63 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE riwayat_sk SET nomor_sk = $1, tanggal_sk = $2, jenis_sk = $3, jabatan = $4, keterangan = $5 WHERE id = $6 RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pegawai_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "nomor_sk",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "tanggal_sk",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "jenis_sk",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "jabatan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "keterangan",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Date",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "3d74f1a7a8cf24f2bf088147787a932039cc3e60332d4371829df15bb76e463d"
+}

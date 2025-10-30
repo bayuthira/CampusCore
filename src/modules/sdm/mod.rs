@@ -13,3 +13,6 @@ pub mod cuti_model;
 pub mod cuti_repo;
 pub mod cuti_handler;
 pub mod cuti_routes;
+pub mod riwayat_sertifikat_model;
+pub mod riwayat_sertifikat_repo;
+pub mod riwayat_sertifikat_handler;

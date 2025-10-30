@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT odometer_awal, odometer_akhir, waktu_aktual_berangkat, waktu_aktual_kembali, bahan_bakar_diisi, catatan_kondisi_kembali FROM log_penggunaan WHERE booking_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "odometer_awal",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "odometer_akhir",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "waktu_aktual_berangkat",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "waktu_aktual_kembali",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "bahan_bakar_diisi",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "catatan_kondisi_kembali",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "8173f56591d333f5dd9077e15f750d475ed611ccf2dac7b5ad6751c68d97aadb"
+}

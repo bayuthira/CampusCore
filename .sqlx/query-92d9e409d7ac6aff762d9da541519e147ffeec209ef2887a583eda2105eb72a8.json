@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO booking_kendaraan (kendaraan_id, user_pemesan_id, tujuan, waktu_berangkat, estimasi_waktu_kembali) VALUES ($1, $2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "92d9e409d7ac6aff762d9da541519e147ffeec209ef2887a583eda2105eb72a8"
+}

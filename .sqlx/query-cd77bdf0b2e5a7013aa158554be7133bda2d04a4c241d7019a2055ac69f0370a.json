@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            mk.id,\n            mk.kode_mk,\n            mk.nama_mk,\n            mk.sks,\n            mk.semester_target,\n            mk.prodi_id,\n            COALESCE(p.nama_prodi, 'Prodi Tidak Ditemukan') as \"nama_prodi!\"\n        FROM mata_kuliah mk\n        INNER JOIN kurikulum_matakuliah km ON mk.id = km.matakuliah_id\n        LEFT JOIN prodi p ON mk.prodi_id = p.id\n        WHERE km.kurikulum_id = $1\n        ORDER BY mk.kode_mk\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kode_mk",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nama_mk",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "sks",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "semester_target",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "prodi_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "nama_prodi!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "cd77bdf0b2e5a7013aa158554be7133bda2d04a4c241d7019a2055ac69f0370a"
+}

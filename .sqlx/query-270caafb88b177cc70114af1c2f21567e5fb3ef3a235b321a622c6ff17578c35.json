@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM jadwal_kuliah WHERE matakuliah_id = $1 AND tahun_akademik_id = $2 AND kelas = $3 AND id != $4)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "270caafb88b177cc70114af1c2f21567e5fb3ef3a235b321a622c6ff17578c35"
+}

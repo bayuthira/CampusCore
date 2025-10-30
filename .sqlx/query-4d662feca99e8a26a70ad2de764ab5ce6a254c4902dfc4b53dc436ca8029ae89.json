@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO histori_stok (aset_id, tipe_transaksi, jumlah, saldo_sebelum, saldo_setelah, user_aksi_id, catatan, tanggal_transaksi) VALUES ($1, 'Pembelian', $2, $3, $4, $5, $6, $7)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4d662feca99e8a26a70ad2de764ab5ce6a254c4902dfc4b53dc436ca8029ae89"
+}

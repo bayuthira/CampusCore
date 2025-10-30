@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO riwayat_pendidikan \n            (pegawai_id, jenjang, institusi, jurusan, tahun_lulus)\n        VALUES ($1, $2, $3, $4, $5)\n        RETURNING *\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pegawai_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "jenjang",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "institusi",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "jurusan",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "tahun_lulus",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "dc5fce883297d59ae4fad3f7d2108acd64c394065cfef26f9ab1760895bb3f72"
+}

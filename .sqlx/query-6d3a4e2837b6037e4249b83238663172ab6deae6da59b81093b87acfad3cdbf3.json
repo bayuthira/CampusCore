@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE booking_kendaraan SET status = 'Berlangsung' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6d3a4e2837b6037e4249b83238663172ab6deae6da59b81093b87acfad3cdbf3"
+}

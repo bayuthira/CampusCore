@@ -1,0 +1,103 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, pegawai_id, tanggal_mulai, tanggal_selesai, jumlah_hari, alasan,\n               status as \"status: _\",\n               tipe_cuti as \"tipe_cuti: _\",\n               user_approve_id, catatan_approval, created_at\n        FROM pengajuan_cuti\n        WHERE pegawai_id = $1\n        ORDER BY created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pegawai_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "tanggal_mulai",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "tanggal_selesai",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "jumlah_hari",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "alasan",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "status: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"StatusCuti\"",
+            "kind": {
+              "Enum": [
+                "Diajukan",
+                "Disetujui",
+                "Ditolak"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "tipe_cuti: _",
+        "type_info": {
+          "Custom": {
+            "name": "\"TipeCuti\"",
+            "kind": {
+              "Enum": [
+                "Paid",
+                "Unpaid"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "user_approve_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "catatan_approval",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "350774b7b11e4e6ec93a698ee19ce9cac5a641fd6994b334b946bc6664e59048"
+}

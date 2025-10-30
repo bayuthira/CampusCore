@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE kurikulum SET nama = $1, tahun_mulai = $2, is_active = $3, prodi_id = $4, updated_at = now() WHERE id = $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int2",
+        "Bool",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6bf9d0174340bb14d3e94fff7774a0cda44da41cea9b9e188b94cd12a322945"
+}
