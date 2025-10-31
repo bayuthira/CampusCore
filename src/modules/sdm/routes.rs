@@ -1,8 +1,8 @@
 // src/modules/sdm/routes.rs
 
 use super::{
-    cuti_routes, dokumen_handler, handler, riwayat_pendidikan_handler, riwayat_sertifikat_handler,
-    riwayat_sk_handler,
+    cuti_routes, dokumen_handler, handler, riwayat_jad_handler, riwayat_pendidikan_handler,
+    riwayat_serdos_handler, riwayat_sertifikat_handler, riwayat_sk_handler,
 };
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
@@ -64,6 +64,26 @@ pub fn sdm_router() -> Router<DbPool> {
             "/sdm/sertifikat/{id}",
             put(riwayat_sertifikat_handler::update_handler)
                 .delete(riwayat_sertifikat_handler::delete_handler),
+        )
+        // --- RUTE BARU UNTUK KARIR DOSEN (JAD & SERDOS) ---
+        .route(
+            "/sdm/pegawai/{pegawai_id}/jad",
+            get(riwayat_jad_handler::get_all_by_pegawai_id_handler)
+                .post(riwayat_jad_handler::create_handler),
+        )
+        .route(
+            "/sdm/jad/{id}",
+            put(riwayat_jad_handler::update_handler).delete(riwayat_jad_handler::delete_handler),
+        )
+        .route(
+            "/sdm/pegawai/{pegawai_id}/serdos",
+            get(riwayat_serdos_handler::get_all_by_pegawai_id_handler)
+                .post(riwayat_serdos_handler::create_handler),
+        )
+        .route(
+            "/sdm/serdos/{id}",
+            put(riwayat_serdos_handler::update_handler)
+                .delete(riwayat_serdos_handler::delete_handler),
         )
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),

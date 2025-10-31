@@ -16,3 +16,8 @@ pub mod cuti_routes;
 pub mod riwayat_sertifikat_model;
 pub mod riwayat_sertifikat_repo;
 pub mod riwayat_sertifikat_handler;
+pub mod karir_dosen_model;
+pub mod riwayat_jad_repo;
+pub mod riwayat_serdos_repo;
+pub mod riwayat_jad_handler;
+pub mod riwayat_serdos_handler;

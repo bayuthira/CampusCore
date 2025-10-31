@@ -12,6 +12,8 @@ pub enum SdmEntityType {
     RiwayatPendidikan,
     RiwayatSk,
     RiwayatSertifikat,
+    RiwayatJad,    
+    RiwayatSerdos, 
 }
 
 impl SdmEntityType {
@@ -22,6 +24,8 @@ impl SdmEntityType {
             "riwayat-pendidikan" => Some(Self::RiwayatPendidikan),
             "riwayat-sk" => Some(Self::RiwayatSk),
             "riwayat-sertifikat" => Some(Self::RiwayatSertifikat),
+            "riwayat-jad" => Some(Self::RiwayatJad),  
+            "riwayat-serdos" => Some(Self::RiwayatSerdos), 
             _ => None,
         }
     }
@@ -33,6 +37,8 @@ impl SdmEntityType {
             Self::RiwayatPendidikan => "RiwayatPendidikan",
             Self::RiwayatSk => "RiwayatSk",
             Self::RiwayatSertifikat => "RiwayatSertifikat",
+            Self::RiwayatJad => "RiwayatJad",         
+            Self::RiwayatSerdos => "RiwayatSerdos",
         }
     }
 }

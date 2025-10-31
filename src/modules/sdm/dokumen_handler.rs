@@ -59,6 +59,26 @@ pub async fn upload_dokumen_handler(
             .await?
             .ok_or_else(|| AppError::Forbidden("Riwayat Sertifikat tidak ditemukan.".to_string()))?
         }
+        // --- TAMBAHAN ARM BARU UNTUK JAD ---
+        SdmEntityType::RiwayatJad => {
+            sqlx::query_scalar!(
+                "SELECT pegawai_id FROM riwayat_jad WHERE id = $1",
+                entity_id
+            )
+            .fetch_optional(&pool)
+            .await?
+            .ok_or_else(|| AppError::Forbidden("Riwayat JAD tidak ditemukan.".to_string()))?
+        }
+        // --- TAMBAHAN ARM BARU UNTUK SERDOS ---
+        SdmEntityType::RiwayatSerdos => {
+            sqlx::query_scalar!(
+                "SELECT pegawai_id FROM riwayat_serdos WHERE id = $1",
+                entity_id
+            )
+            .fetch_optional(&pool)
+            .await?
+            .ok_or_else(|| AppError::Forbidden("Riwayat SERDOS tidak ditemukan.".to_string()))?
+        }
     };
 
     // 3. Ambil data dari form
