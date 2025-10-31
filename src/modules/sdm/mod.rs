@@ -21,3 +21,7 @@ pub mod riwayat_jad_repo;
 pub mod riwayat_serdos_repo;
 pub mod riwayat_jad_handler;
 pub mod riwayat_serdos_handler;
+pub mod ijin_model;
+pub mod ijin_repo;
+pub mod ijin_handler;
+pub mod ijin_routes;

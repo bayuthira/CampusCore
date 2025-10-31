@@ -1,11 +1,10 @@
 // src/modules/sdm/cuti_repo.rs
 use super::cuti_model::{
     ApprovalCutiPayload, CreateJatahCutiPayload, CreatePengajuanCutiPayload, JatahCuti,
-    JatahCutiDetail, JatahCutiFilter, KategoriCuti, KuotaCutiDetail, KuotaFilter, PengajuanCuti,
+    JatahCutiDetail, JatahCutiFilter, KategoriCuti, KuotaCutiDetail,PengajuanCuti,
     StatusCuti, TipeCuti,
 };
 use crate::{db::DbPool, errors::AppError};
-use time::{Date, Duration, OffsetDateTime};
 use uuid::Uuid;
 
 /// Helper untuk mengambil satu pengajuan cuti berdasarkan ID
