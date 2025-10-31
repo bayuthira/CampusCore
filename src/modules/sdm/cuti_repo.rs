@@ -1,12 +1,18 @@
 // src/modules/sdm/cuti_repo.rs
 use super::cuti_model::{
-    ApprovalCutiPayload, CreateJatahCutiPayload, CreatePengajuanCutiPayload, JatahCuti,KuotaCutiDetail,PengajuanCuti, StatusCuti, TipeCuti,
-    JatahCutiDetail, JatahCutiFilter    
+    ApprovalCutiPayload, CreateJatahCutiPayload, CreatePengajuanCutiPayload, JatahCuti,
+    JatahCutiDetail, JatahCutiFilter, KategoriCuti, KuotaCutiDetail, KuotaFilter, PengajuanCuti,
+    StatusCuti, TipeCuti,
 };
 use crate::{db::DbPool, errors::AppError};
+use time::{Date, Duration, OffsetDateTime};
 use uuid::Uuid;
 
-pub async fn get_pengajuan_cuti_by_id_repo<'a, E>(executor: E, id: Uuid) -> Result<PengajuanCuti, AppError>
+/// Helper untuk mengambil satu pengajuan cuti berdasarkan ID
+pub async fn get_pengajuan_cuti_by_id_repo<'a, E>(
+    executor: E,
+    id: Uuid,
+) -> Result<PengajuanCuti, AppError>
 where
     E: sqlx::Executor<'a, Database = sqlx::Postgres>,
 {
@@ -15,6 +21,7 @@ where
         r#"
         SELECT id, pegawai_id, tanggal_mulai, tanggal_selesai, jumlah_hari, alasan,
                status as "status: _", tipe_cuti as "tipe_cuti: _", 
+               kategori as "kategori: _",
                user_approve_id, catatan_approval, created_at
         FROM pengajuan_cuti
         WHERE id = $1
@@ -26,13 +33,11 @@ where
     Ok(pengajuan)
 }
 
-
 /// Endpoint Khusus Admin: Membuat/mengatur jatah cuti tahunan untuk pegawai
 pub async fn create_jatah_cuti_repo(
     pool: &DbPool,
     payload: CreateJatahCutiPayload,
 ) -> Result<JatahCuti, AppError> {
-    // Gunakan ON CONFLICT untuk update jika jatah di tahun yg sama sudah ada
     let jatah = sqlx::query_as!(
         JatahCuti,
         r#"
@@ -51,6 +56,68 @@ pub async fn create_jatah_cuti_repo(
     Ok(jatah)
 }
 
+/// Endpoint Admin: Melihat semua jatah cuti (bisa difilter)
+pub async fn get_all_jatah_cuti_repo(
+    pool: &DbPool,
+    filter: JatahCutiFilter,
+) -> Result<Vec<JatahCutiDetail>, AppError> {
+    let mut query = sqlx::QueryBuilder::new(
+        r#"
+        SELECT 
+            jc.id, jc.pegawai_id, p.nama_lengkap as nama_pegawai, p.nik,
+            jc.tahun, jc.kuota_total, jc.kuota_terpakai
+        FROM jatah_cuti jc
+        JOIN pegawai p ON jc.pegawai_id = p.id
+        WHERE 1=1
+    "#,
+    );
+
+    if let Some(pegawai_id) = filter.pegawai_id {
+        query.push(" AND jc.pegawai_id = ");
+        query.push_bind(pegawai_id);
+    }
+    if let Some(tahun) = filter.tahun {
+        query.push(" AND jc.tahun = ");
+        query.push_bind(tahun);
+    }
+    query.push(" ORDER BY jc.tahun DESC, p.nama_lengkap ASC");
+
+    let list = query.build_query_as::<JatahCutiDetail>().fetch_all(pool).await?;
+    Ok(list)
+}
+
+/// Endpoint Pegawai: Melihat detail kuota cuti
+pub async fn get_kuota_cuti_repo(
+    pool: &DbPool,
+    pegawai_id: Uuid,
+    tahun: i16,
+) -> Result<KuotaCutiDetail, AppError> {
+    let jatah = sqlx::query_as!(
+        JatahCuti,
+        "SELECT * FROM jatah_cuti WHERE pegawai_id = $1 AND tahun = $2",
+        pegawai_id,
+        tahun
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(jatah) = jatah {
+        Ok(KuotaCutiDetail {
+            kuota_total: jatah.kuota_total,
+            kuota_terpakai: jatah.kuota_terpakai,
+            sisa_cuti: jatah.kuota_total - jatah.kuota_terpakai,
+            tahun: jatah.tahun,
+        })
+    } else {
+        Ok(KuotaCutiDetail {
+            kuota_total: 0,
+            kuota_terpakai: 0,
+            sisa_cuti: 0,
+            tahun,
+        })
+    }
+}
+
 /// Endpoint Pegawai: Mengajukan cuti baru
 pub async fn create_pengajuan_cuti_repo(
     pool: &DbPool,
@@ -59,31 +126,43 @@ pub async fn create_pengajuan_cuti_repo(
 ) -> Result<PengajuanCuti, AppError> {
     let mut tx = pool.begin().await?;
     let tahun_cuti = payload.tanggal_mulai.year() as i16;
+    let tipe_cuti_baru: TipeCuti;
 
-    let jatah = sqlx::query_as!(
-        JatahCuti,
-        "SELECT * FROM jatah_cuti WHERE pegawai_id = $1 AND tahun = $2",
-        pegawai_id,
-        tahun_cuti
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
+    // Tentukan Tipe Cuti (Paid/Unpaid) HANYA jika ini 'Cuti Tahunan'
+    if payload.kategori == KategoriCuti::CutiTahunan {
+        let jatah = sqlx::query_as!(
+            JatahCuti,
+            "SELECT * FROM jatah_cuti WHERE pegawai_id = $1 AND tahun = $2",
+            pegawai_id,
+            tahun_cuti
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
 
-    let tipe_cuti_baru;
-    if let Some(j) = jatah {
-        let sisa_cuti = j.kuota_total - j.kuota_terpakai;
-        tipe_cuti_baru = if sisa_cuti >= payload.jumlah_hari { TipeCuti::Paid } else { TipeCuti::Unpaid };
+        if let Some(jatah) = jatah {
+            let sisa_cuti = jatah.kuota_total - jatah.kuota_terpakai;
+            tipe_cuti_baru = if sisa_cuti >= payload.jumlah_hari {
+                TipeCuti::Paid
+            } else {
+                TipeCuti::Unpaid
+            };
+        } else {
+            // Jika tidak ada record jatah, cuti tahunan otomatis Unpaid
+            tipe_cuti_baru = TipeCuti::Unpaid;
+        }
     } else {
-        tipe_cuti_baru = TipeCuti::Unpaid;
+        // Jika bukan Cuti Tahunan (misal: Cuti Melahirkan), otomatis 'Paid' (atau sesuai aturan bisnis)
+        tipe_cuti_baru = TipeCuti::Paid;
     }
-    
-    let tipe_cuti_str = tipe_cuti_baru.as_str();
 
-    // --- PERBAIKAN DI SINI: Ganti query_as! dengan query_scalar() ---
+    let tipe_cuti_str = tipe_cuti_baru.as_str();
+    let kategori_str = payload.kategori.as_str();
+
+    // Insert pengajuan cuti (TANPA memotong kuota)
     let new_id = sqlx::query_scalar(
         r#"
-        INSERT INTO pengajuan_cuti (pegawai_id, tanggal_mulai, tanggal_selesai, jumlah_hari, alasan, tipe_cuti)
-        VALUES ($1, $2, $3, $4, $5, $6::"TipeCuti")
+        INSERT INTO pengajuan_cuti (pegawai_id, tanggal_mulai, tanggal_selesai, jumlah_hari, alasan, tipe_cuti, kategori)
+        VALUES ($1, $2, $3, $4, $5, $6::"TipeCuti", $7::"KategoriCuti")
         RETURNING id
         "#,
     )
@@ -92,16 +171,14 @@ pub async fn create_pengajuan_cuti_repo(
     .bind(payload.tanggal_selesai)
     .bind(payload.jumlah_hari)
     .bind(payload.alasan)
-    .bind(tipe_cuti_str) // Kirim sebagai string
+    .bind(tipe_cuti_str)
+    .bind(kategori_str)
     .fetch_one(&mut *tx)
     .await?;
 
     tx.commit().await?;
-    
-    // Ambil data lengkap menggunakan helper
     get_pengajuan_cuti_by_id_repo(pool, new_id).await
 }
-
 
 /// Endpoint Atasan/Admin: Menyetujui pengajuan cuti
 pub async fn approve_cuti_repo(
@@ -112,14 +189,16 @@ pub async fn approve_cuti_repo(
 ) -> Result<PengajuanCuti, AppError> {
     let mut tx = pool.begin().await?;
 
-    // 1. Ambil data pengajuan (gunakan helper _inner)
+    // 1. Ambil data pengajuan yang akan disetujui
     let pengajuan = get_pengajuan_cuti_by_id_repo(&mut *tx, id).await?;
     if pengajuan.status != StatusCuti::Diajukan {
-        return Err(AppError::Forbidden("Pengajuan cuti tidak ditemukan atau sudah diproses.".to_string()));
+        return Err(AppError::Forbidden(
+            "Pengajuan cuti tidak ditemukan atau sudah diproses.".to_string(),
+        ));
     }
 
-    // 2. Jika tipenya "Paid", potong kuota
-    if pengajuan.tipe_cuti == TipeCuti::Paid {
+    // 2. Potong kuota HANYA JIKA ini 'Cuti Tahunan'
+    if pengajuan.kategori == KategoriCuti::CutiTahunan {
         let tahun_cuti = pengajuan.tanggal_mulai.year() as i16;
         
         let jatah = sqlx::query!(
@@ -130,21 +209,20 @@ pub async fn approve_cuti_repo(
 
         if let Some(jatah) = jatah {
             if (jatah.kuota_total - jatah.kuota_terpakai) < pengajuan.jumlah_hari {
-                return Err(AppError::Forbidden("Gagal menyetujui: Kuota cuti pegawai sudah terpakai.".to_string()));
+                return Err(AppError::Forbidden("Gagal menyetujui: Kuota cuti tahunan pegawai tidak mencukupi.".to_string()));
             }
+            // Lakukan pemotongan kuota
             sqlx::query!(
                 "UPDATE jatah_cuti SET kuota_terpakai = kuota_terpakai + $1 WHERE pegawai_id = $2 AND tahun = $3",
                 pengajuan.jumlah_hari, pengajuan.pegawai_id, tahun_cuti
             ).execute(&mut *tx).await?;
         } else {
-            return Err(AppError::Forbidden("Gagal menyetujui: Jatah cuti pegawai untuk tahun ini tidak ditemukan.".to_string()));
+            return Err(AppError::Forbidden("Gagal menyetujui: Jatah cuti tahunan pegawai untuk tahun ini tidak ditemukan.".to_string()));
         }
     }
 
     // 3. Update status pengajuan
     let status_str = StatusCuti::Disetujui.as_str();
-    
-    // --- PERBAIKAN DI SINI: Ganti query_as! dengan query() ---
     sqlx::query(
         r#"
         UPDATE pengajuan_cuti
@@ -160,7 +238,6 @@ pub async fn approve_cuti_repo(
     .await?;
 
     tx.commit().await?;
-    
     get_pengajuan_cuti_by_id_repo(pool, id).await
 }
 
@@ -171,9 +248,9 @@ pub async fn reject_cuti_repo(
     user_approve_id: Uuid,
     payload: ApprovalCutiPayload,
 ) -> Result<PengajuanCuti, AppError> {
+    // REVISI: Logika ini menjadi sangat sederhana, tidak perlu transaksi
+    // Kita tidak perlu mengembalikan kuota, karena kuota belum dipotong.
     let status_str = StatusCuti::Ditolak.as_str();
-
-    // --- PERBAIKAN DI SINI: Ganti query_as! dengan query() ---
     sqlx::query(
         r#"
         UPDATE pengajuan_cuti
@@ -185,38 +262,23 @@ pub async fn reject_cuti_repo(
     .bind(user_approve_id)
     .bind(payload.catatan)
     .bind(id)
-    .execute(pool) // Tidak perlu transaksi
+    .execute(pool)
     .await?;
 
     get_pengajuan_cuti_by_id_repo(pool, id).await
 }
 
-/// Endpoint Atasan/Admin: Melihat semua pengajuan cuti (bisa difilter)
-pub async fn get_all_cuti_repo(pool: &DbPool) -> Result<Vec<PengajuanCuti>, AppError> {
-    // TODO: Tambahkan filter jika perlu
+/// Endpoint Pegawai: Melihat riwayat cuti milik sendiri
+pub async fn get_my_cuti_repo(
+    pool: &DbPool,
+    pegawai_id: Uuid,
+) -> Result<Vec<PengajuanCuti>, AppError> {
     let list = sqlx::query_as!(
         PengajuanCuti,
         r#"
         SELECT id, pegawai_id, tanggal_mulai, tanggal_selesai, jumlah_hari, alasan,
-               status as "status: _",
-               tipe_cuti as "tipe_cuti: _", -- <-- TAMBAHKAN INI
-               user_approve_id, catatan_approval, created_at
-        FROM pengajuan_cuti
-        ORDER BY created_at DESC
-        "#
-    )
-    .fetch_all(pool)
-    .await?;
-    Ok(list)
-}
-
-pub async fn get_my_cuti_repo(pool: &DbPool, pegawai_id: Uuid) -> Result<Vec<PengajuanCuti>, AppError> {
-    let list = sqlx::query_as!(
-        PengajuanCuti,
-        r#"
-        SELECT id, pegawai_id, tanggal_mulai, tanggal_selesai, jumlah_hari, alasan,
-               status as "status: _",
-               tipe_cuti as "tipe_cuti: _",
+               status as "status: _", tipe_cuti as "tipe_cuti: _", 
+               kategori as "kategori: _",
                user_approve_id, catatan_approval, created_at
         FROM pengajuan_cuti
         WHERE pegawai_id = $1
@@ -229,65 +291,20 @@ pub async fn get_my_cuti_repo(pool: &DbPool, pegawai_id: Uuid) -> Result<Vec<Pen
     Ok(list)
 }
 
-pub async fn get_kuota_cuti_repo(pool: &DbPool, pegawai_id: Uuid, tahun: i16) -> Result<KuotaCutiDetail, AppError> {
-    // 1. Coba ambil jatah cuti untuk tahun yang diminta
-    let jatah = sqlx::query_as!(
-        JatahCuti,
-        "SELECT * FROM jatah_cuti WHERE pegawai_id = $1 AND tahun = $2",
-        pegawai_id,
-        tahun
+/// Endpoint Atasan/Admin: Melihat semua pengajuan cuti (bisa difilter)
+pub async fn get_all_cuti_repo(pool: &DbPool) -> Result<Vec<PengajuanCuti>, AppError> {
+    let list = sqlx::query_as!(
+        PengajuanCuti,
+        r#"
+        SELECT id, pegawai_id, tanggal_mulai, tanggal_selesai, jumlah_hari, alasan,
+               status as "status: _", tipe_cuti as "tipe_cuti: _", 
+               kategori as "kategori: _",
+               user_approve_id, catatan_approval, created_at
+        FROM pengajuan_cuti
+        ORDER BY created_at DESC
+        "#
     )
-    .fetch_optional(pool)
+    .fetch_all(pool)
     .await?;
-
-    // 2. Buat respons. Jika tidak ada jatah (None), kembalikan 0.
-    if let Some(jatah) = jatah {
-        Ok(KuotaCutiDetail {
-            kuota_total: jatah.kuota_total,
-            kuota_terpakai: jatah.kuota_terpakai,
-            sisa_cuti: jatah.kuota_total - jatah.kuota_terpakai,
-            tahun: jatah.tahun,
-        })
-    } else {
-        // Jika pegawai belum punya jatah di tahun itu, kembalikan data default
-        Ok(KuotaCutiDetail {
-            kuota_total: 0,
-            kuota_terpakai: 0,
-            sisa_cuti: 0,
-            tahun,
-        })
-    }
-}
-
-pub async fn get_all_jatah_cuti_repo(
-    pool: &DbPool,
-    filter: JatahCutiFilter,
-) -> Result<Vec<JatahCutiDetail>, AppError> {
-    
-    // Query dasar dengan JOIN ke tabel pegawai
-    let mut query = sqlx::QueryBuilder::new(r#"
-        SELECT 
-            jc.id, jc.pegawai_id, p.nama_lengkap as nama_pegawai, p.nik,
-            jc.tahun, jc.kuota_total, jc.kuota_terpakai
-        FROM jatah_cuti jc
-        JOIN pegawai p ON jc.pegawai_id = p.id
-        WHERE 1=1
-    "#);
-
-    // Tambahkan filter pegawai_id jika ada
-    if let Some(pegawai_id) = filter.pegawai_id {
-        query.push(" AND jc.pegawai_id = ");
-        query.push_bind(pegawai_id);
-    }
-
-    // Tambahkan filter tahun jika ada
-    if let Some(tahun) = filter.tahun {
-        query.push(" AND jc.tahun = ");
-        query.push_bind(tahun);
-    }
-
-    query.push(" ORDER BY jc.tahun DESC, p.nama_lengkap ASC");
-
-    let list = query.build_query_as::<JatahCutiDetail>().fetch_all(pool).await?;
     Ok(list)
 }

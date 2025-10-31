@@ -26,4 +26,8 @@ pub fn lookup_router() -> Router<DbPool> {
             "/lookups/ruangan-tersedia",
             get(handler::search_ruangan_tersedia_handler),
         )
+        .route(
+            "/lookups/kategori-cuti",
+            get(handler::get_kategori_cuti_handler),
+        )
 }

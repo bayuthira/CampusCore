@@ -7,6 +7,45 @@ use uuid::Uuid;
 // --- ENUM ---
 
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
+#[sqlx(type_name = "KategoriCuti")]
+pub enum KategoriCuti {
+    #[serde(rename = "Cuti Tahunan")]
+    #[sqlx(rename = "Cuti Tahunan")]
+    CutiTahunan,
+
+    #[serde(rename = "Cuti Melahirkan")]
+    #[sqlx(rename = "Cuti Melahirkan")]
+    CutiMelahirkan,
+
+    #[serde(rename = "Cuti Sakit Berkepanjangan")]
+    #[sqlx(rename = "Cuti Sakit Berkepanjangan")]
+    CutiSakitBerkepanjangan,
+
+    #[serde(rename = "Cuti Hajatan Keluarga")]
+    #[sqlx(rename = "Cuti Hajatan Keluarga")]
+    CutiHajatanKeluarga,
+
+    #[serde(rename = "Cuti Ibadah")]
+    #[sqlx(rename = "Cuti Ibadah")]
+    CutiIbadah,
+
+    Lainnya,
+}
+
+impl KategoriCuti {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::CutiTahunan => "Cuti Tahunan",
+            Self::CutiMelahirkan => "Cuti Melahirkan",
+            Self::CutiSakitBerkepanjangan => "Cuti Sakit Berkepanjangan",
+            Self::CutiHajatanKeluarga => "Cuti Hajatan Keluarga",
+            Self::CutiIbadah => "Cuti Ibadah",
+            Self::Lainnya => "Lainnya",
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
 #[sqlx(type_name = "TipeCuti")]
 pub enum TipeCuti {
     Paid,
@@ -73,6 +112,7 @@ pub struct PengajuanCuti {
     pub alasan: String,
     pub status: StatusCuti,
     pub tipe_cuti: TipeCuti, 
+    pub kategori: KategoriCuti,
     pub user_approve_id: Option<Uuid>,
     pub catatan_approval: Option<String>,
     pub created_at: OffsetDateTime,
@@ -84,6 +124,7 @@ pub struct CreatePengajuanCutiPayload {
     pub tanggal_selesai: Date,
     pub jumlah_hari: i32,
     pub alasan: String,
+    pub kategori: KategoriCuti,
 }
 
 /// `struct` untuk payload saat atasan melakukan approval
