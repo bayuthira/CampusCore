@@ -79,6 +79,15 @@ pub async fn upload_dokumen_handler(
             .await?
             .ok_or_else(|| AppError::Forbidden("Riwayat SERDOS tidak ditemukan.".to_string()))?
         }
+        SdmEntityType::PengajuanIjin => {
+            sqlx::query_scalar!(
+                "SELECT pegawai_id FROM pengajuan_ijin WHERE id = $1",
+                entity_id
+            )
+            .fetch_optional(&pool)
+            .await?
+            .ok_or_else(|| AppError::Forbidden("Pengajuan Ijin tidak ditemukan.".to_string()))?
+        }
     };
 
     // 3. Ambil data dari form

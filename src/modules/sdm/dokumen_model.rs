@@ -14,6 +14,7 @@ pub enum SdmEntityType {
     RiwayatSertifikat,
     RiwayatJad,    
     RiwayatSerdos, 
+    PengajuanIjin,
 }
 
 impl SdmEntityType {
@@ -26,6 +27,7 @@ impl SdmEntityType {
             "riwayat-sertifikat" => Some(Self::RiwayatSertifikat),
             "riwayat-jad" => Some(Self::RiwayatJad),  
             "riwayat-serdos" => Some(Self::RiwayatSerdos), 
+            "pengajuan-ijin" => Some(Self::PengajuanIjin),
             _ => None,
         }
     }
@@ -39,6 +41,7 @@ impl SdmEntityType {
             Self::RiwayatSertifikat => "RiwayatSertifikat",
             Self::RiwayatJad => "RiwayatJad",         
             Self::RiwayatSerdos => "RiwayatSerdos",
+            Self::PengajuanIjin => "PengajuanIjin",
         }
     }
 }
@@ -55,6 +58,8 @@ pub enum KategoriDokumen {
     SK,
     Sertifikat,
     Lainnya,
+    SuratSakit,
+    DokumenPendukung,
 }
 
 impl KategoriDokumen {
@@ -68,6 +73,8 @@ impl KategoriDokumen {
             "Transkrip" => Some(Self::Transkrip),
             "SK" => Some(Self::SK),
             "Sertifikat" => Some(Self::Sertifikat),
+            "SuratSakit" => Some(Self::SuratSakit),
+            "DokumenPendukung" => Some(Self::DokumenPendukung),
             _ => Some(Self::Lainnya),
         }
     }
@@ -83,6 +90,8 @@ impl KategoriDokumen {
             Self::SK => "SK",
             Self::Sertifikat => "Sertifikat",
             Self::Lainnya => "Lainnya",
+            Self::SuratSakit => "SuratSakit", 
+            Self::DokumenPendukung => "DokumenPendukung",             
         }
     }
 }
