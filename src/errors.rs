@@ -11,6 +11,7 @@ use std::io::Error as IoError;
 use time::error::Parse as TimeParseError;
 use tracing;
 use uuid::Error as UuidError;
+use time::error::ComponentRange;
 
 #[derive(Debug)]
 pub enum AppError {
@@ -28,6 +29,13 @@ pub enum AppError {
     SerdeJsonError(SerdeJsonError),
     TimeParseError(TimeParseError),
     DecimalError(DecimalError),
+    ComponentRangeError(ComponentRange),
+}
+
+impl From<ComponentRange> for AppError {
+    fn from(err: ComponentRange) -> Self {
+        AppError::ComponentRangeError(err)
+    }
 }
 
 impl From<sqlx::Error> for AppError {
@@ -214,6 +222,10 @@ impl IntoResponse for AppError {
             AppError::DecimalError(err) => (
                 StatusCode::BAD_REQUEST,
                 format!("Format angka tidak valid: {}", err),
+            ),
+            AppError::ComponentRangeError(err) => (
+                StatusCode::BAD_REQUEST,
+                format!("Input tanggal/waktu di luar jangkauan: {}", err),
             ),
         };
 

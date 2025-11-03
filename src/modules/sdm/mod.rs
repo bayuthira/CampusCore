@@ -25,3 +25,7 @@ pub mod ijin_model;
 pub mod ijin_repo;
 pub mod ijin_handler;
 pub mod ijin_routes;
+pub mod absensi_model;
+pub mod absensi_repo;
+pub mod absensi_handler;
+pub mod absensi_routes;
