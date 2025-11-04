@@ -24,33 +24,41 @@ pub enum JabatanAkademik {
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
 #[sqlx(type_name = "PangkatGolongan")]
 pub enum PangkatGolongan {
-    #[serde(rename = "III/a")]
-    #[sqlx(rename = "III/a")]
-    IIIa,
-    #[serde(rename = "III/b")]
-    #[sqlx(rename = "III/b")]
-    IIIb,
-    #[serde(rename = "III/c")]
-    #[sqlx(rename = "III/c")]
-    IIIc,
-    #[serde(rename = "III/d")]
-    #[sqlx(rename = "III/d")]
-    IIId,
-    #[serde(rename = "IV/a")]
-    #[sqlx(rename = "IV/a")]
-    IVa,
-    #[serde(rename = "IV/b")]
-    #[sqlx(rename = "IV/b")]
-    IVb,
-    #[serde(rename = "IV/c")]
-    #[sqlx(rename = "IV/c")]
-    IVc,
-    #[serde(rename = "IV/d")]
-    #[sqlx(rename = "IV/d")]
-    IVd,
-    #[serde(rename = "IV/e")]
-    #[sqlx(rename = "IV/e")]
-    IVe,
+    #[serde(rename = "Penata Muda / III.a")]
+    #[sqlx(rename = "Penata Muda / III.a")]
+    PenataMuda,
+
+    #[serde(rename = "Penata Muda Tk.I / III.b")]
+    #[sqlx(rename = "Penata Muda Tk.I / III.b")]
+    PenataMudaTkI,
+
+    #[serde(rename = "Penata / III.c")]
+    #[sqlx(rename = "Penata / III.c")]
+    Penata,
+
+    #[serde(rename = "Penata Tk. I / III.d")]
+    #[sqlx(rename = "Penata Tk. I / III.d")]
+    PenataTkI,
+
+    #[serde(rename = "Pembina / IV.a")]
+    #[sqlx(rename = "Pembina / IV.a")]
+    Pembina,
+
+    #[serde(rename = "Pembina Tk. I / IV.b")]
+    #[sqlx(rename = "Pembina Tk. I / IV.b")]
+    PembinaTkI,
+
+    #[serde(rename = "Pembina Utama Muda / IV.c")]
+    #[sqlx(rename = "Pembina Utama Muda / IV.c")]
+    PembinaUtamaMuda,
+
+    #[serde(rename = "Pembina Utama Madya / IV.d")]
+    #[sqlx(rename = "Pembina Utama Madya / IV.d")]
+    PembinaUtamaMadya,
+    
+    #[serde(rename = "Pembina Utama / IV.e")]
+    #[sqlx(rename = "Pembina Utama / IV.e")]
+    PembinaUtama,
 }
 
 // --- Helper as_str() ---
@@ -67,15 +75,15 @@ impl JabatanAkademik {
 impl PangkatGolongan {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::IIIa => "III/a",
-            Self::IIIb => "III/b",
-            Self::IIIc => "III/c",
-            Self::IIId => "III/d",
-            Self::IVa => "IV/a",
-            Self::IVb => "IV/b",
-            Self::IVc => "IV/c",
-            Self::IVd => "IV/d",
-            Self::IVe => "IV/e",
+            Self::PenataMuda => "Penata Muda / III.a",
+            Self::PenataMudaTkI => "Penata Muda Tk.I / III.b",
+            Self::Penata => "Penata / III.c",
+            Self::PenataTkI => "Penata Tk. I / III.d",
+            Self::Pembina => "Pembina / IV.a",
+            Self::PembinaTkI => "Pembina Tk. I / IV.b",
+            Self::PembinaUtamaMuda => "Pembina Utama Muda / IV.c",
+            Self::PembinaUtamaMadya => "Pembina Utama Madya / IV.d",
+            Self::PembinaUtama => "Pembina Utama / IV.e",
         }
     }
 }
