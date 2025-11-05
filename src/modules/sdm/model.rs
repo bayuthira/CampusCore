@@ -70,9 +70,6 @@ pub struct Pegawai {
     pub kategori_pegawai: Option<KategoriPegawai>,
     pub status_pegawai: Option<StatusPegawai>,
     pub is_active: bool,
-    pub unit_kerja: Option<String>,
-    pub bagian: Option<String>,
-    pub jabatan: Option<String>,
     pub tanggal_masuk: Option<Date>,
     pub tanggal_pensiun: Option<Date>,
     pub no_kk: Option<String>,
@@ -233,4 +230,32 @@ pub struct RiwayatSkPayload {
     pub jenis_sk: String,
     pub jabatan: Option<String>,
     pub keterangan: Option<String>,
+}
+
+
+// --- Struct untuk Riwayat Penempatan ---
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct PenempatanPegawai {
+    pub id: Uuid,
+    pub pegawai_id: Uuid,
+    pub unit_kerja_id: Uuid,
+    
+    // Kita akan JOIN untuk mendapatkan nama unit kerja
+    pub nama_unit_kerja: String, 
+    
+    pub jabatan: String,
+    pub nomor_sk: Option<String>,
+    pub tanggal_mulai: Date,
+    pub tanggal_selesai: Option<Date>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PenempatanPegawaiPayload {
+    pub unit_kerja_id: Uuid,
+    pub jabatan: String,
+    pub nomor_sk: Option<String>,
+    pub tanggal_mulai: Date,
+    // tanggal_selesai tidak ada di payload create,
+    // karena akan diisi otomatis saat ada penempatan baru.
 }
