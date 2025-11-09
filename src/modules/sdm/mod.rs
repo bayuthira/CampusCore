@@ -36,3 +36,5 @@ pub mod unit_kerja_routes;
 pub mod penempatan_repo;
 pub mod penempatan_handler;
 pub mod penempatan_routes;
+pub mod surat_tugas_model;
+pub mod surat_tugas_repo;

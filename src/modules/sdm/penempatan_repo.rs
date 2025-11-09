@@ -1,7 +1,6 @@
 // src/modules/sdm/penempatan_repo.rs
 use super::model::{PenempatanPegawai, PenempatanPegawaiPayload};
 use crate::{db::DbPool, errors::AppError};
-use time::Date;
 use uuid::Uuid;
 
 /// Helper untuk mengambil satu data penempatan
