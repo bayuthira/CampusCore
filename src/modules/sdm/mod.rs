@@ -38,3 +38,5 @@ pub mod penempatan_handler;
 pub mod penempatan_routes;
 pub mod surat_tugas_model;
 pub mod surat_tugas_repo;
+pub mod surat_tugas_handler;
+pub mod surat_tugas_routes;

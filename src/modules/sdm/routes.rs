@@ -3,7 +3,7 @@
 use super::{
     cuti_routes, dokumen_handler, handler, riwayat_jad_handler, riwayat_pendidikan_handler,
     riwayat_serdos_handler, riwayat_sertifikat_handler, riwayat_sk_handler, ijin_routes,absensi_routes, unit_kerja_routes,
-    penempatan_routes,
+    penempatan_routes, surat_tugas_routes
 };
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
@@ -116,4 +116,5 @@ pub fn sdm_router() -> Router<DbPool> {
         .merge(absensi_routes::absensi_router())
         .merge(unit_kerja_routes::unit_kerja_router())
         .merge(penempatan_routes::penempatan_router())
+        .merge(surat_tugas_routes::surat_tugas_router())
 }
