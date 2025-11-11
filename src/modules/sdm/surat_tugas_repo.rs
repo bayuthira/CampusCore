@@ -74,7 +74,7 @@ pub async fn get_surat_tugas_detail_repo(
 
     // 2. Ambil data penandatangan
     let penandatangan = sqlx::query!(
-        r#"SELECT p.nik, p.nama_lengkap, pp.jabatan
+        r#"SELECT p.nik, p.nama_lengkap, pp.jabatan as "jabatan?"
            FROM pegawai p
            LEFT JOIN penempatan_pegawai pp ON p.id = pp.pegawai_id AND pp.tanggal_selesai IS NULL
            WHERE p.id = $1"#,
@@ -103,7 +103,7 @@ pub async fn get_surat_tugas_detail_repo(
             p.id as "pegawai_id!",
             p.nama_lengkap as "nama_lengkap!",
             p.nik as "nip!",
-            pp.jabatan,
+            pp.jabatan as "jabatan?",
             NULL as "pangkat_golongan?", -- Placeholder
             stp.peran as "peran: _"
         FROM surat_tugas_penerima stp
@@ -126,9 +126,9 @@ pub async fn get_surat_tugas_detail_repo(
         tanggal_mulai: master.tanggal_mulai,
         tanggal_selesai: master.tanggal_selesai,
         penandatangan_id: master.penandatangan_id,
-        nama_penandatangan: penandatangan.nama_lengkap,
-        jabatan_penandatangan: Some(penandatangan.jabatan),
-        nip_penandatangan: penandatangan.nik,
+    nama_penandatangan: penandatangan.nama_lengkap,
+    jabatan_penandatangan: penandatangan.jabatan,
+    nip_penandatangan: penandatangan.nik,
         daftar_penerima: penerima_list,
         tembusan: master.tembusan.unwrap_or_default(),
         created_at: master.created_at,
