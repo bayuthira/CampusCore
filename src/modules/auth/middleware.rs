@@ -1,4 +1,4 @@
-// src/auth.rs
+// src/modules/auth/middleware.rs
 
 use crate::{config::CONFIG, errors::AppError};
 use axum::{
