@@ -63,7 +63,8 @@ async fn detect_face_azure(image_bytes: Vec<u8>) -> Result<String, AppError> {
     ))
 }
 
-async fn verify_face_azure(face_id1: &str, face_id2: &str) -> Result<(bool, f64), AppError> {
+// <-- Diubah menjadi return f32 agar sesuai dengan database (REAL)
+async fn verify_face_azure(face_id1: &str, face_id2: &str) -> Result<(bool, f32), AppError> {
     if face_id1 == "dummy_face_id" {
         return Ok((true, 0.99)); // Bypass saat development
     }
@@ -98,10 +99,12 @@ async fn verify_face_azure(face_id1: &str, face_id2: &str) -> Result<(bool, f64)
         .get("isIdentical")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+
+    // <-- Dicast menjadi f32
     let confidence = json
         .get("confidence")
         .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
+        .unwrap_or(0.0) as f32;
 
     Ok((is_identical, confidence))
 }

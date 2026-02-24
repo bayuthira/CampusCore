@@ -8,10 +8,11 @@ use sqlx::Executor;
 use time::{Date, Duration, Month, OffsetDateTime};
 use uuid::Uuid;
 
+/// Fungsi baru: Mengambil nama/path file foto profil dari tabel dokumen_sdm
 pub async fn get_foto_profil_pegawai(pool: &DbPool, pegawai_id: Uuid) -> Result<String, AppError> {
     let foto = sqlx::query_scalar!(
         r#"
-        SELECT nama_file_asli
+        SELECT path_file
         FROM dokumen_sdm
         WHERE pegawai_id = $1 AND kategori = 'FotoProfil'
         LIMIT 1
@@ -23,7 +24,8 @@ pub async fn get_foto_profil_pegawai(pool: &DbPool, pegawai_id: Uuid) -> Result<
 
     match foto {
         Some(path) => Ok(path),
-        None => Err(AppError::NotFound("Foto profil referensi tidak ditemukan. Harap upload foto profil terlebih dahulu sebelum menggunakan fitur absensi wajah.".to_string())),
+        // <-- Diubah dari NotFound menjadi Forbidden
+        None => Err(AppError::Forbidden("Foto profil referensi tidak ditemukan. Harap upload foto profil terlebih dahulu sebelum menggunakan fitur absensi wajah.".to_string())),
     }
 }
 
@@ -111,8 +113,6 @@ pub async fn clock_in_repo(
     get_log_by_id_repo(pool, new_log_id).await
 }
 
-
-/// Endpoint Pegawai: Melakukan Clock Out
 pub async fn clock_out_repo(
     pool: &DbPool,
     pegawai_id: Uuid,
