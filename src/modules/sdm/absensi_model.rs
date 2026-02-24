@@ -54,6 +54,9 @@ pub struct ClockPayload {
     pub latitude: Decimal,
     pub longitude: Decimal,
     pub alamat_absensi: Option<String>,
+    pub foto_absensi_path: Option<String>, // Tambahan Path Foto Selfie
+    pub face_confidence_score: Option<f64>, // Tambahan Skor AI
+    pub is_face_verified: Option<bool>,    // Tambahan Status Validasi
 }
 
 /// `struct` untuk payload saat Admin membuat rekap manual
@@ -76,6 +79,9 @@ pub struct LogAbsensi {
     pub latitude: Decimal,
     pub longitude: Decimal,
     pub alamat_absensi: Option<String>,
+    pub foto_absensi_path: Option<String>,  // Tambahan
+    pub face_confidence_score: Option<f64>, // Tambahan
+    pub is_face_verified: Option<bool>,     // Tambahan
 }
 
 /// `struct` untuk menampilkan data Rekap Absensi Harian (Respons API)
