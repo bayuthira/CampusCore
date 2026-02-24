@@ -20,93 +20,74 @@ use tokio::fs;
 use uuid::Uuid;
 
 // ==========================================
-// HELPER AZURE FACE API (LIVENESS & VERIFY)
+// HELPER FACE++ (FACEPLUSPLUS)
 // ==========================================
-async fn detect_face_azure(image_bytes: Vec<u8>) -> Result<String, AppError> {
-    let endpoint = env::var("AZURE_FACE_ENDPOINT").unwrap_or_default();
-    let api_key = env::var("AZURE_FACE_API_KEY").unwrap_or_default();
+async fn verify_face_faceplusplus(
+    ref_bytes: Vec<u8>,
+    selfie_bytes: Vec<u8>,
+) -> Result<(bool, f32), AppError> {
+    let api_key = env::var("FACEPP_API_KEY").unwrap_or_default();
+    let api_secret = env::var("FACEPP_API_SECRET").unwrap_or_default();
+    let endpoint = env::var("FACEPP_ENDPOINT").unwrap_or_default();
 
-    if endpoint.is_empty() || api_key.is_empty() {
-        // Jika belum disetting, kita loloskan otomatis untuk development
-        return Ok("dummy_face_id".to_string());
+    // Jika .env belum diisi, loloskan untuk testing development
+    if api_key.is_empty() || api_secret.is_empty() {
+        return Ok((true, 99.9));
     }
 
-    let url = format!("{}/face/v1.0/detect?returnFaceId=true", endpoint);
     let client = reqwest::Client::new();
 
+    // Buat form multipart untuk mengirim 2 gambar sekaligus ke Face++
+    let part1 = reqwest::multipart::Part::bytes(ref_bytes)
+        .file_name("referensi.jpg")
+        .mime_str("image/jpeg")
+        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal membaca foto ref: {}", e)))?;
+
+    let part2 = reqwest::multipart::Part::bytes(selfie_bytes)
+        .file_name("selfie.jpg")
+        .mime_str("image/jpeg")
+        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal membaca foto selfie: {}", e)))?;
+
+    let form = reqwest::multipart::Form::new()
+        .text("api_key", api_key)
+        .text("api_secret", api_secret)
+        .part("image_file1", part1) // Foto dari database
+        .part("image_file2", part2); // Foto jepretan saat absen
+
+    // Tembak ke API Face++
     let res = client
-        .post(&url)
-        .header("Ocp-Apim-Subscription-Key", api_key)
-        .header("Content-Type", "application/octet-stream")
-        .body(image_bytes)
+        .post(&endpoint)
+        .multipart(form)
         .send()
         .await
         .map_err(|e| {
-            AppError::AnyhowError(anyhow::anyhow!("Gagal menghubungi server Azure: {}", e))
+            AppError::AnyhowError(anyhow::anyhow!("Gagal menghubungi server Face++: {}", e))
         })?;
 
     let json: Value = res
         .json()
         .await
-        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Azure: {}", e)))?;
+        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Face++: {}", e)))?;
 
-    if let Some(arr) = json.as_array() {
-        if let Some(first_face) = arr.first() {
-            if let Some(face_id) = first_face.get("faceId").and_then(|v| v.as_str()) {
-                return Ok(face_id.to_string());
-            }
-        }
+    // Cek jika API merespons dengan error (misal gambar terlalu besar atau wajah tidak ada)
+    if let Some(err_msg) = json.get("error_message") {
+        return Err(AppError::Forbidden(format!(
+            "Error dari Face++: {}",
+            err_msg.as_str().unwrap_or("Unknown")
+        )));
     }
 
-    Err(AppError::Forbidden(
-        "Wajah tidak terdeteksi dalam foto selfie Anda!".to_string(),
-    ))
-}
-
-// <-- Diubah menjadi return f32 agar sesuai dengan database (REAL)
-async fn verify_face_azure(face_id1: &str, face_id2: &str) -> Result<(bool, f32), AppError> {
-    if face_id1 == "dummy_face_id" {
-        return Ok((true, 0.99)); // Bypass saat development
-    }
-
-    let endpoint = env::var("AZURE_FACE_ENDPOINT").unwrap_or_default();
-    let api_key = env::var("AZURE_FACE_API_KEY").unwrap_or_default();
-    let url = format!("{}/face/v1.0/verify", endpoint);
-
-    let body = serde_json::json!({
-        "faceId1": face_id1,
-        "faceId2": face_id2
-    });
-
-    let client = reqwest::Client::new();
-    let res = client
-        .post(&url)
-        .header("Ocp-Apim-Subscription-Key", api_key)
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| {
-            AppError::AnyhowError(anyhow::anyhow!("Gagal menghubungi server Azure: {}", e))
-        })?;
-
-    let json: Value = res
-        .json()
-        .await
-        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Azure: {}", e)))?;
-
-    let is_identical = json
-        .get("isIdentical")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    // <-- Dicast menjadi f32
+    // Ambil nilai confidence (skala 0 - 100 dari Face++)
     let confidence = json
         .get("confidence")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0) as f32;
 
-    Ok((is_identical, confidence))
+    // Di Face++, confidence di atas 70 (dari 100) biasanya sudah berarti orang yang sama
+    let is_identical = confidence >= 70.0;
+
+    // Kita bagi 100 agar formatnya sama seperti Azure (0.0 - 1.0) di database kita
+    Ok((is_identical, confidence / 100.0))
 }
 
 // ==========================================
@@ -160,22 +141,16 @@ async fn proses_absensi(
     foto_bytes: Vec<u8>,
     tipe: super::absensi_model::TipeAbsensi,
 ) -> Result<LogAbsensi, AppError> {
-    // 1. Ambil path foto referensi dari DB (Contoh isi: "uploads/sdm/...")
+    // 1. Ambil path foto referensi dari DB
     let path_file_db = repo::get_foto_profil_pegawai(pool, pegawai_id).await?;
-
-    // Tambahkan "./" di depannya agar merujuk dengan tepat ke file lokal server
     let foto_ref_path = format!("./{}", path_file_db);
-
-    // Baca file gambar referensi. Jika tidak ada file, ini akan trigger AppError::IoError (500)
     let ref_bytes = fs::read(&foto_ref_path).await?;
 
-    // 2. Azure Face API Process
-    let face_id_ref = detect_face_azure(ref_bytes).await?;
-    let face_id_selfie = detect_face_azure(foto_bytes.clone()).await?;
-    let (is_verified, confidence) = verify_face_azure(&face_id_ref, &face_id_selfie).await?;
+    // 2. FACE++ Process (Lebih Ringkas!)
+    let (is_verified, confidence) = verify_face_faceplusplus(ref_bytes, foto_bytes.clone()).await?;
 
+    // Threshold kemiripan 70% (0.70)
     if !is_verified || confidence < 0.70 {
-        // Threshold kemiripan 70%
         return Err(AppError::Forbidden(format!(
             "Absensi ditolak. Wajah tidak cocok (Kemiripan: {:.0}%)",
             confidence * 100.0
@@ -185,19 +160,14 @@ async fn proses_absensi(
     // 3. Simpan foto selfie ke folder server
     let ext = "jpg";
     let nama_file_selfie = format!("{}.{}", Uuid::new_v4(), ext);
-
-    // Gunakan struktur yang sama dengan modul SDM: uploads/absensi/{pegawai_id}/
     let folder_simpan = format!("./uploads/absensi/{}", pegawai_id);
     let path_simpan = format!("{}/{}", folder_simpan, nama_file_selfie);
 
-    // Pastikan folder untuk pegawai ini ada
     fs::create_dir_all(&folder_simpan).await?;
     fs::write(&path_simpan, foto_bytes).await?;
 
-    // 4. Update Payload dengan path yang bisa disimpan ke DB
-    // Format sama seperti `path_file` di tabel `dokumen_sdm`
+    // 4. Update Payload
     let path_db_selfie = format!("uploads/absensi/{}/{}", pegawai_id, nama_file_selfie);
-
     payload.foto_absensi_path = Some(path_db_selfie);
     payload.face_confidence_score = Some(confidence);
     payload.is_face_verified = Some(is_verified);
