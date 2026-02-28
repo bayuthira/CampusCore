@@ -9,10 +9,10 @@ mod utils;
 use crate::config::CONFIG;
 use crate::db::create_pool;
 use crate::routes::create_router;
+use axum::http::{HeaderValue, Method};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
-use axum::http::{HeaderValue, Method};
 
 #[tokio::main]
 async fn main() {
@@ -33,7 +33,11 @@ async fn main() {
     // <-- 2. DEFINISIKAN CORS DI SINI -->
 
     let cors = CorsLayer::new()
-        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+        .allow_origin([
+            "http://localhost:5173".parse::<HeaderValue>().unwrap(), // Untuk project Vue
+            "http://localhost:8081".parse::<HeaderValue>().unwrap(), // Untuk React Native (Web/Metro)
+            "http://127.0.0.1:8081".parse::<HeaderValue>().unwrap(), // Tambahkan ini jika kadang terbaca sebagai 127.0.0.1
+        ])
         .allow_methods([
             Method::GET,
             Method::POST,
