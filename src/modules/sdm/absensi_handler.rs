@@ -2,7 +2,7 @@
 use super::{
     absensi_model::{
         ClockPayload, LogAbsensi, LogDayFilter, RekapAbsensiFilter, RekapAbsensiHarian,
-        RekapManualPayload,
+        RekapManualPayload, TipeAbsensi,
     },
     absensi_repo as repo, repo as pegawai_repo,
 };
@@ -19,10 +19,50 @@ use std::str::FromStr;
 use tokio::fs;
 use uuid::Uuid;
 
+// Import untuk sistem Queue
+use once_cell::sync::Lazy;
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
+
 // ==========================================
-// HELPER FACE++ (FACEPLUSPLUS)
+// SISTEM ANTREAN (QUEUE) FACE++
 // ==========================================
-async fn verify_face_faceplusplus(
+
+// Struktur pesan yang akan masuk ke dalam antrean
+struct FaceQueueMessage {
+    ref_bytes: Vec<u8>,
+    selfie_bytes: Vec<u8>,
+    reply_tx: oneshot::Sender<Result<(bool, f32), AppError>>,
+}
+
+// Inisialisasi antrean secara global (hanya dibuat 1 kali saat aplikasi berjalan)
+static FACE_QUEUE: Lazy<mpsc::Sender<FaceQueueMessage>> = Lazy::new(|| {
+    // Kapasitas antrean maksimal 100 orang di waktu bersamaan
+    let (tx, mut rx) = mpsc::channel::<FaceQueueMessage>(100);
+
+    // Background worker (Kasir)
+    tokio::spawn(async move {
+        while let Some(msg) = rx.recv().await {
+            // 1. Eksekusi tembakan ke Face++
+            let res = verify_face_faceplusplus_direct(msg.ref_bytes, msg.selfie_bytes).await;
+
+            // 2. Kembalikan hasilnya ke user yang sedang menunggu (Pager)
+            let _ = msg.reply_tx.send(res);
+
+            // 3. JEDA PAKSA 1.1 Detik agar tidak terkena limit 1 QPS Face++
+            tokio::time::sleep(Duration::from_millis(1100)).await;
+        }
+    });
+
+    tx
+});
+
+// ==========================================
+// HELPER FACE++ (DIRECT CALL)
+// ==========================================
+
+// Ini adalah kode asli tanpa antrean
+async fn verify_face_faceplusplus_direct(
     ref_bytes: Vec<u8>,
     selfie_bytes: Vec<u8>,
 ) -> Result<(bool, f32), AppError> {
@@ -30,14 +70,12 @@ async fn verify_face_faceplusplus(
     let api_secret = env::var("FACEPP_API_SECRET").unwrap_or_default();
     let endpoint = env::var("FACEPP_ENDPOINT").unwrap_or_default();
 
-    // Jika .env belum diisi, loloskan untuk testing development
     if api_key.is_empty() || api_secret.is_empty() {
-        return Ok((true, 99.9));
+        return Ok((true, 0.99)); // Bypass saat development
     }
 
     let client = reqwest::Client::new();
 
-    // Buat form multipart untuk mengirim 2 gambar sekaligus ke Face++
     let part1 = reqwest::multipart::Part::bytes(ref_bytes)
         .file_name("referensi.jpg")
         .mime_str("image/jpeg")
@@ -51,10 +89,9 @@ async fn verify_face_faceplusplus(
     let form = reqwest::multipart::Form::new()
         .text("api_key", api_key)
         .text("api_secret", api_secret)
-        .part("image_file1", part1) // Foto dari database
-        .part("image_file2", part2); // Foto jepretan saat absen
+        .part("image_file1", part1)
+        .part("image_file2", part2);
 
-    // Tembak ke API Face++
     let res = client
         .post(&endpoint)
         .multipart(form)
@@ -69,7 +106,6 @@ async fn verify_face_faceplusplus(
         .await
         .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Face++: {}", e)))?;
 
-    // Cek jika API merespons dengan error (misal gambar terlalu besar atau wajah tidak ada)
     if let Some(err_msg) = json.get("error_message") {
         return Err(AppError::Forbidden(format!(
             "Error dari Face++: {}",
@@ -77,22 +113,62 @@ async fn verify_face_faceplusplus(
         )));
     }
 
-    // Ambil nilai confidence (skala 0 - 100 dari Face++)
     let confidence = json
         .get("confidence")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0) as f32;
-
-    // Di Face++, confidence di atas 70 (dari 100) biasanya sudah berarti orang yang sama
     let is_identical = confidence >= 70.0;
 
-    // Kita bagi 100 agar formatnya sama seperti Azure (0.0 - 1.0) di database kita
     Ok((is_identical, confidence / 100.0))
+}
+
+// ==========================================
+// ROUTER LOGIKA (PILIH QUEUE ATAU DIRECT)
+// ==========================================
+
+async fn verify_face_faceplusplus(
+    ref_bytes: Vec<u8>,
+    selfie_bytes: Vec<u8>,
+) -> Result<(bool, f32), AppError> {
+    // Cek konfigurasi dari .env
+    let use_queue = env::var("USE_FACE_QUEUE").unwrap_or_else(|_| "false".to_string());
+
+    if use_queue == "true" || use_queue == "1" {
+        // --- JALUR ANTREAN ---
+        // Buat Pager (oneshot channel) untuk menunggu jawaban
+        let (reply_tx, reply_rx) = oneshot::channel();
+
+        // Buat paket pesan
+        let msg = FaceQueueMessage {
+            ref_bytes,
+            selfie_bytes,
+            reply_tx,
+        };
+
+        // Masukkan ke keranjang antrean
+        if FACE_QUEUE.send(msg).await.is_err() {
+            return Err(AppError::AnyhowError(anyhow::anyhow!(
+                "Sistem antrean AI sedang down"
+            )));
+        }
+
+        // Tunggu Pager berbunyi (await)
+        match reply_rx.await {
+            Ok(res) => res, // Mengembalikan hasil (Ok atau Err dari Face++)
+            Err(_) => Err(AppError::AnyhowError(anyhow::anyhow!(
+                "Gagal menerima respon dari antrean AI"
+            ))),
+        }
+    } else {
+        // --- JALUR LANGSUNG (TANPA ANTREAN) ---
+        verify_face_faceplusplus_direct(ref_bytes, selfie_bytes).await
+    }
 }
 
 // ==========================================
 // HELPER EXTRACT MULTIPART (FORM-DATA)
 // ==========================================
+
 async fn parse_clock_multipart(
     mut multipart: Multipart,
 ) -> Result<(ClockPayload, Vec<u8>), AppError> {
@@ -126,9 +202,9 @@ async fn parse_clock_multipart(
         latitude: lat.unwrap(),
         longitude: lon.unwrap(),
         alamat_absensi: alamat,
-        foto_absensi_path: None,     // Diisi nanti
-        face_confidence_score: None, // Diisi nanti
-        is_face_verified: None,      // Diisi nanti
+        foto_absensi_path: None,
+        face_confidence_score: None,
+        is_face_verified: None,
     };
 
     Ok((payload, foto_bytes.unwrap()))
@@ -139,17 +215,16 @@ async fn proses_absensi(
     pegawai_id: Uuid,
     mut payload: ClockPayload,
     foto_bytes: Vec<u8>,
-    tipe: super::absensi_model::TipeAbsensi,
+    tipe: TipeAbsensi,
 ) -> Result<LogAbsensi, AppError> {
     // 1. Ambil path foto referensi dari DB
     let path_file_db = repo::get_foto_profil_pegawai(pool, pegawai_id).await?;
     let foto_ref_path = format!("./{}", path_file_db);
     let ref_bytes = fs::read(&foto_ref_path).await?;
 
-    // 2. FACE++ Process (Lebih Ringkas!)
+    // 2. FACE++ Process (Akan memilih jalur Queue atau Direct otomatis)
     let (is_verified, confidence) = verify_face_faceplusplus(ref_bytes, foto_bytes.clone()).await?;
 
-    // Threshold kemiripan 70% (0.70)
     if !is_verified || confidence < 0.70 {
         return Err(AppError::Forbidden(format!(
             "Absensi ditolak. Wajah tidak cocok (Kemiripan: {:.0}%)",
@@ -173,7 +248,7 @@ async fn proses_absensi(
     payload.is_face_verified = Some(is_verified);
 
     // 5. Simpan ke Database
-    if tipe == super::absensi_model::TipeAbsensi::ClockIn {
+    if tipe == TipeAbsensi::ClockIn {
         repo::clock_in_repo(pool, pegawai_id, payload).await
     } else {
         repo::clock_out_repo(pool, pegawai_id, payload).await
@@ -187,20 +262,13 @@ async fn proses_absensi(
 pub async fn clock_in_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
-    multipart: Multipart, // <--- Berubah dari Json
+    multipart: Multipart,
 ) -> Result<(StatusCode, Json<LogAbsensi>), AppError> {
     let user_id = claims.sub;
     let pegawai_id = pegawai_repo::get_pegawai_id_from_user_id_repo(&pool, user_id).await?;
 
     let (payload, foto_bytes) = parse_clock_multipart(multipart).await?;
-    let log = proses_absensi(
-        &pool,
-        pegawai_id,
-        payload,
-        foto_bytes,
-        super::absensi_model::TipeAbsensi::ClockIn,
-    )
-    .await?;
+    let log = proses_absensi(&pool, pegawai_id, payload, foto_bytes, TipeAbsensi::ClockIn).await?;
 
     Ok((StatusCode::CREATED, Json(log)))
 }
@@ -208,7 +276,7 @@ pub async fn clock_in_handler(
 pub async fn clock_out_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
-    multipart: Multipart, // <--- Berubah dari Json
+    multipart: Multipart,
 ) -> Result<(StatusCode, Json<LogAbsensi>), AppError> {
     let user_id = claims.sub;
     let pegawai_id = pegawai_repo::get_pegawai_id_from_user_id_repo(&pool, user_id).await?;
@@ -219,14 +287,13 @@ pub async fn clock_out_handler(
         pegawai_id,
         payload,
         foto_bytes,
-        super::absensi_model::TipeAbsensi::ClockOut,
+        TipeAbsensi::ClockOut,
     )
     .await?;
 
     Ok((StatusCode::CREATED, Json(log)))
 }
 
-/// Handler Admin: Membuat atau mengoreksi rekap absensi harian
 pub async fn create_rekap_manual_handler(
     State(pool): State<DbPool>,
     Json(payload): Json<RekapManualPayload>,
@@ -235,7 +302,6 @@ pub async fn create_rekap_manual_handler(
     Ok((StatusCode::CREATED, Json(rekap)))
 }
 
-/// Handler Pegawai: Melihat rekap absensi bulanan milik sendiri
 pub async fn get_my_rekap_absensi_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
@@ -247,19 +313,17 @@ pub async fn get_my_rekap_absensi_handler(
     Ok(Json(list))
 }
 
-/// Handler Pegawai: Melihat log clock-in/out untuk satu hari
 pub async fn get_my_logs_for_day_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
-    Query(filter): Query<LogDayFilter>, // <-- 2. UBAH TIPE DI SINI
+    Query(filter): Query<LogDayFilter>,
 ) -> Result<Json<Vec<LogAbsensi>>, AppError> {
     let user_id = claims.sub;
     let pegawai_id = pegawai_repo::get_pegawai_id_from_user_id_repo(&pool, user_id).await?;
-    let list = repo::get_my_logs_for_day_repo(&pool, pegawai_id, filter.tanggal).await?; // <-- 3. Gunakan filter.tanggal
+    let list = repo::get_my_logs_for_day_repo(&pool, pegawai_id, filter.tanggal).await?;
     Ok(Json(list))
 }
 
-/// Handler Admin: Melihat rekap absensi bulanan semua pegawai
 pub async fn get_all_rekap_absensi_handler(
     State(pool): State<DbPool>,
     Query(filter): Query<RekapAbsensiFilter>,
