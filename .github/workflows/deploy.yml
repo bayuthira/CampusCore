@@ -1,0 +1,40 @@
+name: Deploy SIKT API to Baremetal
+
+on:
+  push:
+    branches: [ "main" ] # Akan trigger otomatis saat Anda push ke branch main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          # Waktu tunggu (timeout) diperpanjang jadi 30 menit karena compile Rust agak lama
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            echo "1. Pindah ke direktori repository..."
+            cd /home/server5/sikt
+            
+            echo "2. Menarik kode terbaru dari GitHub..."
+            git pull origin main
+            
+            echo "3. Mulai kompilasi Rust (cargo build --release)..."
+            # Path penuh ke cargo digunakan untuk mencegah error command not found di sesi SSH non-interaktif
+            ~/.cargo/bin/cargo build --release
+            
+            echo "4. Mengganti file binary..."
+            # Trik Linux: Hapus file lama terlebih dahulu untuk menghindari error "Text file busy"
+            # Aplikasi yang sedang berjalan tidak akan terganggu sampai di-restart
+            rm -f /home/server5/satria/sikt-be-deploy/sik_terpadu_api
+            cp target/release/sik_terpadu_api /home/server5/satria/sikt-be-deploy/sik_terpadu_api
+            
+            echo "5. Me-restart systemd service..."
+            sudo systemctl restart sikt-api.service
+            
+            echo "✅ Deployment Berhasil!"
