@@ -9,7 +9,7 @@ mod utils;
 use crate::config::CONFIG;
 use crate::db::create_pool;
 use crate::routes::create_router;
-use axum::http::{HeaderValue, Method};
+use axum::http::HeaderValue;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
@@ -33,19 +33,16 @@ async fn main() {
     // <-- 2. DEFINISIKAN CORS DI SINI -->
 
     let cors = CorsLayer::new()
+        // Daftarkan semua kemungkinan origin lokal
         .allow_origin([
-            "http://localhost:5173".parse::<HeaderValue>().unwrap(), // Untuk project Vue
-            "http://localhost:8081".parse::<HeaderValue>().unwrap(), // Untuk React Native (Web/Metro)
-            "http://127.0.0.1:8081".parse::<HeaderValue>().unwrap(), // Tambahkan ini jika kadang terbaca sebagai 127.0.0.1
+            "http://localhost:5173".parse::<HeaderValue>().unwrap(),
+            "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(), // <-- TAMBAHKAN INI UNTUK VITE
+            "http://localhost:8081".parse::<HeaderValue>().unwrap(),
+            "http://127.0.0.1:8081".parse::<HeaderValue>().unwrap(),
         ])
-        .allow_methods([
-            Method::GET,
-            Method::POST,
-            Method::PUT,
-            Method::DELETE,
-            Method::PATCH,
-            Method::OPTIONS,
-        ])
+        // Gunakan Any untuk allow_methods selama development agar tidak pusing
+        .allow_methods(Any)
+        // Izinkan semua header (termasuk Authorization: Bearer)
         .allow_headers(Any);
 
     // Membuat router aplikasi dan menerapkan layer CORS

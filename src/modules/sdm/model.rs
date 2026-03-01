@@ -1,9 +1,9 @@
 // src/modules/sdm/model.rs
+use super::dokumen_model::DokumenSdmSimple;
 use serde::{Deserialize, Serialize};
-use sqlx::{Type,FromRow};
+use sqlx::{FromRow, Type};
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
-use super::dokumen_model::{DokumenSdmSimple};
 // --- ENUM untuk tipe data kustom ---
 
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
@@ -14,10 +14,10 @@ pub enum JenisKelamin {
 }
 
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
-#[sqlx(type_name = "StatusNikah")] 
+#[sqlx(type_name = "StatusNikah")]
 pub enum StatusNikah {
     Menikah,
-    #[serde(rename = "Belum Menikah")] 
+    #[serde(rename = "Belum Menikah")]
     BelumMenikah,
     #[serde(rename = "Cerai Hidup")]
     CeraiHidup,
@@ -29,11 +29,11 @@ pub enum StatusNikah {
 #[sqlx(type_name = "KategoriPegawai")] // Nama tipe di DB
 pub enum KategoriPegawai {
     #[serde(rename = "Tenaga Pendidik")] // Untuk JSON (serde)
-    #[sqlx(rename = "Tenaga Pendidik")]  // Untuk Database (sqlx)
+    #[sqlx(rename = "Tenaga Pendidik")] // Untuk Database (sqlx)
     TenagaPendidik,
 
     #[serde(rename = "Tenaga Kependidikan")] // Untuk JSON (serde)
-    #[sqlx(rename = "Tenaga Kependidikan")]  // Untuk Database (sqlx)
+    #[sqlx(rename = "Tenaga Kependidikan")] // Untuk Database (sqlx)
     TenagaKependidikan,
 }
 
@@ -107,20 +107,18 @@ pub struct PegawaiPayload {
     pub kategori_pegawai: Option<KategoriPegawai>,
     pub status_pegawai: Option<StatusPegawai>,
     pub is_active: Option<bool>,
-    pub unit_kerja: Option<String>,
-    pub bagian: Option<String>,
-    pub jabatan: Option<String>,
+    pub unit_kerja_id: Option<Uuid>, // Menggunakan relasi UUID ke tabel unit_kerja
+    pub jabatan: Option<String>,     // Jabatan tetap string, tapi nanti masuk ke penempatan_pegawai
     pub tanggal_masuk: Option<Date>,
     pub tanggal_pensiun: Option<Date>,
     pub no_kk: Option<String>,
     pub no_npwp: Option<String>,
     pub no_bpjs_kesehatan: Option<String>,
     pub no_bpjs_ketenagakerjaan: Option<String>,
-    pub nidn: Option<String>, 
-    pub prodi_id: Option<Uuid>, 
-    pub password: Option<String>, 
+    pub nidn: Option<String>,
+    pub prodi_id: Option<Uuid>,
+    pub password: Option<String>,
 }
-
 
 impl JenisKelamin {
     pub fn as_str(&self) -> &'static str {
@@ -197,7 +195,6 @@ pub struct RiwayatPendidikanPayload {
     pub tahun_lulus: Option<i16>,
 }
 
-
 // --- Struct untuk Riwayat SK ---
 
 #[derive(Debug, sqlx::FromRow)] // Ini adalah struct untuk DB
@@ -232,7 +229,6 @@ pub struct RiwayatSkPayload {
     pub keterangan: Option<String>,
 }
 
-
 // --- Struct untuk Riwayat Penempatan ---
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -240,10 +236,10 @@ pub struct PenempatanPegawai {
     pub id: Uuid,
     pub pegawai_id: Uuid,
     pub unit_kerja_id: Uuid,
-    
+
     // Kita akan JOIN untuk mendapatkan nama unit kerja
-    pub nama_unit_kerja: String, 
-    
+    pub nama_unit_kerja: String,
+
     pub jabatan: String,
     pub nomor_sk: Option<String>,
     pub tanggal_mulai: Date,

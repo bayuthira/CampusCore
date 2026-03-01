@@ -1,6 +1,9 @@
 // src/modules/sdm/repo.rs
 
-use super::model::{CreateUserForPegawaiPayload, KategoriPegawai, Pegawai, PegawaiPayload,JenisKelamin, StatusNikah, StatusPegawai};
+use super::model::{
+    CreateUserForPegawaiPayload, JenisKelamin, KategoriPegawai, Pegawai, PegawaiPayload,
+    StatusNikah, StatusPegawai,
+};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
 
@@ -18,7 +21,6 @@ pub async fn create_pegawai_repo(
 
     // Tahap 1: Tentukan User ID (Cari Berdasarkan Email, atau Buat Baru)
     let new_user_id: Option<Uuid> = if let Some(password) = payload.password {
-        // Cek dulu apakah user dengan email ini sudah ada (jika email diisi)
         let existing_user = if let Some(email) = &payload.email {
             sqlx::query!("SELECT id FROM users WHERE email = $1", email)
                 .fetch_optional(&mut *tx)
@@ -28,22 +30,18 @@ pub async fn create_pegawai_repo(
         };
 
         if let Some(user) = existing_user {
-            // Jika user dengan email tersebut sudah ada, gunakan ID-nya.
-            // Abaikan password yang diinput karena akun sudah ada.
             Some(user.id)
         } else {
-            // Jika user belum ada, buat baru.
             let hashed_password = bcrypt::hash(password, bcrypt::DEFAULT_COST)?;
             match sqlx::query!(
                 "INSERT INTO users (username, password_hash, full_name, email) VALUES ($1, $2, $3, $4) RETURNING id",
-                &payload.nik, // username tetap pakai NIK yang unik
+                &payload.nik, 
                 hashed_password,
                 &payload.nama_lengkap,
                 payload.email.as_deref()
             ).fetch_one(&mut *tx).await {
                 Ok(rec) => Some(rec.id),
                 Err(e) => {
-                    // Penanganan error jika NIK duplikat (bukan email)
                     tx.rollback().await?;
                     if let Some(db_err) = e.as_database_error() {
                         if db_err.is_unique_violation() && db_err.constraint().unwrap_or_default().contains("users_username_key") {
@@ -58,23 +56,23 @@ pub async fn create_pegawai_repo(
         None
     };
 
-    // Konversi semua enum opsional ke string opsional
     let jenis_kelamin_str = payload.jenis_kelamin.as_ref().map(|e| e.as_str());
     let status_nikah_str = payload.status_nikah.as_ref().map(|e| e.as_str());
     let kategori_pegawai_str = payload.kategori_pegawai.as_ref().map(|e| e.as_str());
     let status_pegawai_str = payload.status_pegawai.as_ref().map(|e| e.as_str());
 
-    // 2. Insert data ke tabel pegawai
+    // Tahap 2: Insert data ke tabel pegawai (Kolom unit_kerja, bagian, jabatan DIHAPUS)
     let new_pegawai_id: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO pegawai (
             user_id, nik, no_ktp, nama_lengkap, gelar_depan, gelar_belakang, tempat_lahir, tanggal_lahir, 
             jenis_kelamin, status_nikah, agama, gol_darah, alamat_domisili, kota, kode_pos, 
-            nomor_hp, email, kategori_pegawai, status_pegawai, is_active, unit_kerja, bagian, 
-            jabatan, tanggal_masuk, tanggal_pensiun, no_kk, no_npwp, no_bpjs_kesehatan, no_bpjs_ketenagakerjaan
+            nomor_hp, email, kategori_pegawai, status_pegawai, is_active, 
+            tanggal_masuk, tanggal_pensiun, no_kk, no_npwp, no_bpjs_kesehatan, no_bpjs_ketenagakerjaan
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9::"JenisKelamin", $10::"StatusNikah", $11, $12, $13, $14, $15, 
-            $16, $17, $18::"KategoriPegawai", $19::"StatusPegawai", $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
+            $16, $17, $18::"KategoriPegawai", $19::"StatusPegawai", $20, 
+            $21, $22, $23, $24, $25, $26
         ) RETURNING id
         "#,
     )
@@ -98,9 +96,7 @@ pub async fn create_pegawai_repo(
     .bind(kategori_pegawai_str)
     .bind(status_pegawai_str)
     .bind(payload.is_active.unwrap_or(true))
-    .bind(&payload.unit_kerja)
-    .bind(&payload.bagian)
-    .bind(&payload.jabatan)
+    // --- BINDING LAMA DIHAPUS DARI SINI ---
     .bind(&payload.tanggal_masuk)
     .bind(payload.tanggal_pensiun)
     .bind(&payload.no_kk)
@@ -110,7 +106,23 @@ pub async fn create_pegawai_repo(
     .fetch_one(&mut *tx)
     .await?;
 
-    // 3. Jika Tenaga Pendidik, buat atau tautkan data Dosen
+    // Tahap 2.5: (BARU) Insert ke tabel penempatan_pegawai jika data unit_kerja_id dikirim
+    if let (Some(unit_id), Some(jabatan_nama)) = (payload.unit_kerja_id, &payload.jabatan) {
+        // Gunakan tanggal_masuk sebagai tanggal_mulai, jika kosong gunakan hari ini
+        let tgl_mulai = payload.tanggal_masuk.unwrap_or_else(|| time::OffsetDateTime::now_utc().date());
+        
+        sqlx::query!(
+            "INSERT INTO penempatan_pegawai (pegawai_id, unit_kerja_id, jabatan, tanggal_mulai) VALUES ($1, $2, $3, $4)",
+            new_pegawai_id,
+            unit_id,
+            jabatan_nama,
+            tgl_mulai
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    // Tahap 3: Jika Tenaga Pendidik, buat atau tautkan data Dosen
     if let Some(KategoriPegawai::TenagaPendidik) = &payload.kategori_pegawai {
         let nidn = payload.nidn.as_ref().ok_or_else(|| {
             AppError::Forbidden("NIDN wajib diisi untuk Tenaga Pendidik.".to_string())
@@ -174,42 +186,47 @@ pub async fn get_all_pegawai_repo(pool: &DbPool) -> Result<Vec<Pegawai>, AppErro
         LEFT JOIN prodi pr ON d.prodi_id = pr.id
         ORDER BY p.nama_lengkap ASC
         "#
-    ).fetch_all(pool).await?;
+    )
+    .fetch_all(pool)
+    .await?;
 
-    let pegawai_list = records.into_iter().map(|rec| Pegawai {
-        id: rec.id,
-        user_id: rec.user_id,
-        nik: rec.nik,
-        no_ktp: rec.no_ktp,
-        nama_lengkap: rec.nama_lengkap,
-        gelar_depan: rec.gelar_depan,
-        gelar_belakang: rec.gelar_belakang,
-        tempat_lahir: rec.tempat_lahir,
-        tanggal_lahir: rec.tanggal_lahir,
-        jenis_kelamin: rec.jenis_kelamin,
-        status_nikah: rec.status_nikah,
-        agama: rec.agama,
-        gol_darah: rec.gol_darah,
-        alamat_domisili: rec.alamat_domisili,
-        kota: rec.kota,
-        kode_pos: rec.kode_pos,
-        nomor_hp: rec.nomor_hp,
-        email: rec.email,
-        kategori_pegawai: rec.kategori_pegawai,
-        status_pegawai: rec.status_pegawai,
-        is_active: rec.is_active,
-        tanggal_masuk: rec.tanggal_masuk,
-        tanggal_pensiun: rec.tanggal_pensiun,
-        no_kk: rec.no_kk,
-        no_npwp: rec.no_npwp,
-        no_bpjs_kesehatan: rec.no_bpjs_kesehatan,
-        no_bpjs_ketenagakerjaan: rec.no_bpjs_ketenagakerjaan,
-        nidn: rec.nidn,
-        prodi_id: rec.prodi_id,
-        nama_prodi: rec.nama_prodi,
-        created_at: rec.created_at,
-        updated_at: rec.updated_at,
-    }).collect();
+    let pegawai_list = records
+        .into_iter()
+        .map(|rec| Pegawai {
+            id: rec.id,
+            user_id: rec.user_id,
+            nik: rec.nik,
+            no_ktp: rec.no_ktp,
+            nama_lengkap: rec.nama_lengkap,
+            gelar_depan: rec.gelar_depan,
+            gelar_belakang: rec.gelar_belakang,
+            tempat_lahir: rec.tempat_lahir,
+            tanggal_lahir: rec.tanggal_lahir,
+            jenis_kelamin: rec.jenis_kelamin,
+            status_nikah: rec.status_nikah,
+            agama: rec.agama,
+            gol_darah: rec.gol_darah,
+            alamat_domisili: rec.alamat_domisili,
+            kota: rec.kota,
+            kode_pos: rec.kode_pos,
+            nomor_hp: rec.nomor_hp,
+            email: rec.email,
+            kategori_pegawai: rec.kategori_pegawai,
+            status_pegawai: rec.status_pegawai,
+            is_active: rec.is_active,
+            tanggal_masuk: rec.tanggal_masuk,
+            tanggal_pensiun: rec.tanggal_pensiun,
+            no_kk: rec.no_kk,
+            no_npwp: rec.no_npwp,
+            no_bpjs_kesehatan: rec.no_bpjs_kesehatan,
+            no_bpjs_ketenagakerjaan: rec.no_bpjs_ketenagakerjaan,
+            nidn: rec.nidn,
+            prodi_id: rec.prodi_id,
+            nama_prodi: rec.nama_prodi,
+            created_at: rec.created_at,
+            updated_at: rec.updated_at,
+        })
+        .collect();
 
     Ok(pegawai_list)
 }
@@ -284,9 +301,10 @@ pub async fn update_pegawai_repo(
         // Tahap 2b: Kategori tetap sama, tapi cek perubahan prodi jika TenagaPendidik
         if let Some(KategoriPegawai::TenagaPendidik) = &old_pegawai.kategori_pegawai {
             // Ambil data dosen yang terkait dengan pegawai ini
-            let existing_dosen = sqlx::query!("SELECT id, prodi_id FROM dosen WHERE pegawai_id = $1", id)
-                .fetch_optional(&mut *tx)
-                .await?;
+            let existing_dosen =
+                sqlx::query!("SELECT id, prodi_id FROM dosen WHERE pegawai_id = $1", id)
+                    .fetch_optional(&mut *tx)
+                    .await?;
 
             if let Some(dosen) = existing_dosen {
                 // Jika ada prodi baru di payload, lakukan update
@@ -306,7 +324,7 @@ pub async fn update_pegawai_repo(
         }
     }
 
-    // Tahap 3: Lakukan UPDATE utama pada tabel pegawai (tidak berubah)
+    // Tahap 3: Lakukan UPDATE utama pada tabel pegawai (HAPUS unit_kerja, bagian, jabatan)
     let jenis_kelamin_str = payload.jenis_kelamin.as_ref().map(|e| e.as_str());
     let status_nikah_str = payload.status_nikah.as_ref().map(|e| e.as_str());
     let kategori_pegawai_str = payload.kategori_pegawai.as_ref().map(|e| e.as_str());
@@ -319,10 +337,10 @@ pub async fn update_pegawai_repo(
             tempat_lahir = $6, tanggal_lahir = $7, jenis_kelamin = $8::"JenisKelamin", status_nikah = $9::"StatusNikah",
             agama = $10, gol_darah = $11, alamat_domisili = $12, kota = $13, kode_pos = $14, nomor_hp = $15,
             email = $16, kategori_pegawai = $17::"KategoriPegawai", status_pegawai = $18::"StatusPegawai",
-            is_active = $19, unit_kerja = $20, bagian = $21, jabatan = $22, tanggal_masuk = $23,
-            tanggal_pensiun = $24, no_kk = $25, no_npwp = $26, no_bpjs_kesehatan = $27,
-            no_bpjs_ketenagakerjaan = $28, updated_at = now()
-        WHERE id = $29
+            is_active = $19, tanggal_masuk = $20,
+            tanggal_pensiun = $21, no_kk = $22, no_npwp = $23, no_bpjs_kesehatan = $24,
+            no_bpjs_ketenagakerjaan = $25, updated_at = now()
+        WHERE id = $26
         "#,
     )
     .bind(&payload.nik)
@@ -344,9 +362,6 @@ pub async fn update_pegawai_repo(
     .bind(kategori_pegawai_str)
     .bind(status_pegawai_str)
     .bind(payload.is_active.unwrap_or(old_pegawai.is_active))
-    .bind(&payload.unit_kerja)
-    .bind(&payload.bagian)
-    .bind(&payload.jabatan)
     .bind(payload.tanggal_masuk)
     .bind(payload.tanggal_pensiun)
     .bind(&payload.no_kk)
@@ -356,6 +371,34 @@ pub async fn update_pegawai_repo(
     .bind(id)
     .execute(&mut *tx)
     .await?;
+
+    // Tahap 4: (BARU) Update tabel penempatan_pegawai jika ada unit_kerja_id
+    if let (Some(new_unit_id), Some(new_jabatan)) = (payload.unit_kerja_id, &payload.jabatan) {
+        let active_penempatan = sqlx::query!(
+            "SELECT id FROM penempatan_pegawai WHERE pegawai_id = $1 AND tanggal_selesai IS NULL",
+            id
+        ).fetch_optional(&mut *tx).await?;
+
+        if let Some(penempatan) = active_penempatan {
+            // Update jabatan dan unit kerja yang sedang aktif
+            sqlx::query!(
+                "UPDATE penempatan_pegawai SET unit_kerja_id = $1, jabatan = $2, updated_at = now() WHERE id = $3",
+                new_unit_id,
+                new_jabatan,
+                penempatan.id
+            ).execute(&mut *tx).await?;
+        } else {
+            // Jika belum punya penempatan aktif sama sekali, buat baru
+            let tgl_mulai = payload.tanggal_masuk.unwrap_or_else(|| time::OffsetDateTime::now_utc().date());
+            sqlx::query!(
+                "INSERT INTO penempatan_pegawai (pegawai_id, unit_kerja_id, jabatan, tanggal_mulai) VALUES ($1, $2, $3, $4)",
+                id,
+                new_unit_id,
+                new_jabatan,
+                tgl_mulai
+            ).execute(&mut *tx).await?;
+        }
+    }
 
     tx.commit().await?;
     get_pegawai_by_id_repo_inner(pool, id).await
@@ -540,17 +583,19 @@ pub async fn create_user_for_pegawai_repo(
     get_pegawai_by_id_repo_inner(pool, pegawai_id).await
 }
 
-pub async fn get_pegawai_id_from_user_id_repo(pool: &DbPool, user_id: Uuid) -> Result<Uuid, AppError> {
-    let pegawai_id = sqlx::query_scalar!(
-        "SELECT id FROM pegawai WHERE user_id = $1",
-        user_id
-    )
-    .fetch_one(pool)
-    .await
-    .map_err(|e| match e {
-        sqlx::Error::RowNotFound => AppError::Forbidden("Tidak ada data pegawai yang terhubung dengan akun Anda.".to_string()),
-        _ => e.into(),
-    })?;
+pub async fn get_pegawai_id_from_user_id_repo(
+    pool: &DbPool,
+    user_id: Uuid,
+) -> Result<Uuid, AppError> {
+    let pegawai_id = sqlx::query_scalar!("SELECT id FROM pegawai WHERE user_id = $1", user_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => AppError::Forbidden(
+                "Tidak ada data pegawai yang terhubung dengan akun Anda.".to_string(),
+            ),
+            _ => e.into(),
+        })?;
 
     Ok(pegawai_id)
 }
