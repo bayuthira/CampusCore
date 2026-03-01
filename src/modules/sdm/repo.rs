@@ -559,6 +559,12 @@ pub async fn create_user_for_pegawai_repo(
     .execute(&mut *tx)
     .await?;
 
+    // --- Berikan peran default 'KARYAWAN' untuk semua pegawai ---
+    sqlx::query!(
+        "INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'KARYAWAN')) ON CONFLICT DO NOTHING",
+        new_user_id
+    ).execute(&mut *tx).await?;
+
     // 4. Jika pegawai adalah Dosen, tautkan juga user_id ke data dosen
     if let Some(KategoriPegawai::TenagaPendidik) = pegawai.kategori_pegawai {
         sqlx::query!(
@@ -569,13 +575,12 @@ pub async fn create_user_for_pegawai_repo(
         .execute(&mut *tx)
         .await?;
 
-        // Berikan peran DOSEN
+        // Berikan peran tambahan DOSEN (Jadi dia punya 2 role: KARYAWAN & DOSEN)
         sqlx::query!(
             "INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'DOSEN')) ON CONFLICT DO NOTHING",
             new_user_id
         ).execute(&mut *tx).await?;
     }
-    // Anda bisa tambahkan logika `else` untuk memberikan peran default 'PEGAWAI' jika perlu
 
     tx.commit().await?;
 
