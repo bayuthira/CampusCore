@@ -13,7 +13,10 @@ pub fn absensi_router() -> Router<DbPool> {
         .route("/sdm/absensi/clock-in", post(handler::clock_in_handler))
         .route("/sdm/absensi/clock-out", post(handler::clock_out_handler))
         .route("/sdm/absensi/rekap-saya", get(handler::get_my_rekap_absensi_handler))
-        .route("/sdm/absensi/log-saya", get(handler::get_my_logs_for_day_handler));
+        .route("/sdm/absensi/log-saya", get(handler::get_my_logs_for_day_handler))
+                .route_layer(middleware::from_fn(require_role(vec![
+            "KARYAWAN".to_string(),
+        ])));
     // Rute ini akan dilindungi oleh auth_middleware utama
 
     // Rute untuk admin SDM (mengelola rekap)
