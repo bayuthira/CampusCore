@@ -94,30 +94,34 @@ async fn check_liveness_api(
         .await
         .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Face++ Liveness: {}", e)))?;
 
+    // Menangani Error dari Face++
     if let Some(err_msg) = json.get("error_message") {
+        let err_str = err_msg.as_str().unwrap_or("Unknown");
+        
+        // GRACEFUL FALLBACK: Jika fitur Liveness tidak tersedia di paket Face++ (API_NOT_FOUND)
+        // Kita otomatis bypass pengecekan ini agar karyawan tetap bisa absen.
+        if err_str == "API_NOT_FOUND" {
+            println!("[WARNING] Face++ Liveness Endpoint API_NOT_FOUND. Mem-bypass pengecekan Liveness...");
+            return Ok(true); 
+        }
+
         return Err(AppError::Forbidden(format!(
             "Error dari Face++ Liveness: {}",
-            err_msg.as_str().unwrap_or("Unknown")
+            err_str
         )));
     }
 
     // CATATAN PARSING:
     // Sesuaikan kunci (key) JSON di bawah ini dengan dokumentasi API Anti-Spoofing yang Anda gunakan.
-    // Kode ini mendeteksi pola umum dari Face++.
-    
     let is_fake = if let Some(liveness) = json.get("liveness") {
-        // Contoh A: API mengembalikan probabilitas palsu (misal threshold > 50% tolak)
         let fake_score = liveness.get("fake").and_then(|v| v.as_f64()).unwrap_or(0.0);
         fake_score > 50.0 
     } else if let Some(confidence) = json.get("confidence") {
-        // Contoh B: API mengembalikan confidence score (1-100)
         let liveness_confidence = confidence.as_f64().unwrap_or(0.0);
-        liveness_confidence < 60.0 // Kurang dari 60% dianggap palsu
+        liveness_confidence < 60.0 
     } else if let Some(result_str) = json.get("result").and_then(|v| v.as_str()) {
-        // Contoh C: API mengembalikan text "fake" atau "real"
         result_str.to_lowercase().contains("fake")
     } else {
-        // Jika format JSON asing, biarkan lewat (Anda bisa ubah ke true/false sesuai tingkat strict)
         false
     };
 
