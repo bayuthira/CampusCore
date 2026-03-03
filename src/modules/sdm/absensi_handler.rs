@@ -43,13 +43,13 @@ static FACE_QUEUE: Lazy<mpsc::Sender<FaceQueueMessage>> = Lazy::new(|| {
     // Background worker (Kasir)
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
-            // 1. Eksekusi tembakan ke Face++
+            // 1. Eksekusi tembakan ke API Face++ (Liveness + Compare)
             let res = verify_face_faceplusplus_direct(msg.ref_bytes, msg.selfie_bytes).await;
 
             // 2. Kembalikan hasilnya ke user yang sedang menunggu (Pager)
             let _ = msg.reply_tx.send(res);
 
-            // 3. JEDA PAKSA 1.1 Detik agar tidak terkena limit 1 QPS Face++
+            // 3. JEDA PAKSA 1.1 Detik setelah selesai 1 antrean agar tidak terkena limit 1 QPS Face++
             tokio::time::sleep(Duration::from_millis(1100)).await;
         }
     });
@@ -58,22 +58,111 @@ static FACE_QUEUE: Lazy<mpsc::Sender<FaceQueueMessage>> = Lazy::new(|| {
 });
 
 // ==========================================
-// HELPER FACE++ (DIRECT CALL)
+// HELPER LIVENESS FACE++ (ANTI-SPOOFING)
 // ==========================================
 
-// Ini adalah kode asli tanpa antrean
+async fn check_liveness_api(
+    api_key: String,
+    api_secret: String,
+    selfie_bytes: Vec<u8>,
+) -> Result<bool, AppError> {
+    let endpoint = env::var("FACEPP_LIVENESS_ENDPOINT").unwrap_or_default();
+    if endpoint.is_empty() {
+        return Ok(true); // Bypass jika endpoint belum diset di .env
+    }
+
+    let client = reqwest::Client::new();
+    let part = reqwest::multipart::Part::bytes(selfie_bytes)
+        .file_name("liveness_selfie.jpg")
+        .mime_str("image/jpeg")
+        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal membaca foto selfie untuk liveness: {}", e)))?;
+
+    let form = reqwest::multipart::Form::new()
+        .text("api_key", api_key)
+        .text("api_secret", api_secret)
+        .part("image_file", part);
+
+    let res = client
+        .post(&endpoint)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal menghubungi server Face++ Liveness: {}", e)))?;
+
+    let json: Value = res
+        .json()
+        .await
+        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Face++ Liveness: {}", e)))?;
+
+    if let Some(err_msg) = json.get("error_message") {
+        return Err(AppError::Forbidden(format!(
+            "Error dari Face++ Liveness: {}",
+            err_msg.as_str().unwrap_or("Unknown")
+        )));
+    }
+
+    // CATATAN PARSING:
+    // Sesuaikan kunci (key) JSON di bawah ini dengan dokumentasi API Anti-Spoofing yang Anda gunakan.
+    // Kode ini mendeteksi pola umum dari Face++.
+    
+    let is_fake = if let Some(liveness) = json.get("liveness") {
+        // Contoh A: API mengembalikan probabilitas palsu (misal threshold > 50% tolak)
+        let fake_score = liveness.get("fake").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        fake_score > 50.0 
+    } else if let Some(confidence) = json.get("confidence") {
+        // Contoh B: API mengembalikan confidence score (1-100)
+        let liveness_confidence = confidence.as_f64().unwrap_or(0.0);
+        liveness_confidence < 60.0 // Kurang dari 60% dianggap palsu
+    } else if let Some(result_str) = json.get("result").and_then(|v| v.as_str()) {
+        // Contoh C: API mengembalikan text "fake" atau "real"
+        result_str.to_lowercase().contains("fake")
+    } else {
+        // Jika format JSON asing, biarkan lewat (Anda bisa ubah ke true/false sesuai tingkat strict)
+        false
+    };
+
+    Ok(!is_fake)
+}
+
+
+// ==========================================
+// HELPER FACE++ (DIRECT CALL UNTUK LIVENESS + COMPARE)
+// ==========================================
+
 async fn verify_face_faceplusplus_direct(
     ref_bytes: Vec<u8>,
     selfie_bytes: Vec<u8>,
 ) -> Result<(bool, f32), AppError> {
     let api_key = env::var("FACEPP_API_KEY").unwrap_or_default();
     let api_secret = env::var("FACEPP_API_SECRET").unwrap_or_default();
-    let endpoint = env::var("FACEPP_ENDPOINT").unwrap_or_default();
-
+    
     if api_key.is_empty() || api_secret.is_empty() {
         return Ok((true, 0.99)); // Bypass saat development
     }
 
+    // -----------------------------------------------------
+    // 1. CEK LIVENESS (OPSIONAL BERDASARKAN .ENV)
+    // -----------------------------------------------------
+    let use_liveness = env::var("USE_FACE_LIVENESS_BE").unwrap_or_else(|_| "false".to_string());
+    
+    if use_liveness == "true" || use_liveness == "1" {
+        let is_live = check_liveness_api(api_key.clone(), api_secret.clone(), selfie_bytes.clone()).await?;
+        
+        if !is_live {
+            // Ditolak! Karyawan ketahuan pakai foto / layar HP / topeng
+            return Err(AppError::Forbidden(
+                "Absensi ditolak: Wajah terdeteksi tidak nyata (terindikasi menggunakan foto atau layar).".to_string(),
+            ));
+        }
+        
+        // SANGAT PENTING: Jeda 1.1 Detik agar tidak terkena limit 1 QPS saat lanjut ke endpoint Compare!
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+    }
+
+    // -----------------------------------------------------
+    // 2. CEK KEMIRIPAN (COMPARE)
+    // -----------------------------------------------------
+    let endpoint_compare = env::var("FACEPP_ENDPOINT").unwrap_or_default();
     let client = reqwest::Client::new();
 
     let part1 = reqwest::multipart::Part::bytes(ref_bytes)
@@ -93,18 +182,18 @@ async fn verify_face_faceplusplus_direct(
         .part("image_file2", part2);
 
     let res = client
-        .post(&endpoint)
+        .post(&endpoint_compare)
         .multipart(form)
         .send()
         .await
         .map_err(|e| {
-            AppError::AnyhowError(anyhow::anyhow!("Gagal menghubungi server Face++: {}", e))
+            AppError::AnyhowError(anyhow::anyhow!("Gagal menghubungi server Face++ Compare: {}", e))
         })?;
 
     let json: Value = res
         .json()
         .await
-        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Face++: {}", e)))?;
+        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Face++ Compare: {}", e)))?;
 
     if let Some(err_msg) = json.get("error_message") {
         return Err(AppError::Forbidden(format!(
@@ -135,29 +224,16 @@ async fn verify_face_faceplusplus(
 
     if use_queue == "true" || use_queue == "1" {
         // --- JALUR ANTREAN ---
-        // Buat Pager (oneshot channel) untuk menunggu jawaban
         let (reply_tx, reply_rx) = oneshot::channel();
+        let msg = FaceQueueMessage { ref_bytes, selfie_bytes, reply_tx };
 
-        // Buat paket pesan
-        let msg = FaceQueueMessage {
-            ref_bytes,
-            selfie_bytes,
-            reply_tx,
-        };
-
-        // Masukkan ke keranjang antrean
         if FACE_QUEUE.send(msg).await.is_err() {
-            return Err(AppError::AnyhowError(anyhow::anyhow!(
-                "Sistem antrean AI sedang down"
-            )));
+            return Err(AppError::AnyhowError(anyhow::anyhow!("Sistem antrean AI sedang down")));
         }
 
-        // Tunggu Pager berbunyi (await)
         match reply_rx.await {
-            Ok(res) => res, // Mengembalikan hasil (Ok atau Err dari Face++)
-            Err(_) => Err(AppError::AnyhowError(anyhow::anyhow!(
-                "Gagal menerima respon dari antrean AI"
-            ))),
+            Ok(res) => res,
+            Err(_) => Err(AppError::AnyhowError(anyhow::anyhow!("Gagal menerima respon dari antrean AI"))),
         }
     } else {
         // --- JALUR LANGSUNG (TANPA ANTREAN) ---
@@ -217,12 +293,10 @@ async fn proses_absensi(
     foto_bytes: Vec<u8>,
     tipe: TipeAbsensi,
 ) -> Result<LogAbsensi, AppError> {
-    // 1. Ambil path foto referensi dari DB
     let path_file_db = repo::get_foto_profil_pegawai(pool, pegawai_id).await?;
     let foto_ref_path = format!("./{}", path_file_db);
     let ref_bytes = fs::read(&foto_ref_path).await?;
 
-    // 2. FACE++ Process (Akan memilih jalur Queue atau Direct otomatis)
     let (is_verified, confidence) = verify_face_faceplusplus(ref_bytes, foto_bytes.clone()).await?;
 
     if !is_verified || confidence < 0.70 {
@@ -232,7 +306,6 @@ async fn proses_absensi(
         )));
     }
 
-    // 3. Simpan foto selfie ke folder server
     let ext = "jpg";
     let nama_file_selfie = format!("{}.{}", Uuid::new_v4(), ext);
     let folder_simpan = format!("./uploads/absensi/{}", pegawai_id);
@@ -241,13 +314,11 @@ async fn proses_absensi(
     fs::create_dir_all(&folder_simpan).await?;
     fs::write(&path_simpan, foto_bytes).await?;
 
-    // 4. Update Payload
     let path_db_selfie = format!("uploads/absensi/{}/{}", pegawai_id, nama_file_selfie);
     payload.foto_absensi_path = Some(path_db_selfie);
     payload.face_confidence_score = Some(confidence);
     payload.is_face_verified = Some(is_verified);
 
-    // 5. Simpan ke Database
     if tipe == TipeAbsensi::ClockIn {
         repo::clock_in_repo(pool, pegawai_id, payload).await
     } else {
