@@ -1,7 +1,8 @@
 // src/modules/sdm/absensi_handler.rs
 use super::{
     absensi_model::{
-        ClockPayload, LogAbsensi, LogDayFilter, RekapAbsensiFilter, RekapAbsensiHarian,
+        ClockPayload, LaporanAbsensiResponse, LaporanAbsensiRow, LaporanBulananFilter,
+        LaporanHarianFilter, LogAbsensi, LogDayFilter, RekapAbsensiFilter, RekapAbsensiHarian,
         RekapManualPayload, TipeAbsensi,
     },
     absensi_repo as repo, repo as pegawai_repo,
@@ -75,7 +76,12 @@ async fn check_liveness_api(
     let part = reqwest::multipart::Part::bytes(selfie_bytes)
         .file_name("liveness_selfie.jpg")
         .mime_str("image/jpeg")
-        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal membaca foto selfie untuk liveness: {}", e)))?;
+        .map_err(|e| {
+            AppError::AnyhowError(anyhow::anyhow!(
+                "Gagal membaca foto selfie untuk liveness: {}",
+                e
+            ))
+        })?;
 
     let form = reqwest::multipart::Form::new()
         .text("api_key", api_key)
@@ -87,22 +93,31 @@ async fn check_liveness_api(
         .multipart(form)
         .send()
         .await
-        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal menghubungi server Face++ Liveness: {}", e)))?;
+        .map_err(|e| {
+            AppError::AnyhowError(anyhow::anyhow!(
+                "Gagal menghubungi server Face++ Liveness: {}",
+                e
+            ))
+        })?;
 
-    let json: Value = res
-        .json()
-        .await
-        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Face++ Liveness: {}", e)))?;
+    let json: Value = res.json().await.map_err(|e| {
+        AppError::AnyhowError(anyhow::anyhow!(
+            "Gagal parse respons Face++ Liveness: {}",
+            e
+        ))
+    })?;
 
     // Menangani Error dari Face++
     if let Some(err_msg) = json.get("error_message") {
         let err_str = err_msg.as_str().unwrap_or("Unknown");
-        
+
         // GRACEFUL FALLBACK: Jika fitur Liveness tidak tersedia di paket Face++ (API_NOT_FOUND)
         // Kita otomatis bypass pengecekan ini agar karyawan tetap bisa absen.
         if err_str == "API_NOT_FOUND" {
-            println!("[WARNING] Face++ Liveness Endpoint API_NOT_FOUND. Mem-bypass pengecekan Liveness...");
-            return Ok(true); 
+            println!(
+                "[WARNING] Face++ Liveness Endpoint API_NOT_FOUND. Mem-bypass pengecekan Liveness..."
+            );
+            return Ok(true);
         }
 
         return Err(AppError::Forbidden(format!(
@@ -115,10 +130,10 @@ async fn check_liveness_api(
     // Sesuaikan kunci (key) JSON di bawah ini dengan dokumentasi API Anti-Spoofing yang Anda gunakan.
     let is_fake = if let Some(liveness) = json.get("liveness") {
         let fake_score = liveness.get("fake").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        fake_score > 50.0 
+        fake_score > 50.0
     } else if let Some(confidence) = json.get("confidence") {
         let liveness_confidence = confidence.as_f64().unwrap_or(0.0);
-        liveness_confidence < 60.0 
+        liveness_confidence < 60.0
     } else if let Some(result_str) = json.get("result").and_then(|v| v.as_str()) {
         result_str.to_lowercase().contains("fake")
     } else {
@@ -127,7 +142,6 @@ async fn check_liveness_api(
 
     Ok(!is_fake)
 }
-
 
 // ==========================================
 // HELPER FACE++ (DIRECT CALL UNTUK LIVENESS + COMPARE)
@@ -139,7 +153,7 @@ async fn verify_face_faceplusplus_direct(
 ) -> Result<(bool, f32), AppError> {
     let api_key = env::var("FACEPP_API_KEY").unwrap_or_default();
     let api_secret = env::var("FACEPP_API_SECRET").unwrap_or_default();
-    
+
     if api_key.is_empty() || api_secret.is_empty() {
         return Ok((true, 0.99)); // Bypass saat development
     }
@@ -148,17 +162,18 @@ async fn verify_face_faceplusplus_direct(
     // 1. CEK LIVENESS (OPSIONAL BERDASARKAN .ENV)
     // -----------------------------------------------------
     let use_liveness = env::var("USE_FACE_LIVENESS_BE").unwrap_or_else(|_| "false".to_string());
-    
+
     if use_liveness == "true" || use_liveness == "1" {
-        let is_live = check_liveness_api(api_key.clone(), api_secret.clone(), selfie_bytes.clone()).await?;
-        
+        let is_live =
+            check_liveness_api(api_key.clone(), api_secret.clone(), selfie_bytes.clone()).await?;
+
         if !is_live {
             // Ditolak! Karyawan ketahuan pakai foto / layar HP / topeng
             return Err(AppError::Forbidden(
                 "Absensi ditolak: Wajah terdeteksi tidak nyata (terindikasi menggunakan foto atau layar).".to_string(),
             ));
         }
-        
+
         // SANGAT PENTING: Jeda 1.1 Detik agar tidak terkena limit 1 QPS saat lanjut ke endpoint Compare!
         tokio::time::sleep(Duration::from_millis(1100)).await;
     }
@@ -191,13 +206,15 @@ async fn verify_face_faceplusplus_direct(
         .send()
         .await
         .map_err(|e| {
-            AppError::AnyhowError(anyhow::anyhow!("Gagal menghubungi server Face++ Compare: {}", e))
+            AppError::AnyhowError(anyhow::anyhow!(
+                "Gagal menghubungi server Face++ Compare: {}",
+                e
+            ))
         })?;
 
-    let json: Value = res
-        .json()
-        .await
-        .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Face++ Compare: {}", e)))?;
+    let json: Value = res.json().await.map_err(|e| {
+        AppError::AnyhowError(anyhow::anyhow!("Gagal parse respons Face++ Compare: {}", e))
+    })?;
 
     if let Some(err_msg) = json.get("error_message") {
         return Err(AppError::Forbidden(format!(
@@ -229,15 +246,23 @@ async fn verify_face_faceplusplus(
     if use_queue == "true" || use_queue == "1" {
         // --- JALUR ANTREAN ---
         let (reply_tx, reply_rx) = oneshot::channel();
-        let msg = FaceQueueMessage { ref_bytes, selfie_bytes, reply_tx };
+        let msg = FaceQueueMessage {
+            ref_bytes,
+            selfie_bytes,
+            reply_tx,
+        };
 
         if FACE_QUEUE.send(msg).await.is_err() {
-            return Err(AppError::AnyhowError(anyhow::anyhow!("Sistem antrean AI sedang down")));
+            return Err(AppError::AnyhowError(anyhow::anyhow!(
+                "Sistem antrean AI sedang down"
+            )));
         }
 
         match reply_rx.await {
             Ok(res) => res,
-            Err(_) => Err(AppError::AnyhowError(anyhow::anyhow!("Gagal menerima respon dari antrean AI"))),
+            Err(_) => Err(AppError::AnyhowError(anyhow::anyhow!(
+                "Gagal menerima respon dari antrean AI"
+            ))),
         }
     } else {
         // --- JALUR LANGSUNG (TANPA ANTREAN) ---
@@ -405,4 +430,122 @@ pub async fn get_all_rekap_absensi_handler(
 ) -> Result<Json<Vec<RekapAbsensiHarian>>, AppError> {
     let list = repo::get_all_rekap_absensi_repo(&pool, filter).await?;
     Ok(Json(list))
+}
+
+/// HELPER FUNGSI: Mengonversi DB Row menjadi Response API + Menghitung Keterangan
+fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
+    // 1. Ambil env (bisa support format 07.30 maupun 07:30)
+    let jam_masuk_str = env::var("JAM_MASUK_KERJA")
+        .unwrap_or_else(|_| "07:30".to_string())
+        .replace(".", ":");
+    let jam_pulang_str = env::var("JAM_PULANG_KERJA")
+        .unwrap_or_else(|_| "16:30".to_string())
+        .replace(".", ":");
+
+    // 2. Parsing text jadi struct Waktu
+    let format = time::format_description::parse("[hour]:[minute]").unwrap();
+    let jam_masuk = time::Time::parse(&jam_masuk_str, &format)
+        .unwrap_or(time::Time::from_hms(7, 30, 0).unwrap());
+    let jam_pulang = time::Time::parse(&jam_pulang_str, &format)
+        .unwrap_or(time::Time::from_hms(16, 30, 0).unwrap());
+
+    // Konversi jam ke satuan Menit agar mudah dihitung matematiknya
+    let target_masuk_mnt = jam_masuk.hour() as i32 * 60 + jam_masuk.minute() as i32;
+    let target_pulang_mnt = jam_pulang.hour() as i32 * 60 + jam_pulang.minute() as i32;
+
+    let mut ket = Vec::new();
+    let offset_wib = time::UtcOffset::from_hms(7, 0, 0).unwrap(); // Zona Waktu WIB
+
+    // LOGIKA PENENTUAN KETERANGAN
+    if row.clock_in.is_none() && row.clock_out.is_none() {
+        let status_text = match row.status_harian.as_deref() {
+            Some("Hadir") => "Lupa Absen Mesin (Direkap Manual: Hadir)".to_string(),
+            Some(s) => format!("Keterangan: {}", s), // Misal: Sakit, Cuti, Ijin
+            None => "Tidak Absen (Alpa)".to_string(),
+        };
+        ket.push(status_text);
+    } else {
+        // Cek Clock In (Keterlambatan)
+        if let Some(in_dt) = row.clock_in {
+            let waktu_wib = in_dt.to_offset(offset_wib).time();
+            let real_masuk_mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
+
+            if real_masuk_mnt > target_masuk_mnt {
+                let telat = real_masuk_mnt - target_masuk_mnt;
+                ket.push(format!("Terlambat {} jam {} menit", telat / 60, telat % 60));
+            }
+        } else {
+            ket.push("Tidak ada Clock In".to_string());
+        }
+
+        // Cek Clock Out (Pulang Cepat & Lembur)
+        if let Some(out_dt) = row.clock_out {
+            let waktu_wib = out_dt.to_offset(offset_wib).time();
+            let real_pulang_mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
+
+            if real_pulang_mnt < target_pulang_mnt {
+                let cepat = target_pulang_mnt - real_pulang_mnt;
+                ket.push(format!(
+                    "Pulang Cepat {} jam {} menit",
+                    cepat / 60,
+                    cepat % 60
+                ));
+            } else {
+                let over = real_pulang_mnt - target_pulang_mnt;
+                if over >= 60 {
+                    // Lembur dihitung jika minimal lewat 1 Jam (60 menit)
+                    ket.push(format!("Lembur {} jam {} menit", over / 60, over % 60));
+                }
+            }
+        } else {
+            ket.push("Tidak ada Clock Out".to_string());
+        }
+    }
+
+    let keterangan_final = if ket.is_empty() {
+        "Hadir Tepat Waktu".to_string()
+    } else {
+        ket.join(", ")
+    };
+
+    LaporanAbsensiResponse {
+        pegawai_id: row.pegawai_id,
+        nama_pegawai: row.nama_pegawai.clone(),
+        tanggal: row.tanggal,
+        clock_in: row.clock_in,
+        clock_out: row.clock_out,
+        keterangan: keterangan_final,
+        foto_absensi_path_in: row.foto_absensi_path_in.clone(),
+        foto_absensi_path_out: row.foto_absensi_path_out.clone(),
+        latitude_in: row.latitude_in,
+        longitude_in: row.longitude_in,
+        latitude_out: row.latitude_out,
+        longitude_out: row.longitude_out,
+    }
+}
+
+// =====================================
+// ENDPOINT HANDLERS
+// =====================================
+
+pub async fn laporan_absensi_harian_handler(
+    State(pool): State<DbPool>,
+    Query(filter): Query<LaporanHarianFilter>,
+) -> Result<Json<Vec<LaporanAbsensiResponse>>, AppError> {
+    let rows = repo::get_laporan_harian_repo(&pool, filter.tanggal).await?;
+
+    // Petakan raw data menjadi respons JSON yang sudah melewati logika '.env'
+    let responses: Vec<LaporanAbsensiResponse> = rows.iter().map(kalkulasi_keterangan).collect();
+    Ok(Json(responses))
+}
+
+pub async fn laporan_absensi_bulanan_handler(
+    State(pool): State<DbPool>,
+    Query(filter): Query<LaporanBulananFilter>,
+) -> Result<Json<Vec<LaporanAbsensiResponse>>, AppError> {
+    let rows = repo::get_laporan_bulanan_repo(&pool, filter.pegawai_id, filter.bulan, filter.tahun)
+        .await?;
+
+    let responses: Vec<LaporanAbsensiResponse> = rows.iter().map(kalkulasi_keterangan).collect();
+    Ok(Json(responses))
 }

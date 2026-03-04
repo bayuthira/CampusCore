@@ -106,3 +106,51 @@ pub struct RekapAbsensiFilter {
 pub struct LogDayFilter {
     pub tanggal: Date,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct LaporanHarianFilter {
+    pub tanggal: Date,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LaporanBulananFilter {
+    pub bulan: i32,
+    pub tahun: i32,
+    pub pegawai_id: Uuid,
+}
+
+// Struct raw untuk menerima data dari Database
+#[derive(Debug, FromRow)]
+pub struct LaporanAbsensiRow {
+    pub pegawai_id: Uuid,
+    pub nama_pegawai: String,
+    pub tanggal: Date,
+    pub clock_in: Option<OffsetDateTime>,
+    pub clock_out: Option<OffsetDateTime>,
+    pub foto_absensi_path_in: Option<String>,
+    pub foto_absensi_path_out: Option<String>,
+    pub latitude_in: Option<rust_decimal::Decimal>,
+    pub longitude_in: Option<rust_decimal::Decimal>,
+    pub latitude_out: Option<rust_decimal::Decimal>,
+    pub longitude_out: Option<rust_decimal::Decimal>,
+    pub status_harian: Option<String>,
+}
+
+// Struct hasil olahan yang akan dikirim ke Frontend
+#[derive(Debug, Serialize)]
+pub struct LaporanAbsensiResponse {
+    pub pegawai_id: Uuid,
+    pub nama_pegawai: String,
+    pub tanggal: Date,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub clock_in: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub clock_out: Option<OffsetDateTime>,
+    pub keterangan: String, // <- Hasil olahan dari ENV (Terlambat, Lembur, dll)
+    pub foto_absensi_path_in: Option<String>,
+    pub foto_absensi_path_out: Option<String>,
+    pub latitude_in: Option<rust_decimal::Decimal>,
+    pub longitude_in: Option<rust_decimal::Decimal>,
+    pub latitude_out: Option<rust_decimal::Decimal>,
+    pub longitude_out: Option<rust_decimal::Decimal>,
+}

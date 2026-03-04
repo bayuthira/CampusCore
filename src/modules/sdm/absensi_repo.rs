@@ -2,7 +2,7 @@
 use super::{
     absensi_model::{
         ClockPayload, LogAbsensi, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload,
-        StatusAbsensi, TipeAbsensi,
+        StatusAbsensi, TipeAbsensi, LaporanAbsensiRow
     },
 };
 use crate::{db::DbPool, errors::AppError};
@@ -177,4 +177,85 @@ pub async fn get_all_rekap_absensi_repo(pool: &DbPool, filter: RekapAbsensiFilte
     if let Some(pegawai_id) = filter.pegawai_id { query.push(" AND pegawai_id = "); query.push_bind(pegawai_id); }
     query.push(" ORDER BY tanggal ASC");
     query.build_query_as().fetch_all(pool).await.map_err(Into::into)
+}
+
+
+pub async fn get_laporan_harian_repo(
+    pool: &DbPool, 
+    tanggal: Date
+) -> Result<Vec<LaporanAbsensiRow>, AppError> {
+    let rows = sqlx::query_as!(
+        LaporanAbsensiRow,
+        r#"
+        SELECT 
+            p.id as "pegawai_id!",
+            p.nama_lengkap as "nama_pegawai!",
+            $1::date as "tanggal!",
+            MIN(la.waktu_absensi) FILTER (WHERE la.tipe_absensi = 'ClockIn') as clock_in,
+            MAX(la.waktu_absensi) FILTER (WHERE la.tipe_absensi = 'ClockOut') as clock_out,
+            (SELECT foto_absensi_path FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockIn' ORDER BY waktu_absensi ASC LIMIT 1) as foto_absensi_path_in,
+            (SELECT foto_absensi_path FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as foto_absensi_path_out,
+            (SELECT latitude FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockIn' ORDER BY waktu_absensi ASC LIMIT 1) as latitude_in,
+            (SELECT longitude FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockIn' ORDER BY waktu_absensi ASC LIMIT 1) as longitude_in,
+            (SELECT latitude FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as latitude_out,
+            (SELECT longitude FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as longitude_out,
+            rah.status::TEXT as status_harian
+        FROM pegawai p
+        LEFT JOIN log_absensi la ON p.id = la.pegawai_id AND DATE(la.waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1
+        LEFT JOIN rekap_absensi_harian rah ON p.id = rah.pegawai_id AND rah.tanggal = $1
+        WHERE p.is_active = true
+        GROUP BY p.id, p.nama_lengkap, rah.status
+        ORDER BY p.nama_lengkap ASC
+        "#,
+        tanggal
+    )
+    .fetch_all(pool)
+    .await?;
+    
+    Ok(rows)
+}
+
+pub async fn get_laporan_bulanan_repo(
+    pool: &DbPool, 
+    pegawai_id: Uuid, 
+    bulan: i32, 
+    tahun: i32
+) -> Result<Vec<LaporanAbsensiRow>, AppError> {
+    let rows = sqlx::query_as!(
+        LaporanAbsensiRow,
+        r#"
+        WITH days AS (
+            SELECT generate_series(
+                make_date($2, $1, 1), 
+                (make_date($2, $1, 1) + interval '1 month' - interval '1 day')::date,
+                '1 day'::interval
+            )::date as tanggal
+        )
+        SELECT 
+            $3::uuid as "pegawai_id!",
+            COALESCE((SELECT nama_lengkap FROM pegawai WHERE id = $3), 'Unknown') as "nama_pegawai!",
+            d.tanggal as "tanggal!",
+            MIN(la.waktu_absensi) FILTER (WHERE la.tipe_absensi = 'ClockIn') as clock_in,
+            MAX(la.waktu_absensi) FILTER (WHERE la.tipe_absensi = 'ClockOut') as clock_out,
+            (SELECT foto_absensi_path FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockIn' ORDER BY waktu_absensi ASC LIMIT 1) as foto_absensi_path_in,
+            (SELECT foto_absensi_path FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as foto_absensi_path_out,
+            (SELECT latitude FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockIn' ORDER BY waktu_absensi ASC LIMIT 1) as latitude_in,
+            (SELECT longitude FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockIn' ORDER BY waktu_absensi ASC LIMIT 1) as longitude_in,
+            (SELECT latitude FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as latitude_out,
+            (SELECT longitude FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as longitude_out,
+            rah.status::TEXT as status_harian
+        FROM days d
+        LEFT JOIN log_absensi la ON la.pegawai_id = $3 AND DATE(la.waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal
+        LEFT JOIN rekap_absensi_harian rah ON rah.pegawai_id = $3 AND rah.tanggal = d.tanggal
+        GROUP BY d.tanggal, rah.status
+        ORDER BY d.tanggal ASC
+        "#,
+        bulan,
+        tahun,
+        pegawai_id
+    )
+    .fetch_all(pool)
+    .await?;
+    
+    Ok(rows)
 }
