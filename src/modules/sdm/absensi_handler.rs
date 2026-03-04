@@ -456,24 +456,45 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
     let target_masuk_mnt = jam_masuk.hour() as i32 * 60 + jam_masuk.minute() as i32;
     let target_pulang_mnt = jam_pulang.hour() as i32 * 60 + jam_pulang.minute() as i32;
 
-    let mut ket = Vec::new();
     let offset_wib = time::UtcOffset::from_hms(7, 0, 0).unwrap();
 
+    let mut actual_in = row.clock_in;
+    let mut actual_out = row.clock_out;
+
+    // RULE KHUSUS 1: Jika HANYA ada clock_in dan waktunya > jam pulang, abaikan (anggap tidak absen masuk)
+    if actual_in.is_some() && actual_out.is_none() {
+        let waktu_wib = actual_in.unwrap().to_offset(offset_wib).time();
+        let mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
+        if mnt > target_pulang_mnt {
+            actual_in = None;
+        }
+    }
+
+    // RULE KHUSUS 2: Jika HANYA ada clock_out dan waktunya < jam masuk, abaikan (anggap tidak absen pulang)
+    if actual_out.is_some() && actual_in.is_none() {
+        let waktu_wib = actual_out.unwrap().to_offset(offset_wib).time();
+        let mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
+        if mnt < target_masuk_mnt {
+            actual_out = None;
+        }
+    }
+
+    let mut ket = Vec::new();
     let mut telat_aktual = 0;
     let mut telat_toleransi = 0;
     let mut lembur_aktual = 0;
 
     // LOGIKA PENENTUAN KETERANGAN
-    if row.clock_in.is_none() && row.clock_out.is_none() {
+    if actual_in.is_none() && actual_out.is_none() {
         let status_text = match row.status_harian.as_deref() {
-            Some("Hadir") => "Lupa Absen Mesin (Direkap Manual: Hadir)".to_string(),
+            Some("Hadir") => "Lupa Absen (Direkap Manual: Hadir)".to_string(),
             Some(s) => format!("Keterangan: {}", s),
             None => "Tidak Absen (Alpa)".to_string(),
         };
         ket.push(status_text);
     } else {
         // Cek Clock In (Keterlambatan)
-        if let Some(in_dt) = row.clock_in {
+        if let Some(in_dt) = actual_in {
             let waktu_wib = in_dt.to_offset(offset_wib).time();
             let real_masuk_mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
 
@@ -486,16 +507,19 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
                 };
 
                 ket.push(format!(
-                    "Terlambat: {} menit (Setelah toleransi: {} menit)",
-                    telat_aktual, telat_toleransi
+                    "Terlambat {} jam {} menit (Dihitung: {} jam {} menit)",
+                    telat_aktual / 60,
+                    telat_aktual % 60,
+                    telat_toleransi / 60,
+                    telat_toleransi % 60
                 ));
             }
         } else {
-            ket.push("Tidak ada Clock In".to_string());
+            ket.push("Tidak Absen Masuk".to_string());
         }
 
         // Cek Clock Out (Pulang Cepat & Lembur)
-        if let Some(out_dt) = row.clock_out {
+        if let Some(out_dt) = actual_out {
             let waktu_wib = out_dt.to_offset(offset_wib).time();
             let real_pulang_mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
 
@@ -509,13 +533,13 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
             } else {
                 let over = real_pulang_mnt - target_pulang_mnt;
                 if over >= 60 {
-                    // Lembur minimal 1 Jam
+                    // Lembur dihitung jika minimal lewat 1 Jam (60 menit)
                     lembur_aktual = over;
                     ket.push(format!("Lembur {} jam {} menit", over / 60, over % 60));
                 }
             }
         } else {
-            ket.push("Tidak ada Clock Out".to_string());
+            ket.push("Tidak Absen Pulang".to_string());
         }
     }
 
@@ -529,8 +553,8 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
         pegawai_id: row.pegawai_id,
         nama_pegawai: row.nama_pegawai.clone(),
         tanggal: row.tanggal,
-        clock_in: row.clock_in,
-        clock_out: row.clock_out,
+        clock_in: actual_in, // Menggunakan waktu yang sudah diverifikasi (Bisa menjadi null karena diabaikan)
+        clock_out: actual_out, // Menggunakan waktu yang sudah diverifikasi (Bisa menjadi null karena diabaikan)
         keterangan: keterangan_final,
         terlambat_menit: telat_aktual,
         terlambat_toleransi_menit: telat_toleransi,
