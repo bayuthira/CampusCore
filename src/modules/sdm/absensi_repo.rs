@@ -1,12 +1,14 @@
 // src/modules/sdm/absensi_repo.rs
-use super::absensi_model::{
-    ClockPayload, LogAbsensi, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload,
-    StatusAbsensi, TipeAbsensi,
+use super::{
+    absensi_model::{
+        ClockPayload, LogAbsensi, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload,
+        StatusAbsensi, TipeAbsensi,
+    },
 };
 use crate::{db::DbPool, errors::AppError};
-use sqlx::Executor;
-use time::{Date, Duration, Month, OffsetDateTime};
+use time::{Date, Duration, Month, OffsetDateTime}; 
 use uuid::Uuid;
+use sqlx::Executor;
 
 /// Fungsi baru: Mengambil nama/path file foto profil dari tabel dokumen_sdm
 pub async fn get_foto_profil_pegawai(pool: &DbPool, pegawai_id: Uuid) -> Result<String, AppError> {
@@ -29,7 +31,6 @@ pub async fn get_foto_profil_pegawai(pool: &DbPool, pegawai_id: Uuid) -> Result<
     }
 }
 
-/// Helper untuk mengambil satu log absensi berdasarkan ID
 async fn get_log_by_id_repo<'a, E>(executor: E, id: Uuid) -> Result<LogAbsensi, AppError>
 where
     E: Executor<'a, Database = sqlx::Postgres>,
@@ -50,7 +51,6 @@ where
     Ok(log)
 }
 
-/// Endpoint Pegawai: Melakukan Clock In
 pub async fn clock_in_repo(
     pool: &DbPool,
     pegawai_id: Uuid,
@@ -143,68 +143,21 @@ pub async fn clock_out_repo(
     get_log_by_id_repo(pool, new_log_id).await
 }
 
-/// Endpoint Admin: Membuat atau mengoreksi rekap absensi harian
-pub async fn create_rekap_manual_repo(
-    pool: &DbPool,
-    payload: RekapManualPayload,
-) -> Result<RekapAbsensiHarian, AppError> {
+pub async fn create_rekap_manual_repo(pool: &DbPool, payload: RekapManualPayload) -> Result<RekapAbsensiHarian, AppError> {
     let status_str = payload.status.as_str();
-
-    let rekap = sqlx::query_as(
-        r#"
-        INSERT INTO rekap_absensi_harian (pegawai_id, tanggal, status, keterangan)
-        VALUES ($1, $2, $3::"StatusAbsensi", $4)
-        ON CONFLICT (pegawai_id, tanggal) DO UPDATE SET
-            status = EXCLUDED.status,
-            keterangan = EXCLUDED.keterangan
-        RETURNING id, pegawai_id, tanggal, status as "status: _", keterangan
-        "#,
-    )
-    .bind(payload.pegawai_id)
-    .bind(payload.tanggal)
-    .bind(status_str)
-    .bind(payload.keterangan)
-    .fetch_one(pool)
-    .await?;
-
+    let rekap = sqlx::query_as(r#"INSERT INTO rekap_absensi_harian (pegawai_id, tanggal, status, keterangan) VALUES ($1, $2, $3::"StatusAbsensi", $4) ON CONFLICT (pegawai_id, tanggal) DO UPDATE SET status = EXCLUDED.status, keterangan = EXCLUDED.keterangan RETURNING id, pegawai_id, tanggal, status, keterangan"#).bind(payload.pegawai_id).bind(payload.tanggal).bind(status_str).bind(payload.keterangan).fetch_one(pool).await?;
     Ok(rekap)
 }
 
-/// Endpoint Pegawai: Melihat rekap absensi bulanan milik sendiri
-pub async fn get_my_rekap_absensi_repo(
-    pool: &DbPool,
-    pegawai_id: Uuid,
-    filter: RekapAbsensiFilter,
-) -> Result<Vec<RekapAbsensiHarian>, AppError> {
-    // --- PERBAIKAN LOGIKA TANGGAL ---
-    let bulan_u8: u8 = filter
-        .bulan
-        .try_into()
-        .map_err(|_| AppError::Forbidden("Bulan tidak valid".to_string()))?;
-    let bulan_enum = Month::try_from(bulan_u8)?; // Konversi u8 ke enum Month
-
+pub async fn get_my_rekap_absensi_repo(pool: &DbPool, pegawai_id: Uuid, filter: RekapAbsensiFilter) -> Result<Vec<RekapAbsensiHarian>, AppError> {
+    let bulan_u8: u8 = filter.bulan.try_into().map_err(|_| AppError::Forbidden("Bulan tidak valid".to_string()))?;
+    let bulan_enum = Month::try_from(bulan_u8)?;
     let start_date = Date::from_calendar_date(filter.tahun.into(), bulan_enum, 1)?;
     let end_date = (start_date + Duration::days(32)).replace_day(1)? - Duration::days(1);
-    // --- AKHIR PERBAIKAN ---
-
-    let list = sqlx::query_as!(
-        RekapAbsensiHarian,
-        r#"
-        SELECT id, pegawai_id, tanggal, status as "status: _", keterangan
-        FROM rekap_absensi_harian
-        WHERE pegawai_id = $1 AND tanggal BETWEEN $2 AND $3
-        ORDER BY tanggal ASC
-        "#,
-        pegawai_id,
-        start_date,
-        end_date
-    )
-    .fetch_all(pool)
-    .await?;
+    let list = sqlx::query_as!(RekapAbsensiHarian, r#"SELECT id, pegawai_id, tanggal, status as "status: _", keterangan FROM rekap_absensi_harian WHERE pegawai_id = $1 AND tanggal BETWEEN $2 AND $3 ORDER BY tanggal ASC"#, pegawai_id, start_date, end_date).fetch_all(pool).await?;
     Ok(list)
 }
 
-/// Endpoint Pegawai: Melihat log clock-in/out untuk satu hari
 pub async fn get_my_logs_for_day_repo(pool: &DbPool, pegawai_id: Uuid, tanggal: Date) -> Result<Vec<LogAbsensi>, AppError> {
     let start_of_day = tanggal.midnight().assume_utc();
     let end_of_day = (tanggal + Duration::days(1)).midnight().assume_utc();
@@ -212,42 +165,16 @@ pub async fn get_my_logs_for_day_repo(pool: &DbPool, pegawai_id: Uuid, tanggal: 
     Ok(list)
 }
 
-/// Endpoint Admin: Melihat rekap absensi bulanan semua pegawai
-pub async fn get_all_rekap_absensi_repo(
-    pool: &DbPool,
-    filter: RekapAbsensiFilter,
-) -> Result<Vec<RekapAbsensiHarian>, AppError> {
-    // --- PERBAIKAN LOGIKA TANGGAL ---
-    let bulan_u8: u8 = filter
-        .bulan
-        .try_into()
-        .map_err(|_| AppError::Forbidden("Bulan tidak valid".to_string()))?;
-    let bulan_enum = Month::try_from(bulan_u8)?; // Konversi u8 ke enum Month
-
+pub async fn get_all_rekap_absensi_repo(pool: &DbPool, filter: RekapAbsensiFilter) -> Result<Vec<RekapAbsensiHarian>, AppError> {
+    let bulan_u8: u8 = filter.bulan.try_into().map_err(|_| AppError::Forbidden("Bulan tidak valid".to_string()))?;
+    let bulan_enum = Month::try_from(bulan_u8)?;
     let start_date = Date::from_calendar_date(filter.tahun.into(), bulan_enum, 1)?;
     let end_date = (start_date + Duration::days(32)).replace_day(1)? - Duration::days(1);
-    // --- AKHIR PERBAIKAN ---
-
-    let mut query = sqlx::QueryBuilder::new(
-        r#"
-        SELECT id, pegawai_id, tanggal, status as "status: _", keterangan
-        FROM rekap_absensi_harian
-        WHERE tanggal BETWEEN "#,
-    );
+    let mut query = sqlx::QueryBuilder::new(r#"SELECT id, pegawai_id, tanggal, status, keterangan FROM rekap_absensi_harian WHERE tanggal BETWEEN "#);
     query.push_bind(start_date);
     query.push(" AND ");
     query.push_bind(end_date);
-
-    if let Some(pegawai_id) = filter.pegawai_id {
-        query.push(" AND pegawai_id = ");
-        query.push_bind(pegawai_id);
-    }
-
+    if let Some(pegawai_id) = filter.pegawai_id { query.push(" AND pegawai_id = "); query.push_bind(pegawai_id); }
     query.push(" ORDER BY tanggal ASC");
-
-    query
-        .build_query_as()
-        .fetch_all(pool)
-        .await
-        .map_err(Into::into)
+    query.build_query_as().fetch_all(pool).await.map_err(Into::into)
 }
