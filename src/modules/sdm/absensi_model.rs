@@ -136,7 +136,7 @@ pub struct LaporanAbsensiRow {
     pub status_harian: Option<String>,
 }
 
-// Struct hasil olahan yang akan dikirim ke Frontend
+// Struct hasil olahan Harian yang akan dikirim ke Frontend
 #[derive(Debug, Serialize)]
 pub struct LaporanAbsensiResponse {
     pub pegawai_id: Uuid,
@@ -146,11 +146,27 @@ pub struct LaporanAbsensiResponse {
     pub clock_in: Option<OffsetDateTime>,
     #[serde(with = "time::serde::rfc3339::option")]
     pub clock_out: Option<OffsetDateTime>,
-    pub keterangan: String, // <- Hasil olahan dari ENV (Terlambat, Lembur, dll)
+    pub keterangan: String,
+    pub terlambat_menit: i32,           // <-- Data angka mentah
+    pub terlambat_toleransi_menit: i32, // <-- Data angka mentah
+    pub lembur_menit: i32,              // <-- Data angka mentah
     pub foto_absensi_path_in: Option<String>,
     pub foto_absensi_path_out: Option<String>,
     pub latitude_in: Option<rust_decimal::Decimal>,
     pub longitude_in: Option<rust_decimal::Decimal>,
     pub latitude_out: Option<rust_decimal::Decimal>,
     pub longitude_out: Option<rust_decimal::Decimal>,
+}
+
+// Struct Khusus Respons Laporan Bulanan (Dengan Total)
+#[derive(Debug, Serialize)]
+pub struct LaporanBulananResponse {
+    pub pegawai_id: Uuid,
+    pub nama_pegawai: String,
+    pub bulan: i32,
+    pub tahun: i32,
+    pub total_terlambat_menit: i32, // <-- Total Akumulasi Bulanan
+    pub total_terlambat_toleransi_menit: i32, // <-- Total Akumulasi Bulanan
+    pub total_lembur_menit: i32,    // <-- Total Akumulasi Bulanan
+    pub rekap_harian: Vec<LaporanAbsensiResponse>,
 }

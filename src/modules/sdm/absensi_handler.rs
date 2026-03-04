@@ -2,8 +2,8 @@
 use super::{
     absensi_model::{
         ClockPayload, LaporanAbsensiResponse, LaporanAbsensiRow, LaporanBulananFilter,
-        LaporanHarianFilter, LogAbsensi, LogDayFilter, RekapAbsensiFilter, RekapAbsensiHarian,
-        RekapManualPayload, TipeAbsensi,
+        LaporanBulananResponse, LaporanHarianFilter, LogAbsensi, LogDayFilter, RekapAbsensiFilter,
+        RekapAbsensiHarian, RekapManualPayload, TipeAbsensi,
     },
     absensi_repo as repo, repo as pegawai_repo,
 };
@@ -432,35 +432,42 @@ pub async fn get_all_rekap_absensi_handler(
     Ok(Json(list))
 }
 
-/// HELPER FUNGSI: Mengonversi DB Row menjadi Response API + Menghitung Keterangan
+/// HELPER FUNGSI: Mengonversi DB Row menjadi Response API + Menghitung Keterangan & Menit
 fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
-    // 1. Ambil env (bisa support format 07.30 maupun 07:30)
+    // 1. Ambil env
     let jam_masuk_str = env::var("JAM_MASUK_KERJA")
         .unwrap_or_else(|_| "07:30".to_string())
         .replace(".", ":");
     let jam_pulang_str = env::var("JAM_PULANG_KERJA")
         .unwrap_or_else(|_| "16:30".to_string())
         .replace(".", ":");
+    let toleransi_str =
+        env::var("TOLERANSI_KETERLAMBATAN_PERHARI").unwrap_or_else(|_| "30".to_string());
 
-    // 2. Parsing text jadi struct Waktu
+    // 2. Parsing text jadi struct Waktu & Angka
     let format = time::format_description::parse("[hour]:[minute]").unwrap();
     let jam_masuk = time::Time::parse(&jam_masuk_str, &format)
         .unwrap_or(time::Time::from_hms(7, 30, 0).unwrap());
     let jam_pulang = time::Time::parse(&jam_pulang_str, &format)
         .unwrap_or(time::Time::from_hms(16, 30, 0).unwrap());
+    let toleransi_mnt: i32 = toleransi_str.parse().unwrap_or(30);
 
-    // Konversi jam ke satuan Menit agar mudah dihitung matematiknya
+    // Konversi jam ke satuan Menit
     let target_masuk_mnt = jam_masuk.hour() as i32 * 60 + jam_masuk.minute() as i32;
     let target_pulang_mnt = jam_pulang.hour() as i32 * 60 + jam_pulang.minute() as i32;
 
     let mut ket = Vec::new();
-    let offset_wib = time::UtcOffset::from_hms(7, 0, 0).unwrap(); // Zona Waktu WIB
+    let offset_wib = time::UtcOffset::from_hms(7, 0, 0).unwrap();
+
+    let mut telat_aktual = 0;
+    let mut telat_toleransi = 0;
+    let mut lembur_aktual = 0;
 
     // LOGIKA PENENTUAN KETERANGAN
     if row.clock_in.is_none() && row.clock_out.is_none() {
         let status_text = match row.status_harian.as_deref() {
             Some("Hadir") => "Lupa Absen Mesin (Direkap Manual: Hadir)".to_string(),
-            Some(s) => format!("Keterangan: {}", s), // Misal: Sakit, Cuti, Ijin
+            Some(s) => format!("Keterangan: {}", s),
             None => "Tidak Absen (Alpa)".to_string(),
         };
         ket.push(status_text);
@@ -471,8 +478,17 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
             let real_masuk_mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
 
             if real_masuk_mnt > target_masuk_mnt {
-                let telat = real_masuk_mnt - target_masuk_mnt;
-                ket.push(format!("Terlambat {} jam {} menit", telat / 60, telat % 60));
+                telat_aktual = real_masuk_mnt - target_masuk_mnt;
+                telat_toleransi = if telat_aktual > toleransi_mnt {
+                    telat_aktual - toleransi_mnt
+                } else {
+                    0
+                };
+
+                ket.push(format!(
+                    "Terlambat: {} menit (Setelah toleransi: {} menit)",
+                    telat_aktual, telat_toleransi
+                ));
             }
         } else {
             ket.push("Tidak ada Clock In".to_string());
@@ -493,7 +509,8 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
             } else {
                 let over = real_pulang_mnt - target_pulang_mnt;
                 if over >= 60 {
-                    // Lembur dihitung jika minimal lewat 1 Jam (60 menit)
+                    // Lembur minimal 1 Jam
+                    lembur_aktual = over;
                     ket.push(format!("Lembur {} jam {} menit", over / 60, over % 60));
                 }
             }
@@ -515,6 +532,9 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
         clock_in: row.clock_in,
         clock_out: row.clock_out,
         keterangan: keterangan_final,
+        terlambat_menit: telat_aktual,
+        terlambat_toleransi_menit: telat_toleransi,
+        lembur_menit: lembur_aktual,
         foto_absensi_path_in: row.foto_absensi_path_in.clone(),
         foto_absensi_path_out: row.foto_absensi_path_out.clone(),
         latitude_in: row.latitude_in,
@@ -528,13 +548,14 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
 // ENDPOINT HANDLERS
 // =====================================
 
+// ... [Handler clock_in_handler Dll Tetap Sama] ...
+
 pub async fn laporan_absensi_harian_handler(
     State(pool): State<DbPool>,
     Query(filter): Query<LaporanHarianFilter>,
 ) -> Result<Json<Vec<LaporanAbsensiResponse>>, AppError> {
     let rows = repo::get_laporan_harian_repo(&pool, filter.tanggal).await?;
 
-    // Petakan raw data menjadi respons JSON yang sudah melewati logika '.env'
     let responses: Vec<LaporanAbsensiResponse> = rows.iter().map(kalkulasi_keterangan).collect();
     Ok(Json(responses))
 }
@@ -542,10 +563,44 @@ pub async fn laporan_absensi_harian_handler(
 pub async fn laporan_absensi_bulanan_handler(
     State(pool): State<DbPool>,
     Query(filter): Query<LaporanBulananFilter>,
-) -> Result<Json<Vec<LaporanAbsensiResponse>>, AppError> {
+) -> Result<Json<LaporanBulananResponse>, AppError> {
+    // <-- Perhatikan perubahan return tipe di sini
     let rows = repo::get_laporan_bulanan_repo(&pool, filter.pegawai_id, filter.bulan, filter.tahun)
         .await?;
 
-    let responses: Vec<LaporanAbsensiResponse> = rows.iter().map(kalkulasi_keterangan).collect();
-    Ok(Json(responses))
+    let mut total_terlambat = 0;
+    let mut total_terlambat_toleransi = 0;
+    let mut total_lembur = 0;
+    let mut nama_pegawai = "Unknown".to_string();
+
+    let rekap_harian: Vec<LaporanAbsensiResponse> = rows
+        .iter()
+        .map(|row| {
+            if nama_pegawai == "Unknown" {
+                nama_pegawai = row.nama_pegawai.clone();
+            }
+
+            let response = kalkulasi_keterangan(row);
+
+            // Akumulasi total
+            total_terlambat += response.terlambat_menit;
+            total_terlambat_toleransi += response.terlambat_toleransi_menit;
+            total_lembur += response.lembur_menit;
+
+            response
+        })
+        .collect();
+
+    let result = LaporanBulananResponse {
+        pegawai_id: filter.pegawai_id,
+        nama_pegawai,
+        bulan: filter.bulan,
+        tahun: filter.tahun,
+        total_terlambat_menit: total_terlambat,
+        total_terlambat_toleransi_menit: total_terlambat_toleransi,
+        total_lembur_menit: total_lembur,
+        rekap_harian,
+    };
+
+    Ok(Json(result))
 }
