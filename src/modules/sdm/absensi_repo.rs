@@ -261,3 +261,29 @@ pub async fn get_laporan_bulanan_repo(
     
     Ok(rows)
 }
+
+
+/// Fungsi mengecek apakah pegawai memiliki ijin lokasi (WFH/Dinas Luar) pada tanggal tertentu
+pub async fn cek_ijin_lokasi_aktif(
+    pool: &DbPool,
+    pegawai_id: Uuid,
+    tanggal: time::Date,
+) -> Result<Option<String>, AppError> {
+    let kategori = sqlx::query_scalar!(
+        r#"
+        SELECT kategori::TEXT 
+        FROM pengajuan_ijin 
+        WHERE pegawai_id = $1 AND status = 'Disetujui' 
+          AND $2 BETWEEN tanggal_mulai AND tanggal_selesai 
+          AND kategori IN ('WFH', 'Dinas Luar') 
+        LIMIT 1
+        "#,
+        pegawai_id,
+        tanggal
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    // GUNAKAN .flatten() UNTUK MELEBUR Option<Option<String>> MENJADI Option<String>
+    Ok(kategori.flatten())
+}

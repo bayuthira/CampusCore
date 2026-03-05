@@ -1,9 +1,9 @@
 // src/modules/sdm/absensi_handler.rs
 use super::{
     absensi_model::{
-        ClockPayload, LaporanAbsensiResponse, LaporanAbsensiRow, LaporanBulananFilter,
-        LaporanBulananResponse, LaporanHarianFilter, LogAbsensi, LogDayFilter, RekapAbsensiFilter,
-        RekapAbsensiHarian, RekapManualPayload, TipeAbsensi,
+        ClockPayload, ClockResponse, LaporanAbsensiResponse, LaporanAbsensiRow,
+        LaporanBulananFilter, LaporanBulananResponse, LaporanHarianFilter, LogAbsensi,
+        LogDayFilter, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload, TipeAbsensi,
     },
     absensi_repo as repo, repo as pegawai_repo,
 };
@@ -321,7 +321,51 @@ async fn proses_absensi(
     mut payload: ClockPayload,
     foto_bytes: Vec<u8>,
     tipe: TipeAbsensi,
-) -> Result<LogAbsensi, AppError> {
+) -> Result<(LogAbsensi, String), AppError> {
+    // <-- Perhatikan perubahan return tipe menjadi tuple
+
+    // 1. --- GEOFENCE HARD BLOCK LOGIC ---
+    let today = (time::OffsetDateTime::now_utc() + time::Duration::hours(7)).date(); // Waktu WIB saat ini
+    let ijin_lokasi = repo::cek_ijin_lokasi_aktif(pool, pegawai_id, today).await?;
+
+    let kampus_lat: f64 = env::var("KAMPUS_LATITUDE")
+        .unwrap_or_else(|_| "-7.3389012".to_string())
+        .parse()
+        .unwrap_or(-7.3389012);
+    let kampus_lon: f64 = env::var("KAMPUS_LONGITUDE")
+        .unwrap_or_else(|_| "108.2096703".to_string())
+        .parse()
+        .unwrap_or(108.2096703);
+    let kampus_radius: f64 = env::var("KAMPUS_RADIUS_METER")
+        .unwrap_or_else(|_| "100".to_string())
+        .parse()
+        .unwrap_or(100.0);
+
+    let lat_user = payload.latitude.to_string().parse::<f64>().unwrap_or(0.0);
+    let lon_user = payload.longitude.to_string().parse::<f64>().unwrap_or(0.0);
+
+    // Hitung Jarak
+    let dist = haversine_distance(kampus_lat, kampus_lon, lat_user, lon_user);
+    let mut pesan_notifikasi = "Absensi berhasil dicatat.".to_string();
+
+    // Validasi Block
+    if dist > kampus_radius {
+        if let Some(jenis_ijin) = ijin_lokasi {
+            // BYPASS ALLOWED: Punya ijin, ubah pesan notifikasi
+            pesan_notifikasi = format!(
+                "Absen berhasil. Anda diizinkan absen di luar kampus karena berstatus {}.",
+                jenis_ijin
+            );
+        } else {
+            // HARD BLOCK: Tidak punya ijin
+            return Err(AppError::Forbidden(format!(
+                "Absensi ditolak. Anda berada {:.0} meter dari kampus. Anda harus berada di dalam radius {} meter atau memiliki Ijin Dinas/WFH.",
+                dist, kampus_radius
+            )));
+        }
+    }
+
+    // 2. --- VALIDASI WAJAH (AI) ---
     let path_file_db = repo::get_foto_profil_pegawai(pool, pegawai_id).await?;
     let foto_ref_path = format!("./{}", path_file_db);
     let ref_bytes = fs::read(&foto_ref_path).await?;
@@ -335,6 +379,7 @@ async fn proses_absensi(
         )));
     }
 
+    // 3. --- SIMPAN DATA ---
     let ext = "jpg";
     let nama_file_selfie = format!("{}.{}", Uuid::new_v4(), ext);
     let folder_simpan = format!("./uploads/absensi/{}", pegawai_id);
@@ -348,41 +393,53 @@ async fn proses_absensi(
     payload.face_confidence_score = Some(confidence);
     payload.is_face_verified = Some(is_verified);
 
-    if tipe == TipeAbsensi::ClockIn {
-        repo::clock_in_repo(pool, pegawai_id, payload).await
+    let log = if tipe == TipeAbsensi::ClockIn {
+        repo::clock_in_repo(pool, pegawai_id, payload).await?
     } else {
-        repo::clock_out_repo(pool, pegawai_id, payload).await
-    }
+        repo::clock_out_repo(pool, pegawai_id, payload).await?
+    };
+
+    Ok((log, pesan_notifikasi))
 }
 
-// ==========================================
-// HANDLERS
-// ==========================================
+// =====================================
+// ENDPOINT HANDLERS
+// =====================================
 
 pub async fn clock_in_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
     multipart: Multipart,
-) -> Result<(StatusCode, Json<LogAbsensi>), AppError> {
+) -> Result<(StatusCode, Json<ClockResponse>), AppError> {
+    // <-- Return type diubah
     let user_id = claims.sub;
     let pegawai_id = pegawai_repo::get_pegawai_id_from_user_id_repo(&pool, user_id).await?;
 
     let (payload, foto_bytes) = parse_clock_multipart(multipart).await?;
-    let log = proses_absensi(&pool, pegawai_id, payload, foto_bytes, TipeAbsensi::ClockIn).await?;
+    let (log, pesan_notifikasi) =
+        proses_absensi(&pool, pegawai_id, payload, foto_bytes, TipeAbsensi::ClockIn).await?;
 
-    Ok((StatusCode::CREATED, Json(log)))
+    // Bungkus ke dalam struct ClockResponse
+    Ok((
+        StatusCode::CREATED,
+        Json(ClockResponse {
+            pesan_notifikasi,
+            data: log,
+        }),
+    ))
 }
 
 pub async fn clock_out_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
     multipart: Multipart,
-) -> Result<(StatusCode, Json<LogAbsensi>), AppError> {
+) -> Result<(StatusCode, Json<ClockResponse>), AppError> {
+    // <-- Return type diubah
     let user_id = claims.sub;
     let pegawai_id = pegawai_repo::get_pegawai_id_from_user_id_repo(&pool, user_id).await?;
 
     let (payload, foto_bytes) = parse_clock_multipart(multipart).await?;
-    let log = proses_absensi(
+    let (log, pesan_notifikasi) = proses_absensi(
         &pool,
         pegawai_id,
         payload,
@@ -391,7 +448,14 @@ pub async fn clock_out_handler(
     )
     .await?;
 
-    Ok((StatusCode::CREATED, Json(log)))
+    // Bungkus ke dalam struct ClockResponse
+    Ok((
+        StatusCode::CREATED,
+        Json(ClockResponse {
+            pesan_notifikasi,
+            data: log,
+        }),
+    ))
 }
 
 pub async fn create_rekap_manual_handler(

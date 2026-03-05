@@ -171,3 +171,9 @@ pub struct LaporanBulananResponse {
     pub total_lembur_menit: i32,    // <-- Total Akumulasi Bulanan
     pub rekap_harian: Vec<LaporanAbsensiResponse>,
 }
+
+#[derive(Debug, Serialize)]
+pub struct ClockResponse {
+    pub pesan_notifikasi: String,
+    pub data: LogAbsensi,
+}
