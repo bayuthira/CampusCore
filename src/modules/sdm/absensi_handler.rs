@@ -432,9 +432,20 @@ pub async fn get_all_rekap_absensi_handler(
     Ok(Json(list))
 }
 
-/// HELPER FUNGSI: Mengonversi DB Row menjadi Response API + Menghitung Keterangan & Menit
+/// HELPER FUNGSI: Menghitung jarak antara dua koordinat dalam satuan METER (Haversine Formula)
+fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    let r_earth = 6371000.0; // Radius bumi dalam meter
+    let d_lat = (lat2 - lat1).to_radians();
+    let d_lon = (lon2 - lon1).to_radians();
+    let a = (d_lat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (d_lon / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+    r_earth * c
+}
+
+/// HELPER FUNGSI: Mengonversi DB Row menjadi Response API + Menghitung Keterangan, Menit, & Lokasi
 fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
-    // 1. Ambil env
+    // 1. Ambil env Waktu
     let jam_masuk_str = env::var("JAM_MASUK_KERJA")
         .unwrap_or_else(|_| "07:30".to_string())
         .replace(".", ":");
@@ -444,7 +455,21 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
     let toleransi_str =
         env::var("TOLERANSI_KETERLAMBATAN_PERHARI").unwrap_or_else(|_| "30".to_string());
 
-    // 2. Parsing text jadi struct Waktu & Angka
+    // 2. Ambil env Lokasi Kampus
+    let kampus_lat: f64 = env::var("KAMPUS_LATITUDE")
+        .unwrap_or_else(|_| "-7.3389012".to_string())
+        .parse()
+        .unwrap_or(-7.3389012);
+    let kampus_lon: f64 = env::var("KAMPUS_LONGITUDE")
+        .unwrap_or_else(|_| "108.2096703".to_string())
+        .parse()
+        .unwrap_or(108.2096703);
+    let kampus_radius: f64 = env::var("KAMPUS_RADIUS_METER")
+        .unwrap_or_else(|_| "100".to_string())
+        .parse()
+        .unwrap_or(100.0);
+
+    // 3. Parsing text jadi struct Waktu & Angka
     let format = time::format_description::parse("[hour]:[minute]").unwrap();
     let jam_masuk = time::Time::parse(&jam_masuk_str, &format)
         .unwrap_or(time::Time::from_hms(7, 30, 0).unwrap());
@@ -461,7 +486,7 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
     let mut actual_in = row.clock_in;
     let mut actual_out = row.clock_out;
 
-    // RULE KHUSUS 1: Jika HANYA ada clock_in dan waktunya > jam pulang, abaikan (anggap tidak absen masuk)
+    // RULE KHUSUS 1 & 2 (Abaikan absen anomali)
     if actual_in.is_some() && actual_out.is_none() {
         let waktu_wib = actual_in.unwrap().to_offset(offset_wib).time();
         let mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
@@ -469,8 +494,6 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
             actual_in = None;
         }
     }
-
-    // RULE KHUSUS 2: Jika HANYA ada clock_out dan waktunya < jam masuk, abaikan (anggap tidak absen pulang)
     if actual_out.is_some() && actual_in.is_none() {
         let waktu_wib = actual_out.unwrap().to_offset(offset_wib).time();
         let mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
@@ -484,16 +507,27 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
     let mut telat_toleransi = 0;
     let mut lembur_aktual = 0;
 
+    // --- CEK STATUS IJIN LOKASI (WFH / Dinas Luar) ---
+    let is_remote_allowed = row.ijin_lokasi.is_some();
+    let label_remote = row.ijin_lokasi.as_deref().unwrap_or("");
+
     // LOGIKA PENENTUAN KETERANGAN
     if actual_in.is_none() && actual_out.is_none() {
         let status_text = match row.status_harian.as_deref() {
             Some("Hadir") => "Lupa Absen (Direkap Manual: Hadir)".to_string(),
             Some(s) => format!("Keterangan: {}", s),
-            None => "Tidak Absen (Alpa)".to_string(),
+            None => {
+                // Jika tidak absen mesin, tapi punya ijin WFH/Dinas luar hari itu
+                if is_remote_allowed {
+                    format!("Lupa Absen ({})", label_remote)
+                } else {
+                    "Tidak Absen (Alpa)".to_string()
+                }
+            }
         };
         ket.push(status_text);
     } else {
-        // Cek Clock In (Keterlambatan)
+        // --- Cek Clock In ---
         if let Some(in_dt) = actual_in {
             let waktu_wib = in_dt.to_offset(offset_wib).time();
             let real_masuk_mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
@@ -505,7 +539,6 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
                 } else {
                     0
                 };
-
                 ket.push(format!(
                     "Terlambat {} jam {} menit (Dihitung: {} jam {} menit)",
                     telat_aktual / 60,
@@ -514,11 +547,24 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
                     telat_toleransi % 60
                 ));
             }
+
+            // Cek Lokasi Clock In
+            if let (Some(lat_dec), Some(lon_dec)) = (row.latitude_in, row.longitude_in) {
+                if is_remote_allowed {
+                    ket.push(format!("Clock In ({})", label_remote)); // Bypass Jarak!
+                } else {
+                    let lat_f = lat_dec.to_string().parse::<f64>().unwrap_or(0.0);
+                    let lon_f = lon_dec.to_string().parse::<f64>().unwrap_or(0.0);
+                    if haversine_distance(kampus_lat, kampus_lon, lat_f, lon_f) > kampus_radius {
+                        ket.push("Clock In diluar kampus".to_string());
+                    }
+                }
+            }
         } else {
             ket.push("Tidak Absen Masuk".to_string());
         }
 
-        // Cek Clock Out (Pulang Cepat & Lembur)
+        // --- Cek Clock Out ---
         if let Some(out_dt) = actual_out {
             let waktu_wib = out_dt.to_offset(offset_wib).time();
             let real_pulang_mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
@@ -533,9 +579,21 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
             } else {
                 let over = real_pulang_mnt - target_pulang_mnt;
                 if over >= 60 {
-                    // Lembur dihitung jika minimal lewat 1 Jam (60 menit)
                     lembur_aktual = over;
                     ket.push(format!("Lembur {} jam {} menit", over / 60, over % 60));
+                }
+            }
+
+            // Cek Lokasi Clock Out
+            if let (Some(lat_dec), Some(lon_dec)) = (row.latitude_out, row.longitude_out) {
+                if is_remote_allowed {
+                    ket.push(format!("Clock Out ({})", label_remote)); // Bypass Jarak!
+                } else {
+                    let lat_f = lat_dec.to_string().parse::<f64>().unwrap_or(0.0);
+                    let lon_f = lon_dec.to_string().parse::<f64>().unwrap_or(0.0);
+                    if haversine_distance(kampus_lat, kampus_lon, lat_f, lon_f) > kampus_radius {
+                        ket.push("Clock Out diluar kampus".to_string());
+                    }
                 }
             }
         } else {
@@ -544,7 +602,11 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
     }
 
     let keterangan_final = if ket.is_empty() {
-        "Hadir Tepat Waktu".to_string()
+        if is_remote_allowed {
+            format!("Hadir Tepat Waktu ({})", label_remote)
+        } else {
+            "Hadir Tepat Waktu".to_string()
+        }
     } else {
         ket.join(", ")
     };
@@ -553,8 +615,8 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
         pegawai_id: row.pegawai_id,
         nama_pegawai: row.nama_pegawai.clone(),
         tanggal: row.tanggal,
-        clock_in: actual_in, // Menggunakan waktu yang sudah diverifikasi (Bisa menjadi null karena diabaikan)
-        clock_out: actual_out, // Menggunakan waktu yang sudah diverifikasi (Bisa menjadi null karena diabaikan)
+        clock_in: actual_in,
+        clock_out: actual_out,
         keterangan: keterangan_final,
         terlambat_menit: telat_aktual,
         terlambat_toleransi_menit: telat_toleransi,
@@ -588,7 +650,6 @@ pub async fn laporan_absensi_bulanan_handler(
     State(pool): State<DbPool>,
     Query(filter): Query<LaporanBulananFilter>,
 ) -> Result<Json<LaporanBulananResponse>, AppError> {
-    // <-- Perhatikan perubahan return tipe di sini
     let rows = repo::get_laporan_bulanan_repo(&pool, filter.pegawai_id, filter.bulan, filter.tahun)
         .await?;
 

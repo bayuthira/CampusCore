@@ -13,6 +13,10 @@ pub enum KategoriIjin {
     #[serde(rename = "Urusan Keluarga")]
     #[sqlx(rename = "Urusan Keluarga")]
     UrusanKeluarga,
+    #[serde(rename = "Dinas Luar")]
+    #[sqlx(rename = "Dinas Luar")]
+    DinasLuar,
+    WFH,
     Lainnya,
 }
 
@@ -30,6 +34,8 @@ impl KategoriIjin {
         match self {
             Self::Sakit => "Sakit",
             Self::UrusanKeluarga => "Urusan Keluarga",
+            Self::DinasLuar => "Dinas Luar",
+            Self::WFH => "WFH",
             Self::Lainnya => "Lainnya",
         }
     }

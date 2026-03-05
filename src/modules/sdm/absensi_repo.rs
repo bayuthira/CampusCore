@@ -199,7 +199,8 @@ pub async fn get_laporan_harian_repo(
             (SELECT longitude FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockIn' ORDER BY waktu_absensi ASC LIMIT 1) as longitude_in,
             (SELECT latitude FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as latitude_out,
             (SELECT longitude FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as longitude_out,
-            rah.status::TEXT as status_harian
+            rah.status::TEXT as status_harian,
+            (SELECT kategori::TEXT FROM pengajuan_ijin WHERE pegawai_id = p.id AND status = 'Disetujui' AND $1 BETWEEN tanggal_mulai AND tanggal_selesai AND kategori IN ('WFH', 'Dinas Luar') LIMIT 1) as ijin_lokasi
         FROM pegawai p
         LEFT JOIN log_absensi la ON p.id = la.pegawai_id AND DATE(la.waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1
         LEFT JOIN rekap_absensi_harian rah ON p.id = rah.pegawai_id AND rah.tanggal = $1
@@ -243,7 +244,8 @@ pub async fn get_laporan_bulanan_repo(
             (SELECT longitude FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockIn' ORDER BY waktu_absensi ASC LIMIT 1) as longitude_in,
             (SELECT latitude FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as latitude_out,
             (SELECT longitude FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as longitude_out,
-            rah.status::TEXT as status_harian
+            rah.status::TEXT as status_harian,
+            (SELECT kategori::TEXT FROM pengajuan_ijin WHERE pegawai_id = $3 AND status = 'Disetujui' AND d.tanggal BETWEEN tanggal_mulai AND tanggal_selesai AND kategori IN ('WFH', 'Dinas Luar') LIMIT 1) as ijin_lokasi
         FROM days d
         LEFT JOIN log_absensi la ON la.pegawai_id = $3 AND DATE(la.waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal
         LEFT JOIN rekap_absensi_harian rah ON rah.pegawai_id = $3 AND rah.tanggal = d.tanggal

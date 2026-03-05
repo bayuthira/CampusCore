@@ -134,6 +134,7 @@ pub struct LaporanAbsensiRow {
     pub latitude_out: Option<rust_decimal::Decimal>,
     pub longitude_out: Option<rust_decimal::Decimal>,
     pub status_harian: Option<String>,
+    pub ijin_lokasi: Option<String>,
 }
 
 // Struct hasil olahan Harian yang akan dikirim ke Frontend
