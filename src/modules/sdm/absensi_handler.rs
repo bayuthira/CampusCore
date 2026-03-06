@@ -306,13 +306,13 @@ async fn proses_absensi(
     let ijin_lokasi = repo::cek_ijin_lokasi_aktif(pool, pegawai_id, today).await?;
 
     let kampus_lat: f64 = env::var("KAMPUS_LATITUDE")
-        .unwrap_or_else(|_| "-7.3389012".to_string())
+        .unwrap_or_else(|_| "-7.336465677499996".to_string())
         .parse()
-        .unwrap_or(-7.3389012);
+        .unwrap_or(-7.336465677499996);
     let kampus_lon: f64 = env::var("KAMPUS_LONGITUDE")
-        .unwrap_or_else(|_| "108.2096703".to_string())
+        .unwrap_or_else(|_| "108.15347757116479".to_string())
         .parse()
-        .unwrap_or(108.2096703);
+        .unwrap_or(108.15347757116479);
     let kampus_radius: f64 = env::var("KAMPUS_RADIUS_METER")
         .unwrap_or_else(|_| "100".to_string())
         .parse()
@@ -646,12 +646,6 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
         longitude_out: row.longitude_out,
     }
 }
-
-// =====================================
-// ENDPOINT HANDLERS
-// =====================================
-
-// ... [Handler clock_in_handler Dll Tetap Sama] ...
 
 pub async fn laporan_absensi_harian_handler(
     State(pool): State<DbPool>,
