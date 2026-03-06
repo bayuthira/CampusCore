@@ -80,8 +80,20 @@ pub struct LogAbsensi {
     pub longitude: Decimal,
     pub alamat_absensi: Option<String>,
     pub foto_absensi_path: Option<String>,
-    pub face_confidence_score: Option<f32>, // <-- Diubah menjadi f32
+    pub face_confidence_score: Option<f32>,
     pub is_face_verified: Option<bool>,
+    // FIELD `pesan_notifikasi` DIHAPUS DARI SINI AGAR SQLX MACRO TIDAK ERROR
+}
+
+/// --- TAMBAHAN BARU: WRAPPER BACKWARD COMPATIBLE ---
+/// Menggunakan #[serde(flatten)] agar saat dirender menjadi JSON,
+/// field `pesan_notifikasi` melebur sejajar ke dalam field `LogAbsensi`.
+#[derive(Debug, Serialize)]
+pub struct ClockResponseFlat {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pesan_notifikasi: Option<String>,
+    #[serde(flatten)]
+    pub data: LogAbsensi,
 }
 
 /// `struct` untuk menampilkan data Rekap Absensi Harian (Respons API)
@@ -170,10 +182,4 @@ pub struct LaporanBulananResponse {
     pub total_terlambat_toleransi_menit: i32, // <-- Total Akumulasi Bulanan
     pub total_lembur_menit: i32,    // <-- Total Akumulasi Bulanan
     pub rekap_harian: Vec<LaporanAbsensiResponse>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ClockResponse {
-    pub pesan_notifikasi: String,
-    pub data: LogAbsensi,
 }

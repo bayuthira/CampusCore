@@ -1,9 +1,19 @@
 // src/modules/sdm/absensi_handler.rs
 use super::{
     absensi_model::{
-        ClockPayload, ClockResponse, LaporanAbsensiResponse, LaporanAbsensiRow,
-        LaporanBulananFilter, LaporanBulananResponse, LaporanHarianFilter, LogAbsensi,
-        LogDayFilter, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload, TipeAbsensi,
+        ClockPayload,
+        ClockResponseFlat, // <-- IMPORT WRAPPER FLATTEN
+        LaporanAbsensiResponse,
+        LaporanAbsensiRow,
+        LaporanBulananFilter,
+        LaporanBulananResponse,
+        LaporanHarianFilter,
+        LogAbsensi,
+        LogDayFilter,
+        RekapAbsensiFilter,
+        RekapAbsensiHarian,
+        RekapManualPayload,
+        TipeAbsensi,
     },
     absensi_repo as repo, repo as pegawai_repo,
 };
@@ -20,7 +30,6 @@ use std::str::FromStr;
 use tokio::fs;
 use uuid::Uuid;
 
-// Import untuk sistem Queue
 use once_cell::sync::Lazy;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -29,28 +38,19 @@ use tokio::sync::{mpsc, oneshot};
 // SISTEM ANTREAN (QUEUE) FACE++
 // ==========================================
 
-// Struktur pesan yang akan masuk ke dalam antrean
 struct FaceQueueMessage {
     ref_bytes: Vec<u8>,
     selfie_bytes: Vec<u8>,
     reply_tx: oneshot::Sender<Result<(bool, f32), AppError>>,
 }
 
-// Inisialisasi antrean secara global (hanya dibuat 1 kali saat aplikasi berjalan)
 static FACE_QUEUE: Lazy<mpsc::Sender<FaceQueueMessage>> = Lazy::new(|| {
-    // Kapasitas antrean maksimal 100 orang di waktu bersamaan
     let (tx, mut rx) = mpsc::channel::<FaceQueueMessage>(100);
 
-    // Background worker (Kasir)
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
-            // 1. Eksekusi tembakan ke API Face++ (Liveness + Compare)
             let res = verify_face_faceplusplus_direct(msg.ref_bytes, msg.selfie_bytes).await;
-
-            // 2. Kembalikan hasilnya ke user yang sedang menunggu (Pager)
             let _ = msg.reply_tx.send(res);
-
-            // 3. JEDA PAKSA 1.1 Detik setelah selesai 1 antrean agar tidak terkena limit 1 QPS Face++
             tokio::time::sleep(Duration::from_millis(1100)).await;
         }
     });
@@ -59,7 +59,7 @@ static FACE_QUEUE: Lazy<mpsc::Sender<FaceQueueMessage>> = Lazy::new(|| {
 });
 
 // ==========================================
-// HELPER LIVENESS FACE++ (ANTI-SPOOFING)
+// HELPER LIVENESS & FACE++
 // ==========================================
 
 async fn check_liveness_api(
@@ -69,7 +69,7 @@ async fn check_liveness_api(
 ) -> Result<bool, AppError> {
     let endpoint = env::var("FACEPP_LIVENESS_ENDPOINT").unwrap_or_default();
     if endpoint.is_empty() {
-        return Ok(true); // Bypass jika endpoint belum diset di .env
+        return Ok(true);
     }
 
     let client = reqwest::Client::new();
@@ -107,27 +107,20 @@ async fn check_liveness_api(
         ))
     })?;
 
-    // Menangani Error dari Face++
     if let Some(err_msg) = json.get("error_message") {
         let err_str = err_msg.as_str().unwrap_or("Unknown");
-
-        // GRACEFUL FALLBACK: Jika fitur Liveness tidak tersedia di paket Face++ (API_NOT_FOUND)
-        // Kita otomatis bypass pengecekan ini agar karyawan tetap bisa absen.
         if err_str == "API_NOT_FOUND" {
             println!(
                 "[WARNING] Face++ Liveness Endpoint API_NOT_FOUND. Mem-bypass pengecekan Liveness..."
             );
             return Ok(true);
         }
-
         return Err(AppError::Forbidden(format!(
             "Error dari Face++ Liveness: {}",
             err_str
         )));
     }
 
-    // CATATAN PARSING:
-    // Sesuaikan kunci (key) JSON di bawah ini dengan dokumentasi API Anti-Spoofing yang Anda gunakan.
     let is_fake = if let Some(liveness) = json.get("liveness") {
         let fake_score = liveness.get("fake").and_then(|v| v.as_f64()).unwrap_or(0.0);
         fake_score > 50.0
@@ -143,10 +136,6 @@ async fn check_liveness_api(
     Ok(!is_fake)
 }
 
-// ==========================================
-// HELPER FACE++ (DIRECT CALL UNTUK LIVENESS + COMPARE)
-// ==========================================
-
 async fn verify_face_faceplusplus_direct(
     ref_bytes: Vec<u8>,
     selfie_bytes: Vec<u8>,
@@ -155,32 +144,19 @@ async fn verify_face_faceplusplus_direct(
     let api_secret = env::var("FACEPP_API_SECRET").unwrap_or_default();
 
     if api_key.is_empty() || api_secret.is_empty() {
-        return Ok((true, 0.99)); // Bypass saat development
+        return Ok((true, 0.99));
     }
 
-    // -----------------------------------------------------
-    // 1. CEK LIVENESS (OPSIONAL BERDASARKAN .ENV)
-    // -----------------------------------------------------
     let use_liveness = env::var("USE_FACE_LIVENESS_BE").unwrap_or_else(|_| "false".to_string());
-
     if use_liveness == "true" || use_liveness == "1" {
         let is_live =
             check_liveness_api(api_key.clone(), api_secret.clone(), selfie_bytes.clone()).await?;
-
         if !is_live {
-            // Ditolak! Karyawan ketahuan pakai foto / layar HP / topeng
-            return Err(AppError::Forbidden(
-                "Absensi ditolak: Wajah terdeteksi tidak nyata (terindikasi menggunakan foto atau layar).".to_string(),
-            ));
+            return Err(AppError::Forbidden("Absensi ditolak: Wajah terdeteksi tidak nyata (terindikasi menggunakan foto atau layar).".to_string()));
         }
-
-        // SANGAT PENTING: Jeda 1.1 Detik agar tidak terkena limit 1 QPS saat lanjut ke endpoint Compare!
         tokio::time::sleep(Duration::from_millis(1100)).await;
     }
 
-    // -----------------------------------------------------
-    // 2. CEK KEMIRIPAN (COMPARE)
-    // -----------------------------------------------------
     let endpoint_compare = env::var("FACEPP_ENDPOINT").unwrap_or_default();
     let client = reqwest::Client::new();
 
@@ -227,51 +203,38 @@ async fn verify_face_faceplusplus_direct(
         .get("confidence")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0) as f32;
-    let is_identical = confidence >= 70.0;
-
-    Ok((is_identical, confidence / 100.0))
+    Ok((confidence >= 70.0, confidence / 100.0))
 }
-
-// ==========================================
-// ROUTER LOGIKA (PILIH QUEUE ATAU DIRECT)
-// ==========================================
 
 async fn verify_face_faceplusplus(
     ref_bytes: Vec<u8>,
     selfie_bytes: Vec<u8>,
 ) -> Result<(bool, f32), AppError> {
-    // Cek konfigurasi dari .env
     let use_queue = env::var("USE_FACE_QUEUE").unwrap_or_else(|_| "false".to_string());
-
     if use_queue == "true" || use_queue == "1" {
-        // --- JALUR ANTREAN ---
         let (reply_tx, reply_rx) = oneshot::channel();
         let msg = FaceQueueMessage {
             ref_bytes,
             selfie_bytes,
             reply_tx,
         };
-
         if FACE_QUEUE.send(msg).await.is_err() {
             return Err(AppError::AnyhowError(anyhow::anyhow!(
                 "Sistem antrean AI sedang down"
             )));
         }
-
-        match reply_rx.await {
-            Ok(res) => res,
-            Err(_) => Err(AppError::AnyhowError(anyhow::anyhow!(
+        reply_rx.await.unwrap_or_else(|_| {
+            Err(AppError::AnyhowError(anyhow::anyhow!(
                 "Gagal menerima respon dari antrean AI"
-            ))),
-        }
+            )))
+        })
     } else {
-        // --- JALUR LANGSUNG (TANPA ANTREAN) ---
         verify_face_faceplusplus_direct(ref_bytes, selfie_bytes).await
     }
 }
 
 // ==========================================
-// HELPER EXTRACT MULTIPART (FORM-DATA)
+// HELPER JARINGAN & LOKASI
 // ==========================================
 
 async fn parse_clock_multipart(
@@ -303,29 +266,43 @@ async fn parse_clock_multipart(
         ));
     }
 
-    let payload = ClockPayload {
-        latitude: lat.unwrap(),
-        longitude: lon.unwrap(),
-        alamat_absensi: alamat,
-        foto_absensi_path: None,
-        face_confidence_score: None,
-        is_face_verified: None,
-    };
-
-    Ok((payload, foto_bytes.unwrap()))
+    Ok((
+        ClockPayload {
+            latitude: lat.unwrap(),
+            longitude: lon.unwrap(),
+            alamat_absensi: alamat,
+            foto_absensi_path: None,
+            face_confidence_score: None,
+            is_face_verified: None,
+        },
+        foto_bytes.unwrap(),
+    ))
 }
 
+fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    let r_earth = 6371000.0;
+    let d_lat = (lat2 - lat1).to_radians();
+    let d_lon = (lon2 - lon1).to_radians();
+    let a = (d_lat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (d_lon / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+    r_earth * c
+}
+
+// ==========================================
+// CORE ABSENSI LOGIC
+// ==========================================
+
+// Perhatikan Tipe Return Sekarang Berubah ke ClockResponseFlat
 async fn proses_absensi(
     pool: &DbPool,
     pegawai_id: Uuid,
     mut payload: ClockPayload,
     foto_bytes: Vec<u8>,
     tipe: TipeAbsensi,
-) -> Result<(LogAbsensi, String), AppError> {
-    // <-- Perhatikan perubahan return tipe menjadi tuple
-
+) -> Result<ClockResponseFlat, AppError> {
     // 1. --- GEOFENCE HARD BLOCK LOGIC ---
-    let today = (time::OffsetDateTime::now_utc() + time::Duration::hours(7)).date(); // Waktu WIB saat ini
+    let today = (time::OffsetDateTime::now_utc() + time::Duration::hours(7)).date();
     let ijin_lokasi = repo::cek_ijin_lokasi_aktif(pool, pegawai_id, today).await?;
 
     let kampus_lat: f64 = env::var("KAMPUS_LATITUDE")
@@ -344,20 +321,16 @@ async fn proses_absensi(
     let lat_user = payload.latitude.to_string().parse::<f64>().unwrap_or(0.0);
     let lon_user = payload.longitude.to_string().parse::<f64>().unwrap_or(0.0);
 
-    // Hitung Jarak
     let dist = haversine_distance(kampus_lat, kampus_lon, lat_user, lon_user);
     let mut pesan_notifikasi = "Absensi berhasil dicatat.".to_string();
 
-    // Validasi Block
     if dist > kampus_radius {
         if let Some(jenis_ijin) = ijin_lokasi {
-            // BYPASS ALLOWED: Punya ijin, ubah pesan notifikasi
             pesan_notifikasi = format!(
                 "Absen berhasil. Anda diizinkan absen di luar kampus karena berstatus {}.",
                 jenis_ijin
             );
         } else {
-            // HARD BLOCK: Tidak punya ijin
             return Err(AppError::Forbidden(format!(
                 "Absensi ditolak. Anda berada {:.0} meter dari kampus. Anda harus berada di dalam radius {} meter atau memiliki Ijin Dinas/WFH.",
                 dist, kampus_radius
@@ -388,18 +361,25 @@ async fn proses_absensi(
     fs::create_dir_all(&folder_simpan).await?;
     fs::write(&path_simpan, foto_bytes).await?;
 
-    let path_db_selfie = format!("uploads/absensi/{}/{}", pegawai_id, nama_file_selfie);
-    payload.foto_absensi_path = Some(path_db_selfie);
+    payload.foto_absensi_path = Some(format!(
+        "uploads/absensi/{}/{}",
+        pegawai_id, nama_file_selfie
+    ));
     payload.face_confidence_score = Some(confidence);
     payload.is_face_verified = Some(is_verified);
 
+    // Dapatkan data log dari database
     let log = if tipe == TipeAbsensi::ClockIn {
         repo::clock_in_repo(pool, pegawai_id, payload).await?
     } else {
         repo::clock_out_repo(pool, pegawai_id, payload).await?
     };
 
-    Ok((log, pesan_notifikasi))
+    // Gabungkan pesan notifikasi dan log absensi dalam 1 format response datar
+    Ok(ClockResponseFlat {
+        pesan_notifikasi: Some(pesan_notifikasi),
+        data: log,
+    })
 }
 
 // =====================================
@@ -410,36 +390,27 @@ pub async fn clock_in_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
     multipart: Multipart,
-) -> Result<(StatusCode, Json<ClockResponse>), AppError> {
-    // <-- Return type diubah
+) -> Result<(StatusCode, Json<ClockResponseFlat>), AppError> {
     let user_id = claims.sub;
     let pegawai_id = pegawai_repo::get_pegawai_id_from_user_id_repo(&pool, user_id).await?;
 
     let (payload, foto_bytes) = parse_clock_multipart(multipart).await?;
-    let (log, pesan_notifikasi) =
+    let response_data =
         proses_absensi(&pool, pegawai_id, payload, foto_bytes, TipeAbsensi::ClockIn).await?;
 
-    // Bungkus ke dalam struct ClockResponse
-    Ok((
-        StatusCode::CREATED,
-        Json(ClockResponse {
-            pesan_notifikasi,
-            data: log,
-        }),
-    ))
+    Ok((StatusCode::CREATED, Json(response_data)))
 }
 
 pub async fn clock_out_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
     multipart: Multipart,
-) -> Result<(StatusCode, Json<ClockResponse>), AppError> {
-    // <-- Return type diubah
+) -> Result<(StatusCode, Json<ClockResponseFlat>), AppError> {
     let user_id = claims.sub;
     let pegawai_id = pegawai_repo::get_pegawai_id_from_user_id_repo(&pool, user_id).await?;
 
     let (payload, foto_bytes) = parse_clock_multipart(multipart).await?;
-    let (log, pesan_notifikasi) = proses_absensi(
+    let response_data = proses_absensi(
         &pool,
         pegawai_id,
         payload,
@@ -448,14 +419,7 @@ pub async fn clock_out_handler(
     )
     .await?;
 
-    // Bungkus ke dalam struct ClockResponse
-    Ok((
-        StatusCode::CREATED,
-        Json(ClockResponse {
-            pesan_notifikasi,
-            data: log,
-        }),
-    ))
+    Ok((StatusCode::CREATED, Json(response_data)))
 }
 
 pub async fn create_rekap_manual_handler(
@@ -494,17 +458,6 @@ pub async fn get_all_rekap_absensi_handler(
 ) -> Result<Json<Vec<RekapAbsensiHarian>>, AppError> {
     let list = repo::get_all_rekap_absensi_repo(&pool, filter).await?;
     Ok(Json(list))
-}
-
-/// HELPER FUNGSI: Menghitung jarak antara dua koordinat dalam satuan METER (Haversine Formula)
-fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
-    let r_earth = 6371000.0; // Radius bumi dalam meter
-    let d_lat = (lat2 - lat1).to_radians();
-    let d_lon = (lon2 - lon1).to_radians();
-    let a = (d_lat / 2.0).sin().powi(2)
-        + lat1.to_radians().cos() * lat2.to_radians().cos() * (d_lon / 2.0).sin().powi(2);
-    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
-    r_earth * c
 }
 
 /// HELPER FUNGSI: Mengonversi DB Row menjadi Response API + Menghitung Keterangan, Menit, & Lokasi
