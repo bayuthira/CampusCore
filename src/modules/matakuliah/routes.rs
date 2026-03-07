@@ -1,18 +1,17 @@
+// src/modules/matakuliah/routes.rs
 use super::handler;
-use crate::{modules::auth::middleware::require_role, db::DbPool};
-use axum::{handler::Handler, middleware, routing::{get}, Router};
+use crate::{db::DbPool, modules::auth::middleware::require_role};
+use axum::{Router, handler::Handler, middleware, routing::get};
 
 pub fn matakuliah_router() -> Router<DbPool> {
     Router::new()
         .route(
             "/matakuliah",
             get(handler::get_all_matakuliah_handler).post(
-                handler::create_matakuliah_handler.layer(
-                    middleware::from_fn(require_role(vec![
-                        "SUPER_ADMIN".to_string(),
-                        "KAPRODI".to_string(),
-                    ])),
-                ),
+                handler::create_matakuliah_handler.layer(middleware::from_fn(require_role(vec![
+                    "SUPER_ADMIN".to_string(),
+                    "KAPRODI".to_string(),
+                ]))),
             ),
         )
         .route(

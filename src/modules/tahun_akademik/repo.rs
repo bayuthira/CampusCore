@@ -39,8 +39,8 @@ pub async fn create_tahun_akademik_repo(
     let ta = sqlx::query_as!(
         TahunAkademik,
         r#"
-        INSERT INTO tahun_akademik (nama, tanggal_mulai, tanggal_selesai, krs_mulai, krs_selesai, is_active) 
-        VALUES ($1, $2, $3, $4, $5, $6) 
+        INSERT INTO tahun_akademik (nama, tanggal_mulai, tanggal_selesai, krs_mulai, krs_selesai, is_active, id_semester_feeder) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7) 
         RETURNING *
         "#,
         payload.nama,
@@ -48,7 +48,8 @@ pub async fn create_tahun_akademik_repo(
         payload.tanggal_selesai,
         payload.krs_mulai,
         payload.krs_selesai,
-        payload.is_active
+        payload.is_active,
+        payload.id_semester_feeder
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -86,11 +87,18 @@ pub async fn update_tahun_akademik_repo(
         TahunAkademik,
         r#"
         UPDATE tahun_akademik 
-        SET nama = $1, tanggal_mulai = $2, tanggal_selesai = $3, krs_mulai = $4, krs_selesai = $5, is_active = $6, updated_at = now() 
-        WHERE id = $7
+        SET nama = $1, tanggal_mulai = $2, tanggal_selesai = $3, krs_mulai = $4, krs_selesai = $5, is_active = $6, id_semester_feeder = $7, updated_at = now() 
+        WHERE id = $8
         RETURNING *
         "#,
-        payload.nama, payload.tanggal_mulai, payload.tanggal_selesai, payload.krs_mulai, payload.krs_selesai, payload.is_active, id
+        payload.nama, 
+        payload.tanggal_mulai, 
+        payload.tanggal_selesai, 
+        payload.krs_mulai, 
+        payload.krs_selesai, 
+        payload.is_active, 
+        payload.id_semester_feeder,
+        id
     )
     .fetch_one(&mut *tx)
     .await?;

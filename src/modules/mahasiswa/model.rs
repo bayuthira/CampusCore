@@ -1,41 +1,61 @@
-// src/models/mahasiswa_model.rs
+// src/modules/mahasiswa/model.rs
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-// Payload untuk membuat Mahasiswa baru.
-// Perhatikan kita juga meminta password untuk akun user-nya.
+// Payload untuk membuat Mahasiswa baru
 #[derive(Debug, Deserialize)]
 pub struct CreateMahasiswaPayload {
-    pub nim: String,
+    // --- BIODATA (Tabel mahasiswa) ---
+    pub nik: String,
     pub nama_mahasiswa: String,
-    pub email: String,
+    pub email: Option<String>,
+    pub tempat_lahir: Option<String>,
+    pub tanggal_lahir: Option<time::Date>,
+    pub nama_ibu_kandung: Option<String>,
+
+    // --- AKADEMIK (Tabel registrasi_mahasiswa) ---
+    pub nim: String,
     pub angkatan: i32,
     pub prodi_id: Uuid,
+    pub periode_masuk: Option<String>, // Contoh: "20241"
+
+    // --- AUTH ---
     pub password: String, // Password awal untuk akun login mahasiswa
 }
 
 // Struct untuk menampilkan detail Mahasiswa, hasil dari JOIN beberapa tabel.
 #[derive(Debug, Serialize, FromRow)]
 pub struct MahasiswaDetail {
-    pub id: Uuid, // id dari tabel mahasiswa
-    pub nim: String,
+    pub id: Uuid,                    // id dari tabel mahasiswa (Biodata)
+    pub registrasi_id: Option<Uuid>, // id dari tabel registrasi_mahasiswa (Sangat penting untuk KRS)
+
+    // Biodata
+    pub nik: Option<String>,
     pub nama_mahasiswa: String,
-    pub angkatan: i32,
     pub email: Option<String>,
-    pub prodi_id: Uuid,
+
+    // Akademik
+    pub nim: Option<String>,
+    pub angkatan: Option<i32>,
+    pub prodi_id: Option<Uuid>,
     pub nama_prodi: String,
+    pub status_mahasiswa: Option<String>,
+
+    // Akun
     pub user_id: Option<Uuid>,
-    pub username: Option<String>, // username dari tabel users
+    pub username: String, // username dari tabel users
 }
 
+// Skema untuk Impor CSV (Ditambah NIK)
 #[derive(Debug, Deserialize)]
 pub struct MahasiswaCsvRecord {
+    pub nik: String,
     pub nim: String,
     pub nama_mahasiswa: String,
     pub email: String,
     pub angkatan: i32,
-    pub kode_prodi: String, // Kita gunakan kode prodi di CSV agar lebih user-friendly
+    pub kode_prodi: String,
 }
 
 // Struct untuk laporan hasil impor
@@ -47,13 +67,22 @@ pub struct ImportResult {
     pub detail_error: Vec<String>,
 }
 
+// Menggunakan Option<> untuk Partial Update (Update sebagian)
 #[derive(Debug, Deserialize)]
 pub struct UpdateMahasiswaPayload {
-    pub nama_mahasiswa: String,
-    pub angkatan: i32,
-    pub email: String,
-    pub prodi_id: Uuid,
+    // Biodata
+    pub nik: Option<String>,
+    pub nama_mahasiswa: Option<String>,
+    pub email: Option<String>,
+    pub tempat_lahir: Option<String>,
+    pub tanggal_lahir: Option<time::Date>,
+    pub nama_ibu_kandung: Option<String>,
+
+    // Akademik
     pub nim: Option<String>,
+    pub angkatan: Option<i32>,
+    pub prodi_id: Option<Uuid>,
+    pub status_mahasiswa: Option<String>,
 }
 
 #[derive(Debug, Serialize, FromRow)]

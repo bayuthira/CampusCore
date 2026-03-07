@@ -1,21 +1,17 @@
-// src/handlers/mahasiswa_handler.rs
+// src/modules/mahasiswa/handler.rs
 
 use super::{
     model::{CreateMahasiswaPayload, ImportResult, MahasiswaDetail, UpdateMahasiswaPayload},
     repo as mahasiswa_repo,
 };
-use crate::{
-    modules::auth::middleware::TokenClaims,
-    db::DbPool,
-    errors::AppError,
-};
+use crate::{db::DbPool, errors::AppError, modules::auth::middleware::TokenClaims};
+use axum::response::{IntoResponse, Response};
 use axum::{
-    extract::{Path, State, Json, Multipart},
-    http::StatusCode,
     Extension,
+    extract::{Json, Multipart, Path, State},
+    http::StatusCode,
 };
 use uuid::Uuid;
-use axum::response::{IntoResponse, Response};
 
 /// Handler untuk membuat data Mahasiswa baru, sekaligus membuat akun user-nya.
 pub async fn create_mahasiswa_handler(
@@ -54,7 +50,10 @@ pub async fn import_mahasiswa_from_csv_handler(
     }
 
     // Jika tidak ada field 'file'
-    Err(anyhow::anyhow!("Request harus menyertakan field 'file' dalam format multipart/form-data").into())
+    Err(
+        anyhow::anyhow!("Request harus menyertakan field 'file' dalam format multipart/form-data")
+            .into(),
+    )
 }
 
 /// Handler untuk mendapatkan detail satu mahasiswa berdasarkan ID
@@ -87,7 +86,6 @@ pub async fn update_mahasiswa_handler(
     Ok(Json(updated_mahasiswa))
 }
 
-
 pub async fn delete_mahasiswa_handler(
     State(pool): State<DbPool>,
     Path(id): Path<Uuid>,
@@ -98,11 +96,12 @@ pub async fn delete_mahasiswa_handler(
 
 pub async fn download_mahasiswa_csv_template_handler() -> Response {
     // 1. Definisikan header CSV
-    let header = "nim;nama_mahasiswa;email;angkatan;kode_prodi";
-    
+    let header = "nik;nim;nama_mahasiswa;email;angkatan;kode_prodi";
+
     // 2. Buat beberapa baris contoh untuk memperjelas format
-    let example_row1 = "250101001;Budi Darmawan;budi.d@student.kampus.ac.id;2025;S1TI";
-    let example_row2 = "250202002;Citra Ayu;citra.a@student.kampus.ac.id;2025;D3MI";
+    let example_row1 =
+        "330250101001105;250101001;Budi Darmawan;budi.d@student.kampus.ac.id;2025;S1TI";
+    let example_row2 = "330250202002101;250202002;Citra Ayu;citra.a@student.kampus.ac.id;2025;D3MI";
 
     // 3. Gabungkan menjadi satu string konten CSV
     let content = format!("{}\n{}\n{}", header, example_row1, example_row2);
@@ -112,7 +111,10 @@ pub async fn download_mahasiswa_csv_template_handler() -> Response {
         // Memberitahu browser bahwa ini adalah file CSV
         (axum::http::header::CONTENT_TYPE, "text/csv; charset=utf-8"),
         // Memberitahu browser untuk mengunduh file dengan nama tertentu
-        (axum::http::header::CONTENT_DISPOSITION, "attachment; filename=\"template_mahasiswa.csv\""),
+        (
+            axum::http::header::CONTENT_DISPOSITION,
+            "attachment; filename=\"template_mahasiswa.csv\"",
+        ),
     ];
 
     // 5. Kembalikan respons dengan header dan konten

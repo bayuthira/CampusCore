@@ -1,10 +1,8 @@
-// src/routes/prodi_routes.rs
-
-use crate::{modules::auth::middleware::require_role, db::DbPool, modules::prodi::handler};
+// src/modules/prodi/routes.rs
+use crate::{db::DbPool, modules::auth::middleware::require_role, modules::prodi::handler};
 use axum::{
-    middleware,
+    Router, middleware,
     routing::{get, post, put},
-    Router,
 };
 
 pub fn prodi_router() -> Router<DbPool> {
@@ -13,11 +11,12 @@ pub fn prodi_router() -> Router<DbPool> {
         .route("/prodi", post(handler::create_prodi_handler))
         .route(
             "/prodi/{id}",
-            put(handler::update_prodi_handler)
-                .delete(handler::delete_prodi_handler),
+            put(handler::update_prodi_handler).delete(handler::delete_prodi_handler),
         )
         // Layer ini hanya berlaku untuk rute di grup `admin_routes`
-        .route_layer(middleware::from_fn(require_role(vec!["SUPER_ADMIN".to_string()])));
+        .route_layer(middleware::from_fn(require_role(vec![
+            "SUPER_ADMIN".to_string(),
+        ])));
 
     // Grup rute yang bisa diakses oleh semua user yang sudah login
     let all_user_routes = Router::new()

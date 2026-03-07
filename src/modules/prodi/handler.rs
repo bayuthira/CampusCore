@@ -1,17 +1,13 @@
-// src/handlers/prodi_handler.rs
+// src/modules/prodi/handler.rs
 use super::{
     model::{CreateProdiPayload, Prodi, UpdateProdiPayload},
     repo as prodi_repo,
 };
-use crate::{
-    modules::auth::middleware::TokenClaims,
-    db::DbPool,
-    errors::AppError,
-};
+use crate::{db::DbPool, errors::AppError, modules::auth::middleware::TokenClaims};
 use axum::{
-    extract::{Path, State, Json},
-    http::StatusCode,
     Extension,
+    extract::{Json, Path, State},
+    http::StatusCode,
 };
 use uuid::Uuid;
 
@@ -50,7 +46,9 @@ pub async fn update_prodi_handler(
 ) -> Result<Json<Prodi>, AppError> {
     if payload.kode_prodi.is_some() {
         if !claims.roles.contains(&"SUPER_ADMIN".to_string()) {
-            return Err(AppError::Forbidden("Hanya SUPER_ADMIN yang dapat mengubah Kode Prodi.".to_string()));
+            return Err(AppError::Forbidden(
+                "Hanya SUPER_ADMIN yang dapat mengubah Kode Prodi.".to_string(),
+            ));
         }
     }
     let updated_prodi = prodi_repo::update_prodi_repo(&pool, id, payload).await?;

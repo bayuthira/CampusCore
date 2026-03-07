@@ -1,4 +1,4 @@
-// src/repositories/prodi_repo.rs
+// src/modules/prodi/repo.rs
 use super::model::{CreateProdiPayload, Prodi, UpdateProdiPayload};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
@@ -8,11 +8,20 @@ pub async fn create_prodi_repo(
     pool: &DbPool,
     payload: CreateProdiPayload,
 ) -> Result<Prodi, AppError> {
+    // Default status_prodi ke 'Aktif' jika tidak dikirim dari FE
+    let status = payload.status_prodi.unwrap_or_else(|| "Aktif".to_string());
+
     let prodi = sqlx::query_as!(
         Prodi,
-        "INSERT INTO prodi (kode_prodi, nama_prodi) VALUES ($1, $2) RETURNING *",
+        r#"
+        INSERT INTO prodi (kode_prodi, nama_prodi, id_prodi_feeder, jenjang, status_prodi) 
+        VALUES ($1, $2, $3, $4, $5) RETURNING *
+        "#,
         payload.kode_prodi,
-        payload.nama_prodi
+        payload.nama_prodi,
+        payload.id_prodi_feeder,
+        payload.jenjang,
+        status
     )
     .fetch_one(pool)
     .await?;
@@ -25,7 +34,7 @@ pub async fn get_all_prodi_repo(pool: &DbPool) -> Result<Vec<Prodi>, AppError> {
     let prodi_list = sqlx::query_as!(Prodi, "SELECT * FROM prodi ORDER BY created_at DESC")
         .fetch_all(pool)
         .await?;
-        
+
     Ok(prodi_list)
 }
 
@@ -36,28 +45,43 @@ pub async fn get_prodi_by_id_repo(pool: &DbPool, id: Uuid) -> Result<Prodi, AppE
     Ok(prodi)
 }
 
-pub async fn update_prodi_repo(pool: &DbPool, id: Uuid, payload: UpdateProdiPayload) -> Result<Prodi, AppError> {
+pub async fn update_prodi_repo(
+    pool: &DbPool,
+    id: Uuid,
+    payload: UpdateProdiPayload,
+) -> Result<Prodi, AppError> {
     let mut tx = pool.begin().await?;
 
-    // Update nama prodi
+    // Ambil data lama untuk mendukung partial update
+    let old_prodi = get_prodi_by_id_repo(pool, id).await?;
+
+    let upd_nama = payload.nama_prodi.unwrap_or(old_prodi.nama_prodi);
+    let upd_kode = payload.kode_prodi.unwrap_or(old_prodi.kode_prodi);
+    let upd_feeder = payload.id_prodi_feeder.or(old_prodi.id_prodi_feeder);
+    let upd_jenjang = payload.jenjang.or(old_prodi.jenjang);
+    let upd_status = payload.status_prodi.or(old_prodi.status_prodi);
+
+    // Lakukan satu update query utuh
     sqlx::query!(
-        "UPDATE prodi SET nama_prodi = $1, updated_at = now() WHERE id = $2",
-        payload.nama_prodi,
+        r#"
+        UPDATE prodi 
+        SET nama_prodi = $1, 
+            kode_prodi = $2, 
+            id_prodi_feeder = $3, 
+            jenjang = $4, 
+            status_prodi = $5, 
+            updated_at = now() 
+        WHERE id = $6
+        "#,
+        upd_nama,
+        upd_kode,
+        upd_feeder,
+        upd_jenjang,
+        upd_status,
         id
     )
     .execute(&mut *tx)
     .await?;
-
-    // Jika ada kode_prodi baru, update secara terpisah
-    if let Some(kode_prodi) = payload.kode_prodi {
-        sqlx::query!(
-            "UPDATE prodi SET kode_prodi = $1 WHERE id = $2",
-            kode_prodi,
-            id
-        )
-        .execute(&mut *tx)
-        .await?;
-    }
 
     tx.commit().await?;
 

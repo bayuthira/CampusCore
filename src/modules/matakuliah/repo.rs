@@ -1,18 +1,30 @@
-// src/repositories/matakuliah_repo.rs
-use crate::{
-    db::DbPool,
-    errors::AppError,
-};
+// src/modules/matakuliah/repo.rs
 use super::model::{CreateMataKuliahPayload, MataKuliahDetail, UpdateMataKuliahPayload};
+use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
 
 pub async fn create_matakuliah_repo(
     pool: &DbPool,
     payload: CreateMataKuliahPayload,
 ) -> Result<MataKuliahDetail, AppError> {
+    // Backend menghitung Total SKS otomatis
+    let total_sks = payload.sks_tatap_muka
+        + payload.sks_praktek
+        + payload.sks_praktek_lapangan
+        + payload.sks_simulasi;
+
+    let jenis = payload.jenis_mk.unwrap_or_else(|| "Wajib".to_string());
+
     let mk_id = sqlx::query_scalar!(
-        "INSERT INTO mata_kuliah (kode_mk, nama_mk, sks, semester_target, prodi_id) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-        payload.kode_mk, payload.nama_mk, payload.sks, payload.semester_target, payload.prodi_id
+        r#"
+        INSERT INTO mata_kuliah (
+            kode_mk, nama_mk, sks, semester_target, prodi_id,
+            id_matkul_feeder, sks_tatap_muka, sks_praktek, sks_praktek_lapangan, sks_simulasi, jenis_mk
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id
+        "#,
+        payload.kode_mk, payload.nama_mk, total_sks, payload.semester_target, payload.prodi_id,
+        payload.id_matkul_feeder, payload.sks_tatap_muka, payload.sks_praktek,
+        payload.sks_praktek_lapangan, payload.sks_simulasi, jenis
     )
     .fetch_one(pool)
     .await?;
@@ -25,7 +37,8 @@ pub async fn get_all_matakuliah_repo(pool: &DbPool) -> Result<Vec<MataKuliahDeta
     let mk_list = sqlx::query_as!(
         MataKuliahDetail,
         r#"
-        SELECT mk.id, mk.kode_mk, mk.nama_mk, mk.sks, mk.semester_target, mk.prodi_id, p.nama_prodi
+        SELECT mk.id, mk.kode_mk, mk.nama_mk, mk.sks, mk.semester_target, mk.prodi_id, p.nama_prodi,
+               mk.id_matkul_feeder, mk.sks_tatap_muka, mk.sks_praktek, mk.sks_praktek_lapangan, mk.sks_simulasi, mk.jenis_mk
         FROM mata_kuliah mk
         LEFT JOIN prodi p ON mk.prodi_id = p.id
         ORDER BY mk.kode_mk ASC
@@ -36,11 +49,15 @@ pub async fn get_all_matakuliah_repo(pool: &DbPool) -> Result<Vec<MataKuliahDeta
     Ok(mk_list)
 }
 
-pub async fn get_matakuliah_by_id_repo(pool: &DbPool, id: Uuid) -> Result<MataKuliahDetail, AppError> {
+pub async fn get_matakuliah_by_id_repo(
+    pool: &DbPool,
+    id: Uuid,
+) -> Result<MataKuliahDetail, AppError> {
     let mk = sqlx::query_as!(
         MataKuliahDetail,
         r#"
-        SELECT mk.id, mk.kode_mk, mk.nama_mk, mk.sks, mk.semester_target, mk.prodi_id, p.nama_prodi
+        SELECT mk.id, mk.kode_mk, mk.nama_mk, mk.sks, mk.semester_target, mk.prodi_id, p.nama_prodi,
+               mk.id_matkul_feeder, mk.sks_tatap_muka, mk.sks_praktek, mk.sks_praktek_lapangan, mk.sks_simulasi, mk.jenis_mk
         FROM mata_kuliah mk
         LEFT JOIN prodi p ON mk.prodi_id = p.id
         WHERE mk.id = $1
@@ -60,28 +77,55 @@ pub async fn update_matakuliah_repo(
     // Mulai transaksi
     let mut tx = pool.begin().await?;
 
-    // 1. Update data yang "normal" terlebih dahulu
+    // 1. Ambil data lama
+    let old_mk = get_matakuliah_by_id_repo(pool, id).await?;
+
+    // 2. Tentukan pecahan SKS baru (jika tidak dikirim FE, pakai data lama)
+    let upd_tatap_muka = payload.sks_tatap_muka.unwrap_or(old_mk.sks_tatap_muka);
+    let upd_praktek = payload.sks_praktek.unwrap_or(old_mk.sks_praktek);
+    let upd_lapangan = payload
+        .sks_praktek_lapangan
+        .unwrap_or(old_mk.sks_praktek_lapangan);
+    let upd_simulasi = payload.sks_simulasi.unwrap_or(old_mk.sks_simulasi);
+
+    // 3. Hitung ulang total SKS
+    let upd_total_sks = upd_tatap_muka + upd_praktek + upd_lapangan + upd_simulasi;
+
+    let upd_kode = payload.kode_mk.unwrap_or(old_mk.kode_mk);
+    let upd_nama = payload.nama_mk.unwrap_or(old_mk.nama_mk);
+    let upd_semester = payload.semester_target.unwrap_or(old_mk.semester_target);
+    let upd_prodi = payload.prodi_id.unwrap_or(old_mk.prodi_id);
+    let upd_feeder = payload.id_matkul_feeder.or(old_mk.id_matkul_feeder);
+    let upd_jenis = payload.jenis_mk.unwrap_or(old_mk.jenis_mk);
+
+    // 4. Lakukan Update
     sqlx::query!(
-        "UPDATE mata_kuliah SET nama_mk = $1, sks = $2, semester_target = $3, prodi_id = $4, updated_at = now() WHERE id = $5",
-        payload.nama_mk, payload.sks, payload.semester_target, payload.prodi_id, id
+        r#"
+        UPDATE mata_kuliah SET 
+            kode_mk = $1, nama_mk = $2, sks = $3, semester_target = $4, prodi_id = $5,
+            id_matkul_feeder = $6, sks_tatap_muka = $7, sks_praktek = $8, 
+            sks_praktek_lapangan = $9, sks_simulasi = $10, jenis_mk = $11, updated_at = now()
+        WHERE id = $12
+        "#,
+        upd_kode,
+        upd_nama,
+        upd_total_sks,
+        upd_semester,
+        upd_prodi,
+        upd_feeder,
+        upd_tatap_muka,
+        upd_praktek,
+        upd_lapangan,
+        upd_simulasi,
+        upd_jenis,
+        id
     )
     .execute(&mut *tx)
     .await?;
 
-    // 2. Jika ada `kode_mk` baru di payload, update secara terpisah
-    if let Some(new_kode_mk) = payload.kode_mk {
-        sqlx::query!(
-            "UPDATE mata_kuliah SET kode_mk = $1 WHERE id = $2",
-            new_kode_mk,
-            id
-        )
-        .execute(&mut *tx)
-        .await?;
-    }
-
-    // 3. Commit semua perubahan
+    // 5. Commit semua perubahan
     tx.commit().await?;
-    
+
     // Ambil dan kembalikan data terbaru
     let updated_mk = get_matakuliah_by_id_repo(pool, id).await?;
     Ok(updated_mk)

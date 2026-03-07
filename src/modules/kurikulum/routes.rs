@@ -1,4 +1,4 @@
-// src/routes/kurikulum/routes.rs
+// src/modules/kurikulum/routes.rs
 use super::handler;
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{

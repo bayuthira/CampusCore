@@ -1,4 +1,4 @@
-// src/models/kurikulum_model.rs
+// src/modules/kurikulum/model.rs
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use time::OffsetDateTime;
@@ -12,7 +12,17 @@ pub struct KurikulumDetail {
     pub is_active: bool,
     pub prodi_id: Uuid,
     pub nama_prodi: String, // Dari join
+
+    // --- TAMBAHAN FEEDER ---
+    pub id_kurikulum_feeder: Option<Uuid>,
+    pub sks_lulus: i32,
+    pub sks_wajib: i32,
+    pub sks_pilihan: i32,
+    pub id_semester_mulai: Option<String>,
+
+    #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
 }
 
@@ -22,16 +32,29 @@ pub struct CreateKurikulumPayload {
     pub tahun_mulai: i16,
     pub is_active: bool,
     pub prodi_id: Uuid,
+
+    // --- TAMBAHAN FEEDER ---
+    pub id_kurikulum_feeder: Option<Uuid>,
+    pub sks_lulus: Option<i32>, // Dibuat option agar default DB bekerja
+    pub sks_wajib: Option<i32>,
+    pub sks_pilihan: Option<i32>,
+    pub id_semester_mulai: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateKurikulumPayload {
-    pub nama: String,
-    pub tahun_mulai: i16,
-    pub is_active: bool,
-    pub prodi_id: Uuid,
-}
+    pub nama: Option<String>,
+    pub tahun_mulai: Option<i16>,
+    pub is_active: Option<bool>,
+    pub prodi_id: Option<Uuid>,
 
+    // --- TAMBAHAN FEEDER ---
+    pub id_kurikulum_feeder: Option<Uuid>,
+    pub sks_lulus: Option<i32>,
+    pub sks_wajib: Option<i32>,
+    pub sks_pilihan: Option<i32>,
+    pub id_semester_mulai: Option<String>,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct AddMataKuliahToKurikulumPayload {

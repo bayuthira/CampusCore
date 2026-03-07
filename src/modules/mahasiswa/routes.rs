@@ -1,40 +1,38 @@
+// src/modules/mahasiswa/routes.rs
 use super::handler;
-use crate::{
-    modules::auth::middleware::require_role,
-    db::DbPool,
+use crate::{db::DbPool, modules::auth::middleware::require_role};
+use axum::{
+    Router,
+    handler::Handler,
+    middleware,
+    routing::{get, post},
 };
-use axum::{handler::Handler, middleware, routing::{get, post}, Router};
 
 pub fn mahasiswa_router() -> Router<DbPool> {
     Router::new()
         .route(
             "/mahasiswa/template-csv",
-            get(handler::download_mahasiswa_csv_template_handler)
+            get(handler::download_mahasiswa_csv_template_handler),
         )
         .route(
             "/mahasiswa/import-csv",
-            post(handler::import_mahasiswa_from_csv_handler).layer(
-                middleware::from_fn(require_role(vec![
-                    "SUPER_ADMIN".to_string(),
-                    "STAF_AKADEMIK".to_string(),
-                ])),
-            ),
+            post(handler::import_mahasiswa_from_csv_handler).layer(middleware::from_fn(
+                require_role(vec!["SUPER_ADMIN".to_string(), "STAF_AKADEMIK".to_string()]),
+            )),
         )
         .route(
             "/mahasiswa",
-            get(handler::get_all_mahasiswa_handler).layer(
-                middleware::from_fn(require_role(vec![
+            get(handler::get_all_mahasiswa_handler)
+                .layer(middleware::from_fn(require_role(vec![
                     "SUPER_ADMIN".to_string(),
                     "STAF_AKADEMIK".to_string(),
                     "DOSEN".to_string(),
-                ])),
-            )
-            .post(handler::create_mahasiswa_handler.layer(
-                middleware::from_fn(require_role(vec![
-                    "SUPER_ADMIN".to_string(),
-                    "STAF_AKADEMIK".to_string(),
-                ])),
-            )),
+                ])))
+                .post(
+                    handler::create_mahasiswa_handler.layer(middleware::from_fn(require_role(
+                        vec!["SUPER_ADMIN".to_string(), "STAF_AKADEMIK".to_string()],
+                    ))),
+                ),
         )
         .route(
             "/mahasiswa/{id}",
