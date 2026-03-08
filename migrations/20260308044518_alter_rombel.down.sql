@@ -1,0 +1,1 @@
+ALTER TABLE registrasi_mahasiswa DROP COLUMN kode_rombel;

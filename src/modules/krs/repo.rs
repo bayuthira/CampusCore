@@ -1,16 +1,16 @@
-// src/repositories/krs_repo.rs
-
+// src/modules/krs/repo.rs
 use crate::{db::DbPool, errors::AppError, modules::tahun_akademik::model::TahunAkademik};
 
 use super::model::{
-    CreateEnrollmentPayload, EnrollmentDetail, EnrollmentStatus, UpdateEnrollmentStatusPayload,
+    CreateEnrollmentPayload, EnrollmentDetail, EnrollmentFromDb, EnrollmentStatus,
+    UpdateEnrollmentStatusPayload, UpdateNilaiPayload,
 };
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 pub async fn create_enrollment_repo(
     pool: &DbPool,
-    mahasiswa_id: Uuid,
+    registrasi_id: Uuid,
     payload: CreateEnrollmentPayload,
 ) -> Result<(), AppError> {
     let today = OffsetDateTime::now_utc().date();
@@ -31,8 +31,8 @@ pub async fn create_enrollment_repo(
     }
 
     sqlx::query!(
-        "INSERT INTO enrollments (mahasiswa_id, matakuliah_id, tahun_akademik_id) VALUES ($1, $2, $3)",
-        mahasiswa_id, payload.matakuliah_id, payload.tahun_akademik_id
+        "INSERT INTO enrollments (registrasi_id, matakuliah_id, tahun_akademik_id) VALUES ($1, $2, $3)",
+        registrasi_id, payload.matakuliah_id, payload.tahun_akademik_id
     )
     .execute(pool)
     .await?;
@@ -54,60 +54,41 @@ pub async fn delete_enrollment_repo(pool: &DbPool, id: Uuid) -> Result<(), AppEr
 
 pub async fn get_my_enrollments_repo(
     pool: &DbPool,
-    mahasiswa_id: Uuid,
+    registrasi_id: Uuid,
     tahun_akademik_id: Uuid,
 ) -> Result<Vec<EnrollmentDetail>, AppError> {
-    // Query ini TIDAK BERUBAH. Ini sudah benar.
-    let rows = sqlx::query!(
+    // Menggunakan query_as! dengan EnrollmentFromDb untuk mencegah error 'type annotation needed'
+    let rows = sqlx::query_as!(
+        EnrollmentFromDb,
         r#"
         SELECT 
             e.id, 
-            e.mahasiswa_id,
-            COALESCE(ta.nama, '') as "tahun_akademik!",
-            COALESCE(mk.kode_mk, '') as "kode_mk!",
-            COALESCE(mk.nama_mk, '') as "nama_mk!",
-            COALESCE(mk.sks, 0) as "sks!",
-            e.status_approval::TEXT as "status_approval", 
-            e.nilai_huruf
+            e.registrasi_id,
+            ta.nama as "tahun_akademik",
+            mk.kode_mk as "kode_mk",
+            mk.nama_mk as "nama_mk",
+            mk.sks as "sks",
+            e.status_approval::TEXT as "status_approval!", 
+            e.nilai_huruf,
+            e.id_peserta_kelas_feeder,
+            e.id_nilai_feeder,
+            e.nilai_angka,
+            e.nilai_indeks
         FROM enrollments e
         LEFT JOIN mata_kuliah mk ON e.matakuliah_id = mk.id
         LEFT JOIN tahun_akademik ta ON e.tahun_akademik_id = ta.id
-        WHERE e.mahasiswa_id = $1 AND e.tahun_akademik_id = $2
+        WHERE e.registrasi_id = $1 AND e.tahun_akademik_id = $2
         ORDER BY mk.kode_mk
         "#,
-        mahasiswa_id,
+        registrasi_id,
         tahun_akademik_id
     )
     .fetch_all(pool)
     .await?;
 
-    // --- PERBAIKAN DI BLOK .map() DI BAWAH INI ---
-    let enrollments_detail: Vec<EnrollmentDetail> = rows
-        .into_iter()
-        .map(|row| {
-            let status = match row.status_approval.as_deref() {
-                // status_approval masih Option karena bisa NULL
-                Some("Disetujui") => EnrollmentStatus::Disetujui,
-                Some("Ditolak") => EnrollmentStatus::Ditolak,
-                Some("Selesai") => EnrollmentStatus::Selesai,
-                Some("Mengulang") => EnrollmentStatus::Mengulang,
-                _ => EnrollmentStatus::MenungguPersetujuan,
-            };
-
-            EnrollmentDetail {
-                id: row.id,
-                mahasiswa_id: row.mahasiswa_id,
-                // Hapus .unwrap_or_default() karena `row` sudah berisi tipe non-option
-                tahun_akademik: row.tahun_akademik,
-                kode_mk: row.kode_mk,
-                nama_mk: row.nama_mk,
-                sks: row.sks,
-                status_approval: status,
-                nilai_huruf: row.nilai_huruf,
-            }
-        })
-        .collect();
-
+    // Konversi otomatis karena kita sudah implementasi `From<EnrollmentFromDb>` di model
+    let enrollments_detail: Vec<EnrollmentDetail> =
+        rows.into_iter().map(|row| row.into()).collect();
     Ok(enrollments_detail)
 }
 
@@ -115,18 +96,22 @@ pub async fn get_enrollment_by_id_repo(
     pool: &DbPool,
     id: Uuid,
 ) -> Result<EnrollmentDetail, AppError> {
-    // Menggunakan query! dengan COALESCE dan '!' persis seperti fungsi Anda yang lain
-    let row = sqlx::query!(
+    let row = sqlx::query_as!(
+        EnrollmentFromDb,
         r#"
         SELECT 
             e.id, 
-            e.mahasiswa_id,
-            COALESCE(ta.nama, '') as "tahun_akademik!",
-            COALESCE(mk.kode_mk, '') as "kode_mk!",
-            COALESCE(mk.nama_mk, '') as "nama_mk!",
-            COALESCE(mk.sks, 0) as "sks!",
-            e.status_approval::TEXT as "status_approval", 
-            e.nilai_huruf
+            e.registrasi_id,
+            ta.nama as "tahun_akademik",
+            mk.kode_mk as "kode_mk",
+            mk.nama_mk as "nama_mk",
+            mk.sks as "sks",
+            e.status_approval::TEXT as "status_approval!", 
+            e.nilai_huruf,
+            e.id_peserta_kelas_feeder,
+            e.id_nilai_feeder,
+            e.nilai_angka,
+            e.nilai_indeks
         FROM enrollments e
         LEFT JOIN mata_kuliah mk ON e.matakuliah_id = mk.id
         LEFT JOIN tahun_akademik ta ON e.tahun_akademik_id = ta.id
@@ -137,28 +122,7 @@ pub async fn get_enrollment_by_id_repo(
     .fetch_one(pool)
     .await?;
 
-    // Melakukan pemetaan manual, persis seperti yang Anda lakukan
-    let status = match row.status_approval.as_deref() {
-        Some("Disetujui") => EnrollmentStatus::Disetujui,
-        Some("Ditolak") => EnrollmentStatus::Ditolak,
-        Some("Selesai") => EnrollmentStatus::Selesai,
-        Some("Mengulang") => EnrollmentStatus::Mengulang,
-        _ => EnrollmentStatus::MenungguPersetujuan,
-    };
-
-    // Membuat struct EnrollmentDetail TANPA .unwrap_or_default()
-    let enrollment_detail = EnrollmentDetail {
-        id: row.id,
-        mahasiswa_id: row.mahasiswa_id,
-        tahun_akademik: row.tahun_akademik, // Langsung digunakan
-        kode_mk: row.kode_mk,               // Langsung digunakan
-        nama_mk: row.nama_mk,               // Langsung digunakan
-        sks: row.sks,                       // Langsung digunakan
-        status_approval: status,
-        nilai_huruf: row.nilai_huruf,
-    };
-
-    Ok(enrollment_detail)
+    Ok(row.into())
 }
 
 pub async fn update_enrollment_status_repo(
@@ -166,10 +130,6 @@ pub async fn update_enrollment_status_repo(
     enrollment_id: Uuid,
     payload: UpdateEnrollmentStatusPayload,
 ) -> Result<(), AppError> {
-    // <-- Return type diubah menjadi Result<(), AppError>
-    // 1. Konversi enum dari payload ke representasi string yang TEPAT
-    //    sesuai dengan label yang ada di ENUM PostgreSQL Anda.
-    //    Perhatikan "Menunggu Persetujuan" yang kemungkinan memiliki spasi.
     let status_str = match payload.status_approval {
         EnrollmentStatus::MenungguPersetujuan => "Menunggu Persetujuan",
         EnrollmentStatus::Disetujui => "Disetujui",
@@ -178,9 +138,6 @@ pub async fn update_enrollment_status_repo(
         EnrollmentStatus::Mengulang => "Mengulang",
     };
 
-    // 2. Jalankan query UPDATE dengan melakukan CAST eksplisit dari string ke tipe ENUM di database.
-    //    Ini adalah cara yang paling robust untuk memastikan PostgreSQL menerima nilainya.
-    //    Kita menggunakan sqlx::query() (non-macro) untuk menghindari type-checking dari macro yang terlalu ketat.
     let rows_affected = sqlx::query(
         r#"
         UPDATE enrollments SET status_approval = $1::"EnrollmentStatus", updated_at = now() WHERE id = $2
@@ -192,11 +149,39 @@ pub async fn update_enrollment_status_repo(
     .await?
     .rows_affected();
 
-    // Jika tidak ada baris yang ter-update, berarti id tidak ditemukan
     if rows_affected == 0 {
         return Err(sqlx::Error::RowNotFound.into());
     }
+    Ok(())
+}
 
-    // Jika berhasil, cukup kembalikan Ok
+pub async fn update_nilai_repo(
+    pool: &DbPool,
+    enrollment_id: Uuid,
+    payload: UpdateNilaiPayload,
+) -> Result<(), AppError> {
+    let rows_affected = sqlx::query(
+        r#"
+        UPDATE enrollments 
+        SET nilai_angka = $1, 
+            nilai_indeks = $2, 
+            nilai_huruf = $3, 
+            id_nilai_feeder = $4, 
+            updated_at = now() 
+        WHERE id = $5
+        "#,
+    )
+    .bind(payload.nilai_angka)
+    .bind(payload.nilai_indeks)
+    .bind(payload.nilai_huruf)
+    .bind(payload.id_nilai_feeder)
+    .bind(enrollment_id)
+    .execute(pool)
+    .await?
+    .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound.into());
+    }
     Ok(())
 }

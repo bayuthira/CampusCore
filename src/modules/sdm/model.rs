@@ -26,14 +26,14 @@ pub enum StatusNikah {
 }
 
 #[derive(Debug, Serialize, Deserialize, Type, Clone, PartialEq)]
-#[sqlx(type_name = "KategoriPegawai")] // Nama tipe di DB
+#[sqlx(type_name = "KategoriPegawai")]
 pub enum KategoriPegawai {
-    #[serde(rename = "Tenaga Pendidik")] // Untuk JSON (serde)
-    #[sqlx(rename = "Tenaga Pendidik")] // Untuk Database (sqlx)
+    #[serde(rename = "Tenaga Pendidik")]
+    #[sqlx(rename = "Tenaga Pendidik")]
     TenagaPendidik,
 
-    #[serde(rename = "Tenaga Kependidikan")] // Untuk JSON (serde)
-    #[sqlx(rename = "Tenaga Kependidikan")] // Untuk Database (sqlx)
+    #[serde(rename = "Tenaga Kependidikan")]
+    #[sqlx(rename = "Tenaga Kependidikan")]
     TenagaKependidikan,
 }
 
@@ -46,7 +46,6 @@ pub enum StatusPegawai {
 }
 
 // --- Struct untuk Respons API ---
-
 #[derive(Debug, Serialize, FromRow)]
 pub struct Pegawai {
     pub id: Uuid,
@@ -76,16 +75,31 @@ pub struct Pegawai {
     pub no_npwp: Option<String>,
     pub no_bpjs_kesehatan: Option<String>,
     pub no_bpjs_ketenagakerjaan: Option<String>,
+
+    // TAMBAHAN FEEDER PEGAWAI
+    pub id_sdm_feeder: Option<Uuid>,
+    pub nama_ibu_kandung: Option<String>,
+    pub kewarganegaraan: Option<String>,
+    pub dusun: Option<String>,
+    pub rt: Option<String>,
+    pub rw: Option<String>,
+    pub kelurahan: Option<String>,
+    pub id_wilayah_feeder: Option<Uuid>,
+
     // Data Dosen (jika ada)
     pub nidn: Option<String>,
     pub prodi_id: Option<Uuid>,
     pub nama_prodi: Option<String>,
+    pub id_penugasan_feeder: Option<Uuid>,
+    pub ikatan_kerja: Option<String>,
+
+    #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
 }
 
 // --- Struct untuk Payload (Create & Update) ---
-
 #[derive(Debug, Deserialize)]
 pub struct PegawaiPayload {
     pub nik: String,
@@ -107,16 +121,32 @@ pub struct PegawaiPayload {
     pub kategori_pegawai: Option<KategoriPegawai>,
     pub status_pegawai: Option<StatusPegawai>,
     pub is_active: Option<bool>,
-    pub unit_kerja_id: Option<Uuid>, // Menggunakan relasi UUID ke tabel unit_kerja
-    pub jabatan: Option<String>,     // Jabatan tetap string, tapi nanti masuk ke penempatan_pegawai
+    pub unit_kerja_id: Option<Uuid>,
+    pub jabatan: Option<String>,
     pub tanggal_masuk: Option<Date>,
     pub tanggal_pensiun: Option<Date>,
     pub no_kk: Option<String>,
     pub no_npwp: Option<String>,
     pub no_bpjs_kesehatan: Option<String>,
     pub no_bpjs_ketenagakerjaan: Option<String>,
+
+    // TAMBAHAN FEEDER PEGAWAI
+    pub id_sdm_feeder: Option<Uuid>,
+    pub nama_ibu_kandung: Option<String>,
+    pub kewarganegaraan: Option<String>,
+    pub dusun: Option<String>,
+    pub rt: Option<String>,
+    pub rw: Option<String>,
+    pub kelurahan: Option<String>,
+    pub id_wilayah_feeder: Option<Uuid>,
+
+    // Data Dosen (jika Tenaga Pendidik)
     pub nidn: Option<String>,
     pub prodi_id: Option<Uuid>,
+    pub id_penugasan_feeder: Option<Uuid>,
+    pub ikatan_kerja: Option<String>,
+
+    // Auth
     pub password: Option<String>,
 }
 
@@ -166,7 +196,7 @@ pub struct CreateUserForPegawaiPayload {
 
 // --- Struct untuk Riwayat Pendidikan ---
 
-#[derive(Debug, sqlx::FromRow)] // Ini adalah struct untuk DB
+#[derive(Debug, sqlx::FromRow)]
 pub struct RiwayatPendidikanDb {
     pub id: Uuid,
     pub pegawai_id: Uuid,
@@ -176,7 +206,7 @@ pub struct RiwayatPendidikanDb {
     pub tahun_lulus: Option<i16>,
 }
 
-#[derive(Debug, Serialize)] // Ini adalah struct untuk respons API
+#[derive(Debug, Serialize)]
 pub struct RiwayatPendidikanDetail {
     pub id: Uuid,
     pub pegawai_id: Uuid,
@@ -184,7 +214,7 @@ pub struct RiwayatPendidikanDetail {
     pub institusi: String,
     pub jurusan: Option<String>,
     pub tahun_lulus: Option<i16>,
-    pub dokumen: Vec<DokumenSdmSimple>, // <-- Daftar dokumen
+    pub dokumen: Vec<DokumenSdmSimple>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -197,7 +227,7 @@ pub struct RiwayatPendidikanPayload {
 
 // --- Struct untuk Riwayat SK ---
 
-#[derive(Debug, sqlx::FromRow)] // Ini adalah struct untuk DB
+#[derive(Debug, sqlx::FromRow)]
 pub struct RiwayatSkDb {
     pub id: Uuid,
     pub pegawai_id: Uuid,
@@ -208,7 +238,7 @@ pub struct RiwayatSkDb {
     pub keterangan: Option<String>,
 }
 
-#[derive(Debug, Serialize)] // Ini adalah struct untuk respons API
+#[derive(Debug, Serialize)]
 pub struct RiwayatSkDetail {
     pub id: Uuid,
     pub pegawai_id: Uuid,
@@ -217,7 +247,7 @@ pub struct RiwayatSkDetail {
     pub jenis_sk: String,
     pub jabatan: Option<String>,
     pub keterangan: Option<String>,
-    pub dokumen: Vec<DokumenSdmSimple>, // <-- Daftar dokumen
+    pub dokumen: Vec<DokumenSdmSimple>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -236,10 +266,7 @@ pub struct PenempatanPegawai {
     pub id: Uuid,
     pub pegawai_id: Uuid,
     pub unit_kerja_id: Uuid,
-
-    // Kita akan JOIN untuk mendapatkan nama unit kerja
     pub nama_unit_kerja: String,
-
     pub jabatan: String,
     pub nomor_sk: Option<String>,
     pub tanggal_mulai: Date,
@@ -252,6 +279,4 @@ pub struct PenempatanPegawaiPayload {
     pub jabatan: String,
     pub nomor_sk: Option<String>,
     pub tanggal_mulai: Date,
-    // tanggal_selesai tidak ada di payload create,
-    // karena akan diisi otomatis saat ada penempatan baru.
 }

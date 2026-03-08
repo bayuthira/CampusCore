@@ -1,0 +1,1 @@
+ALTER TABLE registrasi_mahasiswa ADD COLUMN kode_rombel VARCHAR(50);

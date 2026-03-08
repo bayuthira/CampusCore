@@ -1,6 +1,6 @@
 // src/modules/akademik/jadwal_kuliah_model.rs
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use time::{macros::format_description, UtcOffset, Time};
+use time::{Time, UtcOffset, macros::format_description};
 use uuid::Uuid;
 
 // Custom struct for Time with Timezone
@@ -9,7 +9,6 @@ pub struct TimeWithOffset {
     pub time: Time,
     pub offset: UtcOffset,
 }
-
 
 // Serialize/Deserialize implementation
 impl Serialize for TimeWithOffset {
@@ -35,7 +34,7 @@ impl<'de> Deserialize<'de> for TimeWithOffset {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        
+
         // If input is just "HH:MM", assume WIB (+07:00)
         if !s.contains('+') && !s.contains('-') {
             let time = Time::parse(&s, &format_description!("[hour]:[minute]"))
@@ -43,12 +42,11 @@ impl<'de> Deserialize<'de> for TimeWithOffset {
             let offset = UtcOffset::from_hms(7, 0, 0).map_err(serde::de::Error::custom)?;
             return Ok(TimeWithOffset { time, offset });
         }
-        
+
         // Split by + or -
         let (time_str, offset_str, is_positive) = if let Some(pos) = s.find('+') {
             (&s[..pos], &s[pos + 1..], true)
         } else if let Some(pos) = s.rfind('-') {
-            // Use rfind to handle cases like "08:00-05:00" (not negative hour in time part)
             if pos > 0 {
                 (&s[..pos], &s[pos + 1..], false)
             } else {
@@ -57,53 +55,47 @@ impl<'de> Deserialize<'de> for TimeWithOffset {
         } else {
             return Err(serde::de::Error::custom("Invalid time format"));
         };
-        
+
         // Parse time part
         let time = Time::parse(time_str, &format_description!("[hour]:[minute]"))
             .map_err(serde::de::Error::custom)?;
-        
+
         // Parse offset part "07:00"
         let offset_parts: Vec<&str> = offset_str.split(':').collect();
         if offset_parts.len() != 2 {
             return Err(serde::de::Error::custom("Invalid offset format"));
         }
-        
+
         let hours: i8 = offset_parts[0].parse().map_err(serde::de::Error::custom)?;
         let minutes: i8 = offset_parts[1].parse().map_err(serde::de::Error::custom)?;
-        
+
         // Apply sign
         let (hours, minutes) = if is_positive {
             (hours, minutes)
         } else {
             (-hours, -minutes)
         };
-        
-        let offset = UtcOffset::from_hms(hours, minutes, 0)
-            .map_err(serde::de::Error::custom)?;
-        
+
+        let offset = UtcOffset::from_hms(hours, minutes, 0).map_err(serde::de::Error::custom)?;
+
         Ok(TimeWithOffset { time, offset })
     }
 }
 
-
 // SQLx support - store as TIMETZ in PostgreSQL
 impl<'r> sqlx::Decode<'r, sqlx::Postgres> for TimeWithOffset {
-    fn decode(
-        value: sqlx::postgres::PgValueRef<'r>,
-    ) -> Result<Self, sqlx::error::BoxDynError> {
-        // PostgreSQL TIMETZ returns time + offset
-        let time_with_tz: sqlx::postgres::types::PgTimeTz = 
+    fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let time_with_tz: sqlx::postgres::types::PgTimeTz =
             <sqlx::postgres::types::PgTimeTz as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
-        
+
         let time = Time::from_hms(
             time_with_tz.time.hour(),
             time_with_tz.time.minute(),
             time_with_tz.time.second(),
         )?;
-        
-        // time_with_tz.offset is already a UtcOffset, use it directly
+
         let offset = time_with_tz.offset;
-        
+
         Ok(TimeWithOffset { time, offset })
     }
 }
@@ -120,12 +112,12 @@ impl<'q> sqlx::Encode<'q, sqlx::Postgres> for TimeWithOffset {
         buf: &mut sqlx::postgres::PgArgumentBuffer,
     ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
         let pg_time = sqlx::postgres::types::PgTimeTz {
-            time: self.time, // Use Time directly, not PrimitiveDateTime
+            time: self.time,
             offset: self.offset,
         };
-        
+
         <sqlx::postgres::types::PgTimeTz as sqlx::Encode<sqlx::Postgres>>::encode_by_ref(
-            &pg_time, buf
+            &pg_time, buf,
         )
     }
 }
@@ -164,12 +156,6 @@ pub enum PeranDosenPengampu {
     Anggota,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct DosenPengampuPayload {
-    pub dosen_id: Uuid,
-    pub peran: PeranDosenPengampu,
-}
-
 impl PeranDosenPengampu {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -177,6 +163,19 @@ impl PeranDosenPengampu {
             PeranDosenPengampu::Anggota => "Anggota",
         }
     }
+}
+
+// Payload untuk relasi dosen pengampu
+#[derive(Debug, Deserialize)]
+pub struct DosenPengampuPayload {
+    pub dosen_id: Uuid,
+    pub peran: PeranDosenPengampu,
+
+    // --- TAMBAHAN FEEDER AKTIVITAS MENGAJAR ---
+    pub id_aktivitas_mengajar_feeder: Option<Uuid>,
+    pub sks_substansi_total: Option<i32>,
+    pub rencana_tatap_muka: Option<i32>,
+    pub realisasi_tatap_muka: Option<i32>,
 }
 
 // Payload untuk membuat jadwal kuliah baru
@@ -187,7 +186,12 @@ pub struct CreateJadwalKuliahPayload {
     pub hari: DayOfWeek,
     pub jam_mulai: TimeWithOffset,
     pub jam_selesai: TimeWithOffset,
-    pub kelas: String,
+    pub kelas: String, // Kode kelas internal
+
+    // --- TAMBAHAN FEEDER KELAS KULIAH ---
+    pub id_kelas_kuliah_feeder: Option<Uuid>,
+    pub nama_kelas_kuliah: Option<String>, // Jika kosong, backend otomatis memakai value dari "kelas"
+
     pub dosen_pengampu: Vec<DosenPengampuPayload>,
 }
 
@@ -202,12 +206,23 @@ pub struct DosenPengampuDetail {
     pub dosen_id: Uuid,
     pub nama_dosen: String,
     pub peran: PeranDosenPengampu,
+
+    // --- TAMBAHAN FEEDER AKTIVITAS MENGAJAR ---
+    pub id_aktivitas_mengajar_feeder: Option<Uuid>,
+    pub sks_substansi_total: Option<i32>,
+    pub rencana_tatap_muka: Option<i32>,
+    pub realisasi_tatap_muka: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct JadwalKuliahDetail {
     pub id: Uuid,
     pub kelas: String,
+
+    // --- TAMBAHAN FEEDER KELAS KULIAH ---
+    pub id_kelas_kuliah_feeder: Option<Uuid>,
+    pub nama_kelas_kuliah: Option<String>,
+
     pub hari: DayOfWeek,
     pub jam_mulai: TimeWithOffset,
     pub jam_selesai: TimeWithOffset,
@@ -238,5 +253,10 @@ pub struct UpdateJadwalKuliahPayload {
     pub jam_mulai: TimeWithOffset,
     pub jam_selesai: TimeWithOffset,
     pub kelas: String,
+
+    // --- TAMBAHAN FEEDER KELAS KULIAH ---
+    pub id_kelas_kuliah_feeder: Option<Uuid>,
+    pub nama_kelas_kuliah: Option<String>,
+
     pub dosen_pengampu: Vec<DosenPengampuPayload>,
 }

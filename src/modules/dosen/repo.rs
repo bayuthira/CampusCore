@@ -1,9 +1,7 @@
-// src/repositories/dosen_repo.rs
+// src/modules/dosen/repo.rs
 use super::model::{CreateDosenPayload, DosenDetail, UpdateDosenPayload};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
-
-
 
 pub async fn create_dosen_repo(
     pool: &DbPool,
@@ -11,84 +9,61 @@ pub async fn create_dosen_repo(
 ) -> Result<DosenDetail, AppError> {
     let mut tx = pool.begin().await?;
 
-    let hashed_password = bcrypt::hash(payload.password, bcrypt::DEFAULT_COST)?;
-    
-    // Langkah A: Coba buat user dan tangkap hasilnya
-    let user_insert_result = sqlx::query!(
-        "INSERT INTO users (username, password_hash, full_name, email) VALUES ($1, $2, $3, $4) RETURNING id",
-        payload.nidn, // Gunakan NIDN sebagai username
-        hashed_password,
-        payload.nama_dosen,
-        payload.email
+    // Pastikan pegawai ada dan ambil user_id-nya
+    let pegawai = sqlx::query!(
+        "SELECT user_id FROM pegawai WHERE id = $1",
+        payload.pegawai_id
     )
-    .fetch_one(&mut *tx)
-    .await;
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| AppError::Forbidden("Pegawai tidak ditemukan".to_string()))?;
 
-    // Langkah B: Periksa hasil pembuatan user, terjemahkan error jika perlu
-    let new_user_id = match user_insert_result {
-        Ok(record) => record.id, // Jika sukses, ambil ID-nya
-        Err(e) => {
-            // Jika gagal, periksa apakah ini error duplikasi
-            if let Some(db_err) = e.as_database_error() {
-                if db_err.is_unique_violation() {
-                    let constraint = db_err.constraint().unwrap_or_default();
-                    if constraint.contains("users_username_key") {
-                        // Jika ya, kembalikan AppError spesifik kita dengan pesan yang benar
-                        return Err(AppError::DuplicateEntry(format!(
-                            "NIDN '{}' sudah terdaftar sebagai user.",
-                            payload.nidn
-                        )));
-                    } else if constraint.contains("users_email_key") {
-                        return Err(AppError::DuplicateEntry(format!(
-                            "Email '{}' sudah terdaftar.",
-                            payload.email.as_deref().unwrap_or_default()
-                        )));
-                    }
-                }
-            }
-            // Untuk error lain, teruskan saja
-            return Err(e.into());
-        }
-    };
-
-    // Langkah C: Jika user berhasil dibuat, lanjutkan proses
-    sqlx::query!(
-        "INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'DOSEN'))",
-        new_user_id
-    )
-    .execute(&mut *tx)
-    .await?;
-
+    // Insert ke tabel dosen (TANPA nama_dosen dan email)
     let new_dosen_id = sqlx::query_scalar!(
-        "INSERT INTO dosen (nidn, nama_dosen, email, prodi_id, user_id) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+        r#"
+        INSERT INTO dosen (nidn, prodi_id, pegawai_id, user_id, id_penugasan_feeder, ikatan_kerja) 
+        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id
+        "#,
         payload.nidn,
-        payload.nama_dosen,
-        payload.email,
         payload.prodi_id,
-        new_user_id
+        payload.pegawai_id,
+        pegawai.user_id,
+        payload.id_penugasan_feeder,
+        payload.ikatan_kerja
     )
     .fetch_one(&mut *tx)
     .await?;
-    
+
+    // Berikan role DOSEN jika dia punya user_id
+    if let Some(user_id) = pegawai.user_id {
+        sqlx::query!(
+            "INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'DOSEN')) ON CONFLICT DO NOTHING",
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
     tx.commit().await?;
 
     let new_dosen = get_dosen_by_id_repo(pool, new_dosen_id).await?;
     Ok(new_dosen)
 }
 
-
-
-// Query untuk mengambil SEMUA dosen dengan detail prodinya menggunakan JOIN
+// Query untuk mengambil SEMUA dosen dengan JOIN ke tabel pegawai
 pub async fn get_all_dosen_repo(pool: &DbPool) -> Result<Vec<DosenDetail>, AppError> {
     let dosen_list = sqlx::query_as!(
         DosenDetail,
         r#"
         SELECT 
-            d.id, d.nidn, d.nama_dosen, d.email, d.prodi_id, 
-            p.nama_prodi
+            d.id, d.nidn as "nidn!", d.prodi_id as "prodi_id!", d.pegawai_id as "pegawai_id!", 
+            d.id_penugasan_feeder, d.ikatan_kerja,
+            COALESCE(p.nama_prodi, 'Prodi Tidak Ditemukan') as "nama_prodi!",
+            peg.nama_lengkap as "nama_dosen!", peg.email as "email"
         FROM dosen d
         LEFT JOIN prodi p ON d.prodi_id = p.id
-        ORDER BY d.nama_dosen ASC
+        INNER JOIN pegawai peg ON d.pegawai_id = peg.id
+        ORDER BY peg.nama_lengkap ASC
         "#
     )
     .fetch_all(pool)
@@ -102,10 +77,13 @@ pub async fn get_dosen_by_id_repo(pool: &DbPool, id: Uuid) -> Result<DosenDetail
         DosenDetail,
         r#"
         SELECT 
-            d.id, d.nidn, d.nama_dosen, d.email, d.prodi_id, 
-            p.nama_prodi
+            d.id, d.nidn as "nidn!", d.prodi_id as "prodi_id!", d.pegawai_id as "pegawai_id!", 
+            d.id_penugasan_feeder, d.ikatan_kerja,
+            COALESCE(p.nama_prodi, 'Prodi Tidak Ditemukan') as "nama_prodi!",
+            peg.nama_lengkap as "nama_dosen!", peg.email as "email"
         FROM dosen d
         LEFT JOIN prodi p ON d.prodi_id = p.id
+        INNER JOIN pegawai peg ON d.pegawai_id = peg.id
         WHERE d.id = $1
         "#,
         id
@@ -120,18 +98,27 @@ pub async fn update_dosen_repo(
     id: Uuid,
     payload: UpdateDosenPayload,
 ) -> Result<DosenDetail, AppError> {
+    let old_dosen = get_dosen_by_id_repo(pool, id).await?;
+
+    let upd_nidn = payload.nidn.unwrap_or(old_dosen.nidn);
+    let upd_prodi = payload.prodi_id.unwrap_or(old_dosen.prodi_id);
+    let upd_penugasan = payload
+        .id_penugasan_feeder
+        .or(old_dosen.id_penugasan_feeder);
+    let upd_ikatan = payload.ikatan_kerja.or(old_dosen.ikatan_kerja);
+
     // Update data dosen di database
     sqlx::query!(
-        "UPDATE dosen SET nama_dosen = $1, email = $2, prodi_id = $3, updated_at = now() WHERE id = $4",
-        payload.nama_dosen,
-        payload.email,
-        payload.prodi_id,
+        "UPDATE dosen SET nidn = $1, prodi_id = $2, id_penugasan_feeder = $3, ikatan_kerja = $4, updated_at = now() WHERE id = $5",
+        upd_nidn,
+        upd_prodi,
+        upd_penugasan,
+        upd_ikatan,
         id
     )
     .execute(pool)
     .await?;
 
-    // Ambil dan kembalikan data dosen yang sudah terupdate
     let updated_dosen = get_dosen_by_id_repo(pool, id).await?;
     Ok(updated_dosen)
 }

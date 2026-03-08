@@ -94,3 +94,19 @@ pub struct MahasiswaBimbingan {
     pub email: Option<String>,
     pub nama_prodi: String,
 }
+
+// --- PAYLOAD UNTUK ASSIGN DOSEN PA ---
+
+#[derive(Debug, Deserialize)]
+pub struct BatchAssignDosenPaPayload {
+    pub prodi_id: Uuid,
+    pub angkatan: i32,
+    pub kode_rombel: String,
+    pub dosen_pa_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SingleAssignDosenPaPayload {
+    pub registrasi_id: Uuid,
+    pub dosen_pa_id: Uuid,
+}
