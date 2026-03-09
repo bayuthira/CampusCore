@@ -7,6 +7,14 @@ use axum::{
 
 pub fn krs_router() -> Router<DbPool> {
     Router::new()
+        // --- ENDPOINT BARU UNTUK PILIHAN JADWAL UI KRS ---
+        .route(
+            "/krs/jadwal-available",
+            get(handler::get_available_jadwal_handler).layer(middleware::from_fn(require_role(
+                vec!["MAHASISWA".to_string()],
+            ))),
+        )
+        // ------------------------------------------------
         .route(
             "/krs/enrollments",
             post(handler::create_enrollment_handler).layer(middleware::from_fn(require_role(
@@ -31,7 +39,6 @@ pub fn krs_router() -> Router<DbPool> {
                 require_role(vec!["DOSEN".to_string(), "SUPER_ADMIN".to_string()]),
             )),
         )
-        // --- ENDPOINT BARU: UNTUK INPUT NILAI ---
         .route(
             "/krs/enrollments/{id}/nilai",
             put(handler::update_nilai_handler).layer(middleware::from_fn(require_role(vec![

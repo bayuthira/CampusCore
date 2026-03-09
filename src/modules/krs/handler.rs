@@ -1,8 +1,8 @@
 // src/modules/krs/handler.rs
 use super::{
     model::{
-        CreateEnrollmentPayload, EnrollmentDetail, KrsQuery, UpdateEnrollmentStatusPayload,
-        UpdateNilaiPayload,
+        AvailableJadwalDetail, CreateEnrollmentPayload, EnrollmentDetail, KrsQuery,
+        UpdateEnrollmentStatusPayload, UpdateNilaiPayload,
     },
     repo as krs_repo,
 };
@@ -192,4 +192,40 @@ pub async fn update_nilai_handler(
     Ok(Json(SuccessResponse {
         message: "Nilai berhasil diperbarui.".to_string(),
     }))
+}
+
+// --- HANDLER BARU: MENDAPATKAN LIST JADWAL AVAILABLE UNTUK UI KRS ---
+pub async fn get_available_jadwal_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Query(query): Query<KrsQuery>,
+) -> Result<Json<Vec<AvailableJadwalDetail>>, AppError> {
+    let user_id = claims.sub;
+
+    // 1. Ambil detail akademik mahasiswa yang login
+    let mhs = sqlx::query!(
+        r#"
+        SELECT rm.prodi_id, rm.kode_rombel 
+        FROM mahasiswa m 
+        JOIN registrasi_mahasiswa rm ON m.id = rm.mahasiswa_id 
+        WHERE m.user_id = $1 
+        ORDER BY rm.created_at DESC LIMIT 1
+        "#,
+        user_id
+    )
+    .fetch_optional(&pool)
+    .await?
+    .ok_or_else(|| {
+        AppError::Forbidden("Akun Anda tidak terdaftar sebagai profil mahasiswa aktif.".to_string())
+    })?;
+
+    // Jika rombel belum di-set, anggap string kosong agar tidak error
+    let rombel = mhs.kode_rombel.unwrap_or_else(|| "".to_string());
+
+    // 2. Panggil Repo Super
+    let list_jadwal =
+        krs_repo::get_available_jadwal_repo(&pool, query.tahun_akademik_id, mhs.prodi_id, rombel)
+            .await?;
+
+    Ok(Json(list_jadwal))
 }

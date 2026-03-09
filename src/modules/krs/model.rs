@@ -17,8 +17,8 @@ pub enum EnrollmentStatus {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateEnrollmentPayload {
-    pub matakuliah_id: Uuid,
     pub tahun_akademik_id: Uuid,
+    pub jadwal_kuliah_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,4 +105,22 @@ impl From<EnrollmentFromDb> for EnrollmentDetail {
             nilai_indeks: e.nilai_indeks,
         }
     }
+}
+
+// --- STRUCT BARU UNTUK PILIHAN JADWAL DI FORM KRS ---
+#[derive(Debug, Serialize, FromRow)]
+pub struct AvailableJadwalDetail {
+    pub jadwal_id: Uuid,
+    pub matakuliah_id: Uuid,
+    pub kode_mk: String,
+    pub nama_mk: String,
+    pub sks: i32,
+    pub semester_target: i32,
+    pub kelas: String,
+    pub nama_kelas_kuliah: Option<String>,
+    pub hari: String,
+    pub jam_mulai: String,
+    pub jam_selesai: String,
+    pub dosen_pengampu: Option<String>, // Nama dosen digabung (string_agg)
+    pub is_paket: bool,                 // TRUE jika cocok dengan Rombel mahasiswa
 }
