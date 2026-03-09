@@ -60,3 +60,19 @@ pub struct UpdateKurikulumPayload {
 pub struct AddMataKuliahToKurikulumPayload {
     pub matakuliah_id: Uuid,
 }
+
+// --- MODEL UNTUK MEMBACA BARIS CSV ---
+#[derive(Debug, Deserialize)]
+pub struct MappingCsvRow {
+    pub nama_kurikulum: String,
+    pub kode_mk: String,
+}
+
+// --- MODEL UNTUK RESPONSE HASIL IMPORT ---
+#[derive(Debug, Serialize)]
+pub struct ImportMappingResponse {
+    pub message: String,
+    pub success_count: usize,
+    pub failed_count: usize,
+    pub errors: Vec<String>, // Menampilkan alasan kenapa gagal (misal: "Kode MK tidak ditemukan")
+}

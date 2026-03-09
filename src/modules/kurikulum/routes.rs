@@ -22,6 +22,16 @@ pub fn kurikulum_router() -> Router<DbPool> {
             "/kurikulum/{id}/matakuliah/{mk_id}",
             delete(handler::remove_matakuliah_from_kurikulum_handler),
         )
+        // Endpoint Download Template
+        .route(
+            "/kurikulum/mapping/template",
+            get(handler::download_template_mapping_handler),
+        )
+        // Endpoint Upload File CSV
+        .route(
+            "/kurikulum/mapping/import",
+            post(handler::import_mapping_csv_handler),
+        )
         .layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),
             "KAPRODI".to_string(),

@@ -3,14 +3,16 @@ use crate::{db::DbPool, errors::AppError, modules::matakuliah::model::MataKuliah
 
 use super::{
     model::{
-        AddMataKuliahToKurikulumPayload, CreateKurikulumPayload, KurikulumDetail,
-        UpdateKurikulumPayload,
+        AddMataKuliahToKurikulumPayload, CreateKurikulumPayload, ImportMappingResponse,
+        KurikulumDetail, MappingCsvRow, UpdateKurikulumPayload,
     },
     repo as kurikulum_repo,
 };
 use axum::{
-    extract::{Json, Path, State},
-    http::StatusCode,
+    Json,
+    extract::{Multipart, Path, State},
+    http::{StatusCode, header},
+    response::IntoResponse,
 };
 use uuid::Uuid;
 
@@ -78,4 +80,87 @@ pub async fn remove_matakuliah_from_kurikulum_handler(
     kurikulum_repo::remove_matakuliah_from_kurikulum_repo(&pool, kurikulum_id, matakuliah_id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler untuk mendownload template CSV
+pub async fn download_template_mapping_handler() -> impl IntoResponse {
+    // Template isi CSV dengan delimiter titik koma (;)
+    let csv_content =
+        "nama_kurikulum;kode_mk\nKurikulum Inti 2025;IF101\nKurikulum Inti 2025;IF102\n";
+
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "text/csv"),
+            (
+                header::CONTENT_DISPOSITION,
+                "attachment; filename=\"template_mapping_kurikulum.csv\"",
+            ),
+        ],
+        csv_content,
+    )
+}
+
+/// Handler untuk menerima file upload CSV dan memproses import
+pub async fn import_mapping_csv_handler(
+    State(pool): State<DbPool>,
+    mut multipart: Multipart, // Menggunakan axum::extract::Multipart untuk menerima file
+) -> Result<(StatusCode, Json<ImportMappingResponse>), AppError> {
+    let mut records: Vec<MappingCsvRow> = Vec::new();
+    let mut file_found = false;
+
+    // Membaca stream form-data
+    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
+        if field.name() == Some("file") {
+            file_found = true;
+
+            // Ekstrak byte dari file CSV
+            let data = field.bytes().await.map_err(|_| {
+                AppError::BadRequest("Gagal membaca file yang diunggah.".to_string())
+            })?;
+
+            // Setup CSV Reader menggunakan delimiter titik koma (b';')
+            let mut rdr = csv::ReaderBuilder::new()
+                .delimiter(b';')
+                .has_headers(true)
+                .from_reader(data.as_ref());
+
+            // Deserialize baris CSV menjadi struct Rust
+            for result in rdr.deserialize::<MappingCsvRow>() {
+                match result {
+                    Ok(row) => records.push(row),
+                    Err(e) => {
+                        return Err(AppError::BadRequest(format!(
+                            "Format CSV tidak valid atau header tidak sesuai. Error: {}",
+                            e
+                        )));
+                    }
+                }
+            }
+        }
+    }
+
+    if !file_found {
+        return Err(AppError::BadRequest(
+            "Field 'file' tidak ditemukan dalam request multipart.".to_string(),
+        ));
+    }
+
+    if records.is_empty() {
+        return Err(AppError::BadRequest(
+            "File CSV kosong atau tidak ada data yang valid.".to_string(),
+        ));
+    }
+
+    // Panggil repo untuk melakukan insert massal ke database
+    let (success, failed, errors) = kurikulum_repo::import_mapping_csv_repo(&pool, records).await?;
+
+    let response = ImportMappingResponse {
+        message: "Proses import selesai.".to_string(),
+        success_count: success,
+        failed_count: failed,
+        errors,
+    };
+
+    Ok((StatusCode::OK, Json(response)))
 }

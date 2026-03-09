@@ -8,10 +8,10 @@ use rust_decimal::Error as DecimalError;
 use serde_json::Error as SerdeJsonError;
 use serde_json::json;
 use std::io::Error as IoError;
+use time::error::ComponentRange;
 use time::error::Parse as TimeParseError;
 use tracing;
 use uuid::Error as UuidError;
-use time::error::ComponentRange;
 
 #[derive(Debug)]
 pub enum AppError {
@@ -22,6 +22,7 @@ pub enum AppError {
     JsonWebTokenError(jsonwebtoken::errors::Error),
     AnyhowError(anyhow::Error),
     Forbidden(String),
+    BadRequest(String),
     MultipartError(MultipartError),
     DuplicateEntry(String),
     IoError(IoError),
@@ -199,6 +200,7 @@ impl IntoResponse for AppError {
             ),
             AppError::AnyhowError(err) => (StatusCode::UNAUTHORIZED, err.to_string()),
             AppError::Forbidden(message) => (StatusCode::FORBIDDEN, message.clone()),
+            AppError::BadRequest(message) => (StatusCode::BAD_REQUEST, message.clone()),
             AppError::MultipartError(err) => (
                 StatusCode::BAD_REQUEST,
                 format!("Request upload tidak valid: {}", err),

@@ -3,7 +3,7 @@ use crate::{db::DbPool, errors::AppError, modules::matakuliah::model::MataKuliah
 use uuid::Uuid;
 
 use super::model::{
-    AddMataKuliahToKurikulumPayload, CreateKurikulumPayload, KurikulumDetail,
+    AddMataKuliahToKurikulumPayload, CreateKurikulumPayload, KurikulumDetail, MappingCsvRow,
     UpdateKurikulumPayload,
 };
 
@@ -181,4 +181,73 @@ pub async fn remove_matakuliah_from_kurikulum_repo(
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// Fungsi untuk mengeksekusi import CSV pemetaan mata kuliah ke kurikulum
+pub async fn import_mapping_csv_repo(
+    pool: &DbPool,
+    records: Vec<MappingCsvRow>,
+) -> Result<(usize, usize, Vec<String>), AppError> {
+    let mut tx = pool.begin().await?;
+
+    let mut success_count = 0;
+    let mut failed_count = 0;
+    let mut error_messages = Vec::new();
+
+    for (index, row) in records.into_iter().enumerate() {
+        let row_number = index + 2; // +2 karena baris 1 adalah header
+
+        // 1. Cari ID Kurikulum berdasarkan Namanya
+        let kurikulum = sqlx::query!(
+            "SELECT id FROM kurikulum WHERE nama = $1",
+            row.nama_kurikulum
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        // 2. Cari ID Mata Kuliah berdasarkan Kode MK-nya
+        let matakuliah = sqlx::query!("SELECT id FROM mata_kuliah WHERE kode_mk = $1", row.kode_mk)
+            .fetch_optional(&mut *tx)
+            .await?;
+
+        // 3. Validasi & Insert
+        match (kurikulum, matakuliah) {
+            (Some(k), Some(mk)) => {
+                // INSERT dengan ON CONFLICT DO NOTHING agar jika data sudah ada, tidak terjadi error DB
+                // Asumsi nama tabel relasi Anda adalah `kurikulum_matakuliah`
+                let result_ = sqlx::query!(
+                    r#"
+                    INSERT INTO kurikulum_matakuliah (kurikulum_id, matakuliah_id) 
+                    VALUES ($1, $2) 
+                    ON CONFLICT DO NOTHING
+                    "#,
+                    k.id,
+                    mk.id
+                )
+                .execute(&mut *tx)
+                .await?;
+
+                // Jika rows_affected 0, artinya sudah pernah ditambahkan sebelumnya, tetap kita anggap sukses
+                success_count += 1;
+            }
+            (None, _) => {
+                failed_count += 1;
+                error_messages.push(format!(
+                    "Baris {}: Kurikulum '{}' tidak ditemukan.",
+                    row_number, row.nama_kurikulum
+                ));
+            }
+            (_, None) => {
+                failed_count += 1;
+                error_messages.push(format!(
+                    "Baris {}: Mata Kuliah dengan kode '{}' tidak ditemukan.",
+                    row_number, row.kode_mk
+                ));
+            }
+        }
+    }
+
+    tx.commit().await?;
+
+    Ok((success_count, failed_count, error_messages))
 }
