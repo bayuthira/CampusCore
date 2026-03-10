@@ -5,7 +5,6 @@ use super::model::{
 };
 use crate::db::DbPool;
 use crate::errors::AppError;
-use bytes::Bytes;
 use uuid::Uuid;
 
 pub async fn create_mahasiswa_repo(
@@ -157,105 +156,245 @@ pub async fn get_all_mahasiswa_repo(pool: &DbPool) -> Result<Vec<MahasiswaDetail
 
 pub async fn import_mahasiswa_from_csv_repo(
     pool: &DbPool,
-    file_data: Bytes,
+    file_data: bytes::Bytes,
 ) -> Result<ImportResult, AppError> {
-    let mut reader = csv::ReaderBuilder::new()
+    let mut rdr = csv::ReaderBuilder::new()
         .delimiter(b';')
         .from_reader(file_data.as_ref());
 
-    let mut tx = pool.begin().await?;
+    let mut success_count = 0;
+    let mut failed_count = 0;
+    let mut errors = Vec::new();
 
-    let mut rows_processed = 0;
-    let mut first_fatal_error: Option<String> = None;
-
-    for (index, result) in reader.deserialize::<MahasiswaCsvRecord>().enumerate() {
-        rows_processed += 1;
-        let baris_ke = index + 2;
-
+    // =========================================================================
+    // FASE 1: BACA & PARSING CSV KE MEMORI
+    // =========================================================================
+    let mut valid_rows = Vec::new();
+    for (index, result) in rdr.deserialize::<MahasiswaCsvRecord>().enumerate() {
+        let row_number = index + 2; // +2 karena baris 1 adalah header
         match result {
-            Ok(record) => {
-                let prodi = sqlx::query!(
-                    "SELECT id FROM prodi WHERE kode_prodi = $1",
-                    record.kode_prodi
-                )
-                .fetch_optional(&mut *tx)
-                .await?;
-
-                if prodi.is_none() {
-                    first_fatal_error = Some(format!(
-                        "Baris {}: Kode prodi '{}' tidak ditemukan.",
-                        baris_ke, record.kode_prodi
-                    ));
-                    break;
-                }
-
-                let prodi_id = prodi.unwrap().id;
-                let hashed_password = bcrypt::hash(&record.nim, bcrypt::DEFAULT_COST)?;
-
-                // Query raksasa untuk Insert ke 3 tabel sekaligus (Users, Mahasiswa, Registrasi_Mahasiswa)
-                let insert_result = sqlx::query!(
-                    r#"
-                    WITH new_user AS (
-                        INSERT INTO users (username, password_hash, full_name, email)
-                        VALUES ($1, $2, $3, $4) RETURNING id
-                    ), new_user_role AS (
-                        INSERT INTO user_roles (user_id, role_id)
-                        VALUES ((SELECT id FROM new_user), (SELECT id FROM roles WHERE name = 'MAHASISWA'))
-                    ), new_mhs AS (
-                        INSERT INTO mahasiswa (nik, nama_mahasiswa, email, user_id)
-                        VALUES ($5, $3, $4, (SELECT id FROM new_user)) RETURNING id
-                    )
-                    INSERT INTO registrasi_mahasiswa (mahasiswa_id, prodi_id, nim, angkatan)
-                    VALUES ((SELECT id FROM new_mhs), $6, $1, $7)
-                    "#,
-                    record.nim, hashed_password, record.nama_mahasiswa, record.email, record.nik, prodi_id, record.angkatan
-                ).execute(&mut *tx).await;
-
-                if let Err(e) = insert_result {
-                    let e_str = e.to_string();
-                    let err_msg = if e_str.contains("users_username_key")
-                        || e_str.contains("registrasi_mahasiswa_nim_key")
-                    {
-                        format!("Baris {}: NIM '{}' sudah terdaftar.", baris_ke, record.nim)
-                    } else if e_str.contains("mahasiswa_nik_key") {
-                        format!("Baris {}: NIK '{}' sudah terdaftar.", baris_ke, record.nik)
-                    } else {
-                        format!("Baris {}: Gagal memasukkan ke DB - {}", baris_ke, e_str)
-                    };
-                    first_fatal_error = Some(err_msg);
-                    break;
-                }
-            }
+            Ok(row) => valid_rows.push((row_number, row)),
             Err(e) => {
-                first_fatal_error = Some(format!(
-                    "Baris {}: Format CSV tidak valid - {}",
-                    baris_ke, e
+                failed_count += 1;
+                errors.push(format!(
+                    "Baris {}: Format baris CSV tidak valid - {}",
+                    row_number, e
                 ));
-                break;
             }
         }
     }
 
-    let final_report: ImportResult;
-    if let Some(err_msg) = first_fatal_error {
-        tx.rollback().await?;
-        final_report = ImportResult {
-            status: "GAGAL_DIBATALKAN".to_string(),
-            total_baris_dipindai: rows_processed,
-            baris_berhasil_disimpan: 0,
-            detail_error: vec![err_msg],
+    // =========================================================================
+    // FASE 2: PRE-HASH PASSWORD DI LUAR TRANSAKSI DB (MENCEGAH SERVER FREEZE)
+    // =========================================================================
+    // Kita gunakan `spawn_blocking` agar perhitungan kriptografi tidak memblokir async runtime
+    let hashed_data = tokio::task::spawn_blocking(move || {
+        let mut processed = Vec::new();
+        for (row_number, row) in valid_rows {
+            let nim_clean = row.nim.trim().to_string();
+            // Gunakan cost 8 (Bukan default 12). Cost 8 sangat cepat (±10ms per hash)
+            // sehingga cocok untuk import massal password default.
+            let hash_result = bcrypt::hash(&nim_clean, 8);
+            processed.push((row_number, row, hash_result));
+        }
+        processed
+    })
+    .await
+    .map_err(|e| AppError::AnyhowError(anyhow::anyhow!("Worker thread error: {}", e)))?;
+
+    // =========================================================================
+    // FASE 3: BUKA TRANSAKSI DATABASE & EKSEKUSI (SANGAT CEPAT)
+    // =========================================================================
+    let mut tx = pool.begin().await?;
+
+    // Ambil role_id untuk MAHASISWA sekali saja di luar loop
+    let role_id = sqlx::query_scalar!("SELECT id FROM roles WHERE name = 'MAHASISWA'")
+        .fetch_optional(&mut *tx)
+        .await?;
+
+    for (row_number, row, hash_result) in hashed_data {
+        // Buat SAVEPOINT agar jika ada NIK duplikat, tidak membatalkan seluruh proses
+        let sp_name = format!("sp_{}", row_number);
+        sqlx::query(&format!("SAVEPOINT {}", sp_name))
+            .execute(&mut *tx)
+            .await?;
+
+        // 1. Cek hasil pre-hash
+        let hashed_password = match hash_result {
+            Ok(h) => h,
+            Err(_) => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                    .execute(&mut *tx)
+                    .await?;
+                failed_count += 1;
+                errors.push(format!(
+                    "Baris {}: Gagal mengenkripsi password.",
+                    row_number
+                ));
+                continue;
+            }
         };
-    } else {
-        tx.commit().await?;
-        final_report = ImportResult {
-            status: "SUKSES".to_string(),
-            total_baris_dipindai: rows_processed,
-            baris_berhasil_disimpan: rows_processed,
-            detail_error: vec![],
+
+        // 2. Cari Prodi ID & Nama Prodi berdasarkan Kode Prodi
+        let prodi = match sqlx::query!(
+            "SELECT id, nama_prodi FROM prodi WHERE kode_prodi = $1",
+            row.kode_prodi.trim()
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        {
+            Some(p) => p,
+            None => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                    .execute(&mut *tx)
+                    .await?;
+                failed_count += 1;
+                errors.push(format!(
+                    "Baris {}: Prodi dengan kode '{}' tidak ditemukan.",
+                    row_number, row.kode_prodi
+                ));
+                continue;
+            }
         };
+
+        // 3. LOGIKA OPSI 2 (Pembuatan NIK Sementara)
+        let nik_final = if row.nik.trim().is_empty() {
+            format!("TMP{}", row.nim.trim())
+        } else {
+            row.nik.trim().to_string()
+        };
+
+        // 4. LOGIKA ROMBEL OTOMATIS (nama_jurusan + tahun_masuk)
+        let rombel_otomatis = format!(
+            "{} {}",
+            prodi.nama_prodi.trim().to_lowercase(),
+            row.angkatan
+        );
+
+        // 5. Buat Akun Login (Users)
+        let user_result = sqlx::query_scalar!(
+            "INSERT INTO users (username, password_hash, full_name, email) VALUES ($1, $2, $3, $4) RETURNING id",
+            row.nim.trim(),
+            hashed_password,
+            row.nama_mahasiswa.trim(),
+            row.email.trim()
+        )
+        .fetch_one(&mut *tx)
+        .await;
+
+        let user_id = match user_result {
+            Ok(id) => id,
+            Err(e) => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                    .execute(&mut *tx)
+                    .await?;
+                failed_count += 1;
+
+                let err_msg = e.to_string();
+                let alasan = if err_msg.contains("users_email_key") {
+                    "Email duplikat"
+                } else {
+                    "NIM duplikat"
+                };
+                errors.push(format!(
+                    "Baris {}: Gagal simpan User ({}).",
+                    row_number, alasan
+                ));
+                continue;
+            }
+        };
+
+        // Berikan Role Mahasiswa
+        if let Some(r_id) = role_id {
+            let _ = sqlx::query!(
+                "INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                user_id,
+                r_id
+            )
+            .execute(&mut *tx)
+            .await;
+        }
+
+        // 6. Insert Biodata Mahasiswa (Menggunakan nik_final)
+        let mhs_result = sqlx::query_scalar!(
+            "INSERT INTO mahasiswa (user_id, nik, nama_mahasiswa) VALUES ($1, $2, $3) RETURNING id",
+            user_id,
+            nik_final,
+            row.nama_mahasiswa.trim()
+        )
+        .fetch_one(&mut *tx)
+        .await;
+
+        let mhs_id = match mhs_result {
+            Ok(id) => id,
+            Err(_) => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                    .execute(&mut *tx)
+                    .await?;
+                failed_count += 1;
+                errors.push(format!(
+                    "Baris {}: Gagal simpan Biodata (NIK {} mungkin duplikat).",
+                    row_number, nik_final
+                ));
+                continue;
+            }
+        };
+
+        // 7. Insert Registrasi Akademik (Dengan kode_rombel otomatis)
+        let reg_result = sqlx::query!(
+            "INSERT INTO registrasi_mahasiswa (mahasiswa_id, prodi_id, nim, angkatan, kode_rombel) VALUES ($1, $2, $3, $4, $5)",
+            mhs_id,
+            prodi.id,
+            row.nim.trim(),
+            row.angkatan,
+            rombel_otomatis
+        )
+        .execute(&mut *tx)
+        .await;
+
+        match reg_result {
+            Ok(_) => {
+                // Lepaskan Savepoint jika baris ini sukses sepenuhnya
+                sqlx::query(&format!("RELEASE SAVEPOINT {}", sp_name))
+                    .execute(&mut *tx)
+                    .await?;
+                success_count += 1;
+            }
+            Err(_) => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                    .execute(&mut *tx)
+                    .await?;
+                failed_count += 1;
+                errors.push(format!(
+                    "Baris {}: Gagal simpan Akademik (NIM {} duplikat di tabel registrasi).",
+                    row_number,
+                    row.nim.trim()
+                ));
+            }
+        }
     }
 
-    Ok(final_report)
+    // =========================================================================
+    // FASE 4: COMMIT ATAU ROLLBACK TOTAL (All-or-Nothing)
+    // =========================================================================
+    if failed_count > 0 {
+        tx.rollback().await?;
+        return Ok(ImportResult {
+            status: "GAGAL".to_string(),
+            total_baris_dipindai: success_count + failed_count,
+            baris_berhasil_disimpan: 0, // 0 karena transaksi dibatalkan
+            detail_error: errors,
+        });
+    }
+
+    tx.commit().await?;
+
+    Ok(ImportResult {
+        status: "SUKSES".to_string(),
+        total_baris_dipindai: success_count,
+        baris_berhasil_disimpan: success_count,
+        detail_error: errors,
+    })
 }
 
 pub async fn update_mahasiswa_repo(

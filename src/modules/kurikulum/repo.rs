@@ -215,7 +215,7 @@ pub async fn import_mapping_csv_repo(
             (Some(k), Some(mk)) => {
                 // INSERT dengan ON CONFLICT DO NOTHING agar jika data sudah ada, tidak terjadi error DB
                 // Asumsi nama tabel relasi Anda adalah `kurikulum_matakuliah`
-                let result_ = sqlx::query!(
+                let _result_ = sqlx::query!(
                     r#"
                     INSERT INTO kurikulum_matakuliah (kurikulum_id, matakuliah_id) 
                     VALUES ($1, $2) 
