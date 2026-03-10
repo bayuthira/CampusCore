@@ -110,3 +110,52 @@ pub struct SingleAssignDosenPaPayload {
     pub registrasi_id: Uuid,
     pub dosen_pa_id: Uuid,
 }
+
+// =========================================================================
+// --- MODEL UNTUK FITUR MANAJEMEN ROMBEL ---
+// =========================================================================
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct RombelSummary {
+    pub prodi_id: Uuid,
+    pub nama_prodi: String,
+    pub angkatan: i32,
+    pub kode_rombel: Option<String>,
+    pub jumlah_mahasiswa: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RombelFilter {
+    pub prodi_id: Option<Uuid>,
+    pub angkatan: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MahasiswaRombelFilter {
+    pub prodi_id: Uuid,
+    pub angkatan: i32,
+    pub kode_rombel: Option<String>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct MahasiswaRombelDetail {
+    pub registrasi_id: Uuid,
+    pub mahasiswa_id: Uuid,
+    pub nim: String,
+    pub nama_mahasiswa: String,
+    pub kode_rombel: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PindahRombelPayload {
+    pub registrasi_ids: Vec<Uuid>,
+    pub kode_rombel_baru: Option<String>, // Bisa diset null jika ingin dicabut rombelnya
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RenameRombelPayload {
+    pub prodi_id: Uuid,
+    pub angkatan: i32,
+    pub kode_rombel_lama: Option<String>,
+    pub kode_rombel_baru: Option<String>,
+}

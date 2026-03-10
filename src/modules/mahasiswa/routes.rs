@@ -2,14 +2,15 @@
 use super::handler;
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
-    Router,
-    handler::Handler,
-    middleware,
-    routing::{get, post},
+    Router, middleware,
+    routing::{get, post, put},
 };
 
 pub fn mahasiswa_router() -> Router<DbPool> {
-    Router::new()
+    // =========================================================
+    // 1. RUTE DATA MAHASISWA
+    // =========================================================
+    let rute_mahasiswa = Router::new()
         .route(
             "/mahasiswa/template-csv",
             get(handler::download_mahasiswa_csv_template_handler),
@@ -28,11 +29,11 @@ pub fn mahasiswa_router() -> Router<DbPool> {
                     "STAF_AKADEMIK".to_string(),
                     "DOSEN".to_string(),
                 ])))
-                .post(
-                    handler::create_mahasiswa_handler.layer(middleware::from_fn(require_role(
-                        vec!["SUPER_ADMIN".to_string(), "STAF_AKADEMIK".to_string()],
-                    ))),
-                ),
+                .post(handler::create_mahasiswa_handler)
+                .layer(middleware::from_fn(require_role(vec![
+                    "SUPER_ADMIN".to_string(),
+                    "STAF_AKADEMIK".to_string(),
+                ]))),
         )
         .route(
             "/mahasiswa/{id}",
@@ -43,5 +44,33 @@ pub fn mahasiswa_router() -> Router<DbPool> {
                     "SUPER_ADMIN".to_string(),
                     "STAF_AKADEMIK".to_string(),
                 ]))),
+        );
+
+    // =========================================================
+    // 2. RUTE MANAJEMEN ROMBEL (ROMBONGAN BELAJAR)
+    // =========================================================
+    let rute_rombel = Router::new()
+        .route("/akademik/rombel", get(handler::get_rombel_summary_handler))
+        .route(
+            "/akademik/rombel/mahasiswa",
+            get(handler::get_mahasiswa_by_rombel_handler),
         )
+        .route(
+            "/akademik/rombel/pindah",
+            put(handler::pindah_rombel_handler),
+        )
+        .route(
+            "/akademik/rombel/rename",
+            put(handler::rename_rombel_handler),
+        )
+        .layer(middleware::from_fn(require_role(vec![
+            "SUPER_ADMIN".to_string(),
+            "STAF_AKADEMIK".to_string(),
+            "KAPRODI".to_string(),
+        ])));
+
+    // =========================================================
+    // GABUNGKAN SEMUA RUTE MENJADI SATU KESATUAN MODUL
+    // =========================================================
+    Router::new().merge(rute_mahasiswa).merge(rute_rombel)
 }

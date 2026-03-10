@@ -1,7 +1,8 @@
 // src/modules/mahasiswa/repo.rs
 use super::model::{
     CreateMahasiswaPayload, ImportResult, MahasiswaCsvRecord, MahasiswaDetail,
-    UpdateMahasiswaPayload,
+    MahasiswaRombelDetail, MahasiswaRombelFilter, PindahRombelPayload, RenameRombelPayload,
+    RombelFilter, RombelSummary, UpdateMahasiswaPayload,
 };
 use crate::db::DbPool;
 use crate::errors::AppError;
@@ -498,4 +499,129 @@ pub async fn delete_mahasiswa_repo(pool: &DbPool, id: Uuid) -> Result<(), AppErr
 
     tx.commit().await?;
     Ok(())
+}
+
+// =========================================================================
+// --- REPOSITORY UNTUK FITUR MANAJEMEN ROMBEL ---
+// =========================================================================
+pub async fn get_rombel_summary_repo(
+    pool: &DbPool,
+    filter: RombelFilter,
+) -> Result<Vec<RombelSummary>, AppError> {
+    let mut query = sqlx::QueryBuilder::new(
+        r#"
+        SELECT 
+            rm.prodi_id,
+            p.nama_prodi,
+            rm.angkatan,
+            rm.kode_rombel,
+            COUNT(rm.id) as jumlah_mahasiswa
+        FROM registrasi_mahasiswa rm
+        JOIN prodi p ON rm.prodi_id = p.id
+        WHERE 1=1
+        "#,
+    );
+
+    if let Some(prodi_id) = filter.prodi_id {
+        query.push(" AND rm.prodi_id = ");
+        query.push_bind(prodi_id);
+    }
+    if let Some(angkatan) = filter.angkatan {
+        query.push(" AND rm.angkatan = ");
+        query.push_bind(angkatan);
+    }
+
+    query.push(" GROUP BY rm.prodi_id, p.nama_prodi, rm.angkatan, rm.kode_rombel ORDER BY rm.angkatan DESC, p.nama_prodi ASC, rm.kode_rombel ASC");
+
+    let result = query
+        .build_query_as::<RombelSummary>()
+        .fetch_all(pool)
+        .await?;
+    Ok(result)
+}
+
+pub async fn get_mahasiswa_by_rombel_repo(
+    pool: &DbPool,
+    filter: MahasiswaRombelFilter,
+) -> Result<Vec<MahasiswaRombelDetail>, AppError> {
+    let mut query = sqlx::QueryBuilder::new(
+        r#"
+        SELECT 
+            rm.id as registrasi_id,
+            rm.mahasiswa_id,
+            rm.nim,
+            m.nama_mahasiswa,
+            rm.kode_rombel
+        FROM registrasi_mahasiswa rm
+        JOIN mahasiswa m ON rm.mahasiswa_id = m.id
+        WHERE rm.prodi_id = "#,
+    );
+    query.push_bind(filter.prodi_id);
+    query.push(" AND rm.angkatan = ");
+    query.push_bind(filter.angkatan);
+
+    // Mengakomodasi jika admin ingin mencari mahasiswa yang "Belum punya rombel" (NULL)
+    if let Some(rombel) = filter.kode_rombel {
+        query.push(" AND rm.kode_rombel = ");
+        query.push_bind(rombel);
+    } else {
+        query.push(" AND rm.kode_rombel IS NULL");
+    }
+
+    query.push(" ORDER BY rm.nim ASC");
+
+    let result = query
+        .build_query_as::<MahasiswaRombelDetail>()
+        .fetch_all(pool)
+        .await?;
+    Ok(result)
+}
+
+pub async fn pindah_rombel_repo(
+    pool: &DbPool,
+    payload: PindahRombelPayload,
+) -> Result<u64, AppError> {
+    if payload.registrasi_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let mut tx = pool.begin().await?;
+    let mut rows_affected = 0;
+
+    // Loop sangat cepat menggunakan Transaksi
+    for reg_id in payload.registrasi_ids {
+        let res = sqlx::query!(
+            "UPDATE registrasi_mahasiswa SET kode_rombel = $1, updated_at = now() WHERE id = $2",
+            payload.kode_rombel_baru,
+            reg_id
+        )
+        .execute(&mut *tx)
+        .await?;
+        rows_affected += res.rows_affected();
+    }
+
+    tx.commit().await?;
+    Ok(rows_affected)
+}
+
+pub async fn rename_rombel_repo(
+    pool: &DbPool,
+    payload: RenameRombelPayload,
+) -> Result<u64, AppError> {
+    let mut query = sqlx::QueryBuilder::new("UPDATE registrasi_mahasiswa SET kode_rombel = ");
+    query.push_bind(payload.kode_rombel_baru);
+    query.push(", updated_at = now() WHERE prodi_id = ");
+    query.push_bind(payload.prodi_id);
+    query.push(" AND angkatan = ");
+    query.push_bind(payload.angkatan);
+
+    if let Some(lama) = payload.kode_rombel_lama {
+        query.push(" AND kode_rombel = ");
+        query.push_bind(lama);
+    } else {
+        query.push(" AND kode_rombel IS NULL");
+    }
+
+    let res = query.build().execute(pool).await?;
+    Ok(res.rows_affected())
 }

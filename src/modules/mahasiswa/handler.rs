@@ -1,16 +1,21 @@
 // src/modules/mahasiswa/handler.rs
 
 use super::{
-    model::{CreateMahasiswaPayload, ImportResult, MahasiswaDetail, UpdateMahasiswaPayload},
+    model::{
+        CreateMahasiswaPayload, ImportResult, MahasiswaDetail, MahasiswaRombelDetail,
+        MahasiswaRombelFilter, PindahRombelPayload, RenameRombelPayload, RombelFilter,
+        RombelSummary, UpdateMahasiswaPayload,
+    },
     repo as mahasiswa_repo,
 };
 use crate::{db::DbPool, errors::AppError, modules::auth::middleware::TokenClaims};
 use axum::response::{IntoResponse, Response};
 use axum::{
     Extension,
-    extract::{Json, Multipart, Path, State},
+    extract::{Json, Multipart, Path, Query, State},
     http::StatusCode,
 };
+use serde_json::json;
 use uuid::Uuid;
 
 /// Handler untuk membuat data Mahasiswa baru, sekaligus membuat akun user-nya.
@@ -119,4 +124,40 @@ pub async fn download_mahasiswa_csv_template_handler() -> Response {
 
     // 5. Kembalikan respons dengan header dan konten
     (headers, content).into_response()
+}
+
+pub async fn get_rombel_summary_handler(
+    State(pool): State<DbPool>,
+    Query(filter): Query<RombelFilter>,
+) -> Result<Json<Vec<RombelSummary>>, AppError> {
+    let result = mahasiswa_repo::get_rombel_summary_repo(&pool, filter).await?;
+    Ok(Json(result))
+}
+
+pub async fn get_mahasiswa_by_rombel_handler(
+    State(pool): State<DbPool>,
+    Query(filter): Query<MahasiswaRombelFilter>,
+) -> Result<Json<Vec<MahasiswaRombelDetail>>, AppError> {
+    let result = mahasiswa_repo::get_mahasiswa_by_rombel_repo(&pool, filter).await?;
+    Ok(Json(result))
+}
+
+pub async fn pindah_rombel_handler(
+    State(pool): State<DbPool>,
+    Json(payload): Json<PindahRombelPayload>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let count = mahasiswa_repo::pindah_rombel_repo(&pool, payload).await?;
+    Ok(Json(json!({
+        "message": format!("Berhasil memindahkan {} mahasiswa ke rombel baru.", count)
+    })))
+}
+
+pub async fn rename_rombel_handler(
+    State(pool): State<DbPool>,
+    Json(payload): Json<RenameRombelPayload>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let count = mahasiswa_repo::rename_rombel_repo(&pool, payload).await?;
+    Ok(Json(json!({
+        "message": format!("Berhasil mengubah nama rombel untuk {} mahasiswa.", count)
+    })))
 }
