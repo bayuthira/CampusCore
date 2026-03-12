@@ -7,7 +7,7 @@ use uuid::Uuid;
 // Tidak lagi meminta password/email di sini karena dikelola via Pegawai
 #[derive(Debug, Deserialize)]
 pub struct CreateDosenPayload {
-    pub nidn: String,
+    pub nidn: Option<String>,
     pub pegawai_id: Uuid, // Wajib terhubung ke pegawai
     pub prodi_id: Uuid,
 
@@ -20,7 +20,7 @@ pub struct CreateDosenPayload {
 #[derive(Debug, Serialize, FromRow)]
 pub struct DosenDetail {
     pub id: Uuid,
-    pub nidn: String,
+    pub nidn: Option<String>,
     pub nama_dosen: String,    // Didapat dari JOIN pegawai.nama_lengkap
     pub email: Option<String>, // Didapat dari JOIN pegawai.email
     pub prodi_id: Uuid,

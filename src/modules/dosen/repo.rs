@@ -9,7 +9,7 @@ pub async fn create_dosen_repo(
 ) -> Result<DosenDetail, AppError> {
     let mut tx = pool.begin().await?;
 
-    // Pastikan pegawai ada dan ambil user_id-nya
+    // Pastikan pegawai ada dan ambil user_id-nya (tetap butuh ini untuk insert Role)
     let pegawai = sqlx::query!(
         "SELECT user_id FROM pegawai WHERE id = $1",
         payload.pegawai_id
@@ -18,16 +18,15 @@ pub async fn create_dosen_repo(
     .await?
     .ok_or_else(|| AppError::Forbidden("Pegawai tidak ditemukan".to_string()))?;
 
-    // Insert ke tabel dosen (TANPA nama_dosen dan email)
+    // Insert ke tabel dosen (TANPA nama_dosen, email, dan user_id)
     let new_dosen_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO dosen (nidn, prodi_id, pegawai_id, user_id, id_penugasan_feeder, ikatan_kerja) 
-        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id
+        INSERT INTO dosen (nidn, prodi_id, pegawai_id, id_penugasan_feeder, ikatan_kerja) 
+        VALUES ($1, $2, $3, $4, $5) RETURNING id
         "#,
         payload.nidn,
         payload.prodi_id,
         payload.pegawai_id,
-        pegawai.user_id,
         payload.id_penugasan_feeder,
         payload.ikatan_kerja
     )
@@ -56,7 +55,7 @@ pub async fn get_all_dosen_repo(pool: &DbPool) -> Result<Vec<DosenDetail>, AppEr
         DosenDetail,
         r#"
         SELECT 
-            d.id, d.nidn as "nidn!", d.prodi_id as "prodi_id!", d.pegawai_id as "pegawai_id!", 
+            d.id, d.nidn, d.prodi_id as "prodi_id!", d.pegawai_id as "pegawai_id!", 
             d.id_penugasan_feeder, d.ikatan_kerja,
             COALESCE(p.nama_prodi, 'Prodi Tidak Ditemukan') as "nama_prodi!",
             peg.nama_lengkap as "nama_dosen!", peg.email as "email"
@@ -77,7 +76,7 @@ pub async fn get_dosen_by_id_repo(pool: &DbPool, id: Uuid) -> Result<DosenDetail
         DosenDetail,
         r#"
         SELECT 
-            d.id, d.nidn as "nidn!", d.prodi_id as "prodi_id!", d.pegawai_id as "pegawai_id!", 
+            d.id, d.nidn, d.prodi_id as "prodi_id!", d.pegawai_id as "pegawai_id!", 
             d.id_penugasan_feeder, d.ikatan_kerja,
             COALESCE(p.nama_prodi, 'Prodi Tidak Ditemukan') as "nama_prodi!",
             peg.nama_lengkap as "nama_dosen!", peg.email as "email"
@@ -100,7 +99,8 @@ pub async fn update_dosen_repo(
 ) -> Result<DosenDetail, AppError> {
     let old_dosen = get_dosen_by_id_repo(pool, id).await?;
 
-    let upd_nidn = payload.nidn.unwrap_or(old_dosen.nidn);
+    // --- PERBAIKAN: Gunakan .or() karena nidn sekarang adalah Option<String> ---
+    let upd_nidn = payload.nidn.or(old_dosen.nidn);
     let upd_prodi = payload.prodi_id.unwrap_or(old_dosen.prodi_id);
     let upd_penugasan = payload
         .id_penugasan_feeder
@@ -129,10 +129,8 @@ pub async fn delete_dosen_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> 
         .await?
         .rows_affected();
 
-    // Jika tidak ada baris yang terhapus, berarti ID tidak ditemukan
     if rows_affected == 0 {
         return Err(sqlx::Error::RowNotFound.into());
     }
-
     Ok(())
 }

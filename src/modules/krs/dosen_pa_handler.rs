@@ -26,12 +26,14 @@ pub async fn get_my_advisees_handler(
 ) -> Result<Json<Vec<MahasiswaBimbingan>>, AppError> {
     let logged_in_user_id = claims.sub;
 
-    let dosen = sqlx::query!("SELECT id FROM dosen WHERE user_id = $1", logged_in_user_id)
-        .fetch_optional(&pool)
-        .await?
-        .ok_or_else(|| {
-            AppError::Forbidden("Hanya dosen yang dapat mengakses data ini.".to_string())
-        })?;
+    // --- PERBAIKAN: JOIN ke pegawai untuk mencari dosen berdasarkan user_id ---
+    let dosen = sqlx::query!(
+        "SELECT d.id FROM dosen d JOIN pegawai p ON d.pegawai_id = p.id WHERE p.user_id = $1",
+        logged_in_user_id
+    )
+    .fetch_optional(&pool)
+    .await?
+    .ok_or_else(|| AppError::Forbidden("Hanya dosen yang dapat mengakses data ini.".to_string()))?;
 
     let advisees = dosen_pa_repo::get_my_advisees_repo(&pool, dosen.id).await?;
 
@@ -44,16 +46,15 @@ pub async fn get_advisee_krs_handler(
     Path(mahasiswa_id): Path<Uuid>,
     Query(query): Query<KrsQuery>,
 ) -> Result<Json<Vec<EnrollmentDetail>>, AppError> {
-    let dosen = sqlx::query!("SELECT id FROM dosen WHERE user_id = $1", claims.sub)
-        .fetch_optional(&pool)
-        .await?
-        .ok_or_else(|| {
-            AppError::Forbidden("Hanya dosen yang dapat mengakses data ini.".to_string())
-        })?;
+    // --- PERBAIKAN: JOIN ke pegawai untuk mencari dosen berdasarkan user_id ---
+    let dosen = sqlx::query!(
+        "SELECT d.id FROM dosen d JOIN pegawai p ON d.pegawai_id = p.id WHERE p.user_id = $1",
+        claims.sub
+    )
+    .fetch_optional(&pool)
+    .await?
+    .ok_or_else(|| AppError::Forbidden("Hanya dosen yang dapat mengakses data ini.".to_string()))?;
 
-    // PERBAIKAN: Tidak memfilter menggunakan tahun_akademik_id karena dosen PA
-    // menempel pada registrasi mahasiswa secara umum (bukan per semester).
-    // Kita cukup mengambil data registrasi terbaru milik mahasiswa tersebut.
     let registrasi = sqlx::query!(
         "SELECT id, dosen_pa_id FROM registrasi_mahasiswa WHERE mahasiswa_id = $1 ORDER BY created_at DESC LIMIT 1",
         mahasiswa_id

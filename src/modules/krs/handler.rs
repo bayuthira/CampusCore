@@ -122,12 +122,16 @@ pub async fn update_enrollment_status_handler(
     Path(enrollment_id): Path<Uuid>,
     Json(payload): Json<UpdateEnrollmentStatusPayload>,
 ) -> Result<Json<SuccessResponse>, AppError> {
-    let dosen = sqlx::query!("SELECT id FROM dosen WHERE user_id = $1", claims.sub)
-        .fetch_optional(&pool)
-        .await?
-        .ok_or_else(|| {
-            AppError::Forbidden("Hanya profil dosen yang dapat melakukan aksi ini.".to_string())
-        })?;
+    // --- PERBAIKAN: JOIN ke pegawai untuk mencari dosen berdasarkan user_id ---
+    let dosen = sqlx::query!(
+        "SELECT d.id FROM dosen d JOIN pegawai p ON d.pegawai_id = p.id WHERE p.user_id = $1",
+        claims.sub
+    )
+    .fetch_optional(&pool)
+    .await?
+    .ok_or_else(|| {
+        AppError::Forbidden("Hanya profil dosen yang dapat melakukan aksi ini.".to_string())
+    })?;
 
     let enrollment = krs_repo::get_enrollment_by_id_repo(&pool, enrollment_id).await?;
 
@@ -160,9 +164,14 @@ pub async fn update_nilai_handler(
     Json(payload): Json<UpdateNilaiPayload>,
 ) -> Result<Json<SuccessResponse>, AppError> {
     let is_admin = claims.roles.contains(&"SUPER_ADMIN".to_string());
-    let dosen = sqlx::query!("SELECT id FROM dosen WHERE user_id = $1", claims.sub)
-        .fetch_optional(&pool)
-        .await?;
+
+    // --- PERBAIKAN: JOIN ke pegawai untuk mencari dosen berdasarkan user_id ---
+    let dosen = sqlx::query!(
+        "SELECT d.id FROM dosen d JOIN pegawai p ON d.pegawai_id = p.id WHERE p.user_id = $1",
+        claims.sub
+    )
+    .fetch_optional(&pool)
+    .await?;
 
     if !is_admin && dosen.is_none() {
         return Err(AppError::Forbidden(
@@ -194,7 +203,6 @@ pub async fn update_nilai_handler(
     }))
 }
 
-// --- HANDLER BARU: MENDAPATKAN LIST JADWAL AVAILABLE UNTUK UI KRS ---
 pub async fn get_available_jadwal_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
@@ -202,7 +210,6 @@ pub async fn get_available_jadwal_handler(
 ) -> Result<Json<Vec<AvailableJadwalDetail>>, AppError> {
     let user_id = claims.sub;
 
-    // 1. Ambil detail akademik mahasiswa yang login
     let mhs = sqlx::query!(
         r#"
         SELECT rm.prodi_id, rm.kode_rombel 
@@ -219,10 +226,8 @@ pub async fn get_available_jadwal_handler(
         AppError::Forbidden("Akun Anda tidak terdaftar sebagai profil mahasiswa aktif.".to_string())
     })?;
 
-    // Jika rombel belum di-set, anggap string kosong agar tidak error
     let rombel = mhs.kode_rombel.unwrap_or_else(|| "".to_string());
 
-    // 2. Panggil Repo Super
     let list_jadwal =
         krs_repo::get_available_jadwal_repo(&pool, query.tahun_akademik_id, mhs.prodi_id, rombel)
             .await?;

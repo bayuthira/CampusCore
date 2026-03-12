@@ -75,6 +75,7 @@ pub struct Pegawai {
     pub no_npwp: Option<String>,
     pub no_bpjs_kesehatan: Option<String>,
     pub no_bpjs_ketenagakerjaan: Option<String>,
+    pub nuptk: Option<String>, // <-- TAMBAHAN NUPTK
 
     // TAMBAHAN FEEDER PEGAWAI
     pub id_sdm_feeder: Option<Uuid>,
@@ -129,6 +130,7 @@ pub struct PegawaiPayload {
     pub no_npwp: Option<String>,
     pub no_bpjs_kesehatan: Option<String>,
     pub no_bpjs_ketenagakerjaan: Option<String>,
+    pub nuptk: Option<String>, // <-- TAMBAHAN NUPTK
 
     // TAMBAHAN FEEDER PEGAWAI
     pub id_sdm_feeder: Option<Uuid>,
