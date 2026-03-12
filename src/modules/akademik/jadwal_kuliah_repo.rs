@@ -4,6 +4,7 @@ use super::jadwal_kuliah_model::{
     JadwalKuliahFilter, PlotJadwalRuanganPayload, TimeWithOffset, UpdateJadwalKuliahPayload,
 };
 use crate::{db::DbPool, errors::AppError};
+use rust_decimal::Decimal;
 use sqlx::FromRow;
 use time::{Duration, Weekday};
 use uuid::Uuid;
@@ -83,7 +84,9 @@ pub async fn create_jadwal_kuliah_repo(
         let peran_str = dosen.peran.as_str();
 
         // Ambil default values untuk SKS dan Tatap Muka
-        let sks_sub = dosen.sks_substansi_total.unwrap_or(0);
+        let sks_sub = dosen
+            .sks_substansi_total
+            .unwrap_or_else(|| Decimal::from(0));
         let renc_tm = dosen.rencana_tatap_muka.unwrap_or(16);
         let real_tm = dosen.realisasi_tatap_muka.unwrap_or(0);
 
@@ -284,7 +287,7 @@ pub async fn get_all_jadwal_kuliah_repo(
             SELECT 
                 d.id as dosen_id, p.nama_lengkap as nama_dosen, jdp.peran as "peran: _",
                 jdp.id_aktivitas_mengajar_feeder, 
-                jdp.sks_substansi_total as "sks_substansi_total: i32", 
+                jdp.sks_substansi_total as "sks_substansi_total: Decimal", 
                 jdp.rencana_tatap_muka as "rencana_tatap_muka: i32", 
                 jdp.realisasi_tatap_muka as "realisasi_tatap_muka: i32"
             FROM jadwal_dosen_pengampu jdp
@@ -414,7 +417,9 @@ pub async fn update_jadwal_kuliah_repo(
     for dosen in payload.dosen_pengampu {
         let peran_str = dosen.peran.as_str();
 
-        let sks_sub = dosen.sks_substansi_total.unwrap_or(0);
+        let sks_sub = dosen
+            .sks_substansi_total
+            .unwrap_or_else(|| Decimal::from(0));
         let renc_tm = dosen.rencana_tatap_muka.unwrap_or(16);
         let real_tm = dosen.realisasi_tatap_muka.unwrap_or(0);
 

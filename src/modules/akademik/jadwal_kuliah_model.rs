@@ -1,4 +1,5 @@
 // src/modules/akademik/jadwal_kuliah_model.rs
+use rust_decimal::Decimal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use time::{Time, UtcOffset, macros::format_description};
 use uuid::Uuid;
@@ -173,7 +174,7 @@ pub struct DosenPengampuPayload {
 
     // --- TAMBAHAN FEEDER AKTIVITAS MENGAJAR ---
     pub id_aktivitas_mengajar_feeder: Option<Uuid>,
-    pub sks_substansi_total: Option<i32>,
+    pub sks_substansi_total: Option<Decimal>,
     pub rencana_tatap_muka: Option<i32>,
     pub realisasi_tatap_muka: Option<i32>,
 }
@@ -209,7 +210,7 @@ pub struct DosenPengampuDetail {
 
     // --- TAMBAHAN FEEDER AKTIVITAS MENGAJAR ---
     pub id_aktivitas_mengajar_feeder: Option<Uuid>,
-    pub sks_substansi_total: Option<i32>,
+    pub sks_substansi_total: Option<Decimal>,
     pub rencana_tatap_muka: Option<i32>,
     pub realisasi_tatap_muka: Option<i32>,
 }
