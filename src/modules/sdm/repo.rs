@@ -206,48 +206,55 @@ pub async fn update_pegawai_repo(
 
     let old_pegawai = get_pegawai_by_id_repo_inner(&mut *tx, id).await?;
 
-    // --- 1. PERBAIKAN BUG UPDATE DOSEN (SINKRONISASI PINTAR) ---
-    // Tetapkan kategori akhir dari payload jika ada, jika tidak pakai yang lama
-    let final_kategori = payload.kategori_pegawai.as_ref().or(old_pegawai.kategori_pegawai.as_ref());
+    // --- 1. AMANKAN DATA LAMA DARI KEHILANGAN (FALLBACK MECHANISM) ---
+    // Jika frontend tidak mengirim data tertentu (Null), gunakan data lama dari DB
+    let upd_nik = payload.nik; 
+    let upd_no_ktp = payload.no_ktp.or(old_pegawai.no_ktp);
+    let upd_nama = payload.nama_lengkap;
+    let upd_gelar_depan = payload.gelar_depan.or(old_pegawai.gelar_depan);
+    let upd_gelar_belakang = payload.gelar_belakang.or(old_pegawai.gelar_belakang);
+    let upd_tempat_lahir = payload.tempat_lahir.or(old_pegawai.tempat_lahir);
+    let upd_tanggal_lahir = payload.tanggal_lahir.or(old_pegawai.tanggal_lahir);
+    let upd_jenis_kelamin = payload.jenis_kelamin.or(old_pegawai.jenis_kelamin);
+    let upd_status_nikah = payload.status_nikah.or(old_pegawai.status_nikah);
+    let upd_agama = payload.agama.or(old_pegawai.agama);
+    let upd_gol_darah = payload.gol_darah.or(old_pegawai.gol_darah);
+    let upd_alamat_domisili = payload.alamat_domisili.or(old_pegawai.alamat_domisili);
+    let upd_kota = payload.kota.or(old_pegawai.kota);
+    let upd_kode_pos = payload.kode_pos.or(old_pegawai.kode_pos);
+    let upd_nomor_hp = payload.nomor_hp.or(old_pegawai.nomor_hp);
+    let upd_email = payload.email.or(old_pegawai.email);
+    let upd_kategori_pegawai = payload.kategori_pegawai.or(old_pegawai.kategori_pegawai);
+    let upd_status_pegawai = payload.status_pegawai.or(old_pegawai.status_pegawai);
+    let upd_is_active = payload.is_active.unwrap_or(old_pegawai.is_active);
+    let upd_tanggal_masuk = payload.tanggal_masuk.or(old_pegawai.tanggal_masuk);
+    let upd_tanggal_pensiun = payload.tanggal_pensiun.or(old_pegawai.tanggal_pensiun);
+    let upd_no_kk = payload.no_kk.or(old_pegawai.no_kk);
+    let upd_no_npwp = payload.no_npwp.or(old_pegawai.no_npwp);
+    let upd_no_bpjs_kes = payload.no_bpjs_kesehatan.or(old_pegawai.no_bpjs_kesehatan);
+    let upd_no_bpjs_ket = payload.no_bpjs_ketenagakerjaan.or(old_pegawai.no_bpjs_ketenagakerjaan);
+    let upd_nuptk = payload.nuptk.or(old_pegawai.nuptk);
+    let upd_id_sdm_feeder = payload.id_sdm_feeder.or(old_pegawai.id_sdm_feeder);
+    let upd_nama_ibu = payload.nama_ibu_kandung.or(old_pegawai.nama_ibu_kandung);
+    let upd_kewarganegaraan = payload.kewarganegaraan.or(old_pegawai.kewarganegaraan).unwrap_or_else(|| "ID".to_string());
+    let upd_dusun = payload.dusun.or(old_pegawai.dusun);
+    let upd_rt = payload.rt.or(old_pegawai.rt);
+    let upd_rw = payload.rw.or(old_pegawai.rw);
+    let upd_kelurahan = payload.kelurahan.or(old_pegawai.kelurahan);
+    let upd_id_wilayah_feeder = payload.id_wilayah_feeder.or(old_pegawai.id_wilayah_feeder);
 
-    if let Some(KategoriPegawai::TenagaPendidik) = final_kategori {
-        let upd_nidn = payload.nidn.clone().or(old_pegawai.nidn.clone());
-        let upd_prodi = payload.prodi_id.or(old_pegawai.prodi_id);
-        let upd_penugasan = payload.id_penugasan_feeder.or(old_pegawai.id_penugasan_feeder);
-        let upd_ikatan = payload.ikatan_kerja.clone().or(old_pegawai.ikatan_kerja.clone());
+    // Amankan data Dosen
+    let upd_nidn = payload.nidn.or(old_pegawai.nidn);
+    let upd_prodi_id = payload.prodi_id.or(old_pegawai.prodi_id);
+    let upd_id_penugasan_feeder = payload.id_penugasan_feeder.or(old_pegawai.id_penugasan_feeder);
+    let upd_ikatan_kerja = payload.ikatan_kerja.or(old_pegawai.ikatan_kerja);
+    let old_user_id = old_pegawai.user_id;
 
-        if let Some(p_id) = upd_prodi {
-            let existing_dosen = sqlx::query!("SELECT id FROM dosen WHERE pegawai_id = $1", id)
-                .fetch_optional(&mut *tx)
-                .await?;
-
-            if let Some(dosen) = existing_dosen {
-                // Jika sudah ada record di tabel dosen, UPDATE
-                sqlx::query!(
-                    "UPDATE dosen SET nidn = $1, prodi_id = $2, id_penugasan_feeder = $3, ikatan_kerja = $4 WHERE id = $5",
-                    upd_nidn, p_id, upd_penugasan, upd_ikatan, dosen.id
-                ).execute(&mut *tx).await?;
-            } else {
-                // Jika belum ada record di tabel dosen (Misal: dulu disave tapi tanpa Prodi), INSERT otomatis!
-                sqlx::query!(
-                    "INSERT INTO dosen (nidn, prodi_id, pegawai_id, id_penugasan_feeder, ikatan_kerja) VALUES ($1, $2, $3, $4, $5)",
-                    upd_nidn, p_id, id, upd_penugasan, upd_ikatan
-                ).execute(&mut *tx).await?;
-
-                // Berikan Role DOSEN secara otomatis karena baru masuk ke tabel Dosen
-                if let Some(user_id) = old_pegawai.user_id {
-                    sqlx::query!("INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'DOSEN')) ON CONFLICT DO NOTHING", user_id)
-                        .execute(&mut *tx).await?;
-                }
-            }
-        }
-    }
-
-    // 2. UPDATE PEGAWAI
-    let jenis_kelamin_str = payload.jenis_kelamin.as_ref().map(|e| e.as_str());
-    let status_nikah_str = payload.status_nikah.as_ref().map(|e| e.as_str());
-    let kategori_pegawai_str = payload.kategori_pegawai.as_ref().map(|e| e.as_str());
-    let status_pegawai_str = payload.status_pegawai.as_ref().map(|e| e.as_str());
+    // --- 2. UPDATE TABEL PEGAWAI DENGAN DATA AMAN ---
+    let jenis_kelamin_str = upd_jenis_kelamin.as_ref().map(|e| e.as_str());
+    let status_nikah_str = upd_status_nikah.as_ref().map(|e| e.as_str());
+    let kategori_pegawai_str = upd_kategori_pegawai.as_ref().map(|e| e.as_str());
+    let status_pegawai_str = upd_status_pegawai.as_ref().map(|e| e.as_str());
 
     sqlx::query(
         r#"
@@ -263,26 +270,52 @@ pub async fn update_pegawai_repo(
         WHERE id = $35
         "#,
     )
-    .bind(&payload.nik).bind(&payload.no_ktp).bind(&payload.nama_lengkap).bind(&payload.gelar_depan).bind(&payload.gelar_belakang)
-    .bind(&payload.tempat_lahir).bind(payload.tanggal_lahir).bind(jenis_kelamin_str).bind(status_nikah_str)
-    .bind(&payload.agama).bind(&payload.gol_darah).bind(&payload.alamat_domisili).bind(&payload.kota).bind(&payload.kode_pos)
-    .bind(&payload.nomor_hp).bind(&payload.email).bind(kategori_pegawai_str).bind(status_pegawai_str)
-    .bind(payload.is_active.unwrap_or(old_pegawai.is_active)).bind(payload.tanggal_masuk).bind(payload.tanggal_pensiun)
-    .bind(&payload.no_kk).bind(&payload.no_npwp).bind(&payload.no_bpjs_kesehatan).bind(&payload.no_bpjs_ketenagakerjaan)
-    .bind(&payload.nuptk)
-    .bind(payload.id_sdm_feeder).bind(&payload.nama_ibu_kandung).bind(payload.kewarganegaraan.as_deref().unwrap_or("ID"))
-    .bind(&payload.dusun).bind(&payload.rt).bind(&payload.rw).bind(&payload.kelurahan).bind(payload.id_wilayah_feeder)
+    .bind(&upd_nik).bind(&upd_no_ktp).bind(&upd_nama).bind(&upd_gelar_depan).bind(&upd_gelar_belakang)
+    .bind(&upd_tempat_lahir).bind(upd_tanggal_lahir).bind(jenis_kelamin_str).bind(status_nikah_str)
+    .bind(&upd_agama).bind(&upd_gol_darah).bind(&upd_alamat_domisili).bind(&upd_kota).bind(&upd_kode_pos)
+    .bind(&upd_nomor_hp).bind(&upd_email).bind(kategori_pegawai_str).bind(status_pegawai_str)
+    .bind(upd_is_active).bind(upd_tanggal_masuk).bind(upd_tanggal_pensiun)
+    .bind(&upd_no_kk).bind(&upd_no_npwp).bind(&upd_no_bpjs_kes).bind(&upd_no_bpjs_ket)
+    .bind(&upd_nuptk)
+    .bind(upd_id_sdm_feeder).bind(&upd_nama_ibu).bind(upd_kewarganegaraan).bind(&upd_dusun)
+    .bind(&upd_rt).bind(&upd_rw).bind(&upd_kelurahan).bind(upd_id_wilayah_feeder)
     .bind(id)
     .execute(&mut *tx).await?;
 
-    // 3. UPDATE PENEMPATAN
-    if let (Some(new_unit_id), Some(new_jabatan)) = (payload.unit_kerja_id, &payload.jabatan) {
+    // --- 3. SINKRONISASI OTOMATIS KE TABEL DOSEN ---
+    if let Some(KategoriPegawai::TenagaPendidik) = upd_kategori_pegawai {
+        if let Some(p_id) = upd_prodi_id {
+            let existing_dosen = sqlx::query!("SELECT id FROM dosen WHERE pegawai_id = $1", id)
+                .fetch_optional(&mut *tx)
+                .await?;
+
+            if let Some(dosen) = existing_dosen {
+                sqlx::query!(
+                    "UPDATE dosen SET nidn = $1, prodi_id = $2, id_penugasan_feeder = $3, ikatan_kerja = $4, updated_at = now() WHERE id = $5",
+                    upd_nidn, p_id, upd_id_penugasan_feeder, upd_ikatan_kerja, dosen.id
+                ).execute(&mut *tx).await?;
+            } else {
+                sqlx::query!(
+                    "INSERT INTO dosen (nidn, prodi_id, pegawai_id, id_penugasan_feeder, ikatan_kerja) VALUES ($1, $2, $3, $4, $5)",
+                    upd_nidn, p_id, id, upd_id_penugasan_feeder, upd_ikatan_kerja
+                ).execute(&mut *tx).await?;
+
+                if let Some(user_id) = old_user_id {
+                    sqlx::query!("INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT id FROM roles WHERE name = 'DOSEN')) ON CONFLICT DO NOTHING", user_id)
+                        .execute(&mut *tx).await?;
+                }
+            }
+        }
+    }
+
+    // --- 4. UPDATE PENEMPATAN ---
+    if let (Some(new_unit_id), Some(new_jabatan)) = (payload.unit_kerja_id, payload.jabatan) {
         let active_penempatan = sqlx::query!("SELECT id FROM penempatan_pegawai WHERE pegawai_id = $1 AND tanggal_selesai IS NULL", id).fetch_optional(&mut *tx).await?;
 
         if let Some(penempatan) = active_penempatan {
             sqlx::query!("UPDATE penempatan_pegawai SET unit_kerja_id = $1, jabatan = $2, updated_at = now() WHERE id = $3", new_unit_id, new_jabatan, penempatan.id).execute(&mut *tx).await?;
         } else {
-            let tgl_mulai = payload.tanggal_masuk.unwrap_or_else(|| time::OffsetDateTime::now_utc().date());
+            let tgl_mulai = upd_tanggal_masuk.unwrap_or_else(|| time::OffsetDateTime::now_utc().date());
             sqlx::query!("INSERT INTO penempatan_pegawai (pegawai_id, unit_kerja_id, jabatan, tanggal_mulai) VALUES ($1, $2, $3, $4)", id, new_unit_id, new_jabatan, tgl_mulai).execute(&mut *tx).await?;
         }
     }
