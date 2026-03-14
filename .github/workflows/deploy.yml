@@ -18,8 +18,8 @@ jobs:
           script_stop: true
           command_timeout: 30m
           script: |
-            echo "1. Pindah ke direktori repository..."
-            cd /home/server5/sikt
+            echo "1. Pindah ke direktori repository di /opt..."
+            cd /opt/sikt-api
             
             echo "2. Menarik kode terbaru dari GitHub..."
             git pull origin main
