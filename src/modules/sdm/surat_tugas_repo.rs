@@ -112,11 +112,13 @@ pub async fn get_surat_tugas_detail_repo(
             p.nama_lengkap as "nama_lengkap!",
             p.nik as "nip!",
             pp.jabatan as "jabatan?",
+            uk.nama_unit as "unit_kerja?",
             NULL as "pangkat_golongan?",
             stp.peran as "peran: _"
         FROM surat_tugas_penerima stp
         JOIN pegawai p ON stp.pegawai_id = p.id
         LEFT JOIN penempatan_pegawai pp ON p.id = pp.pegawai_id AND pp.tanggal_selesai IS NULL
+        LEFT JOIN unit_kerja uk ON pp.unit_kerja_id = uk.id
         WHERE stp.surat_tugas_id = $1
         "#,
         id

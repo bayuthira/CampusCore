@@ -59,6 +59,7 @@ pub struct PenerimaTugasDetail {
     pub nama_lengkap: String,
     pub nip: String,
     pub jabatan: Option<String>,
+    pub unit_kerja: Option<String>,
     pub pangkat_golongan: Option<String>,
     pub peran: PeranPerjalanan,
 }

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPPD STIKes Respati</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        body {
+            font-family: "Times New Roman", Times, serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 4cm 2.5cm 2.5cm 2.5cm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .page-break {
+            page-break-before: always;
+        }
+
+        @media print {
+            body {
+                background-color: white;
+            }
+
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+
+        .title-section {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .title-section h2 {
+            text-decoration: underline;
+            margin: 0;
+            font-size: 14pt;
+        }
+
+        .title-section p {
+            margin: 5px 0 0 0;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+        }
+
+        table.bordered th,
+        table.bordered td {
+            border: 1px solid black;
+            padding: 6px 8px;
+        }
+
+        table.no-border td {
+            padding: 2px 0;
+            vertical-align: top;
+        }
+
+        .square {
+            width: 14px;
+            height: 14px;
+            border: 1px solid black;
+            display: inline-block;
+            margin-right: 5px;
+            text-align: center;
+            line-height: 14px;
+            font-size: 10pt;
+            font-weight: bold;
+        }
+
+        .signature-container {
+            width: 300px;
+            text-align: center;
+            margin-left: auto;
+            margin-bottom: 15px;
+        }
+
+        .tembusan-section {
+            margin-top: 20px;
+            font-size: 10pt;
+            clear: both;
+        }
+
+        .dashed-line {
+            border-top: 1.5px dashed #000;
+            margin: 30px 0 15px 0;
+            position: relative;
+            clear: both;
+        }
+
+        .dashed-line::after {
+            content: "✂";
+            position: absolute;
+            top: -12px;
+            left: 0;
+            font-size: 14pt;
+        }
+
+        .spacer {
+            height: 75px;
+        }
+
+        .footer-notes {
+            margin-top: 25px;
+            font-size: 9pt;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- HALAMAN 1 -->
+    <div class="page">
+        <div class="title-section">
+            <h2>SURAT PERINTAH PERJALANAN DINAS (SPPD)</h2>
+            <p>Nomor : <span>{{ nomor_sppd }}</span></p>
+        </div>
+
+        <div style="margin-bottom: 10px;">
+            Demi kepentingan STIKes Respati, maka ditugaskan kepada :
+        </div>
+
+        <table class="bordered">
+            <thead>
+                <tr>
+                    <th width="5%">No</th>
+                    <th width="35%">Nama Karyawan / Dosen</th>
+                    <th width="30%">Jabatan Struktural / Fungsional</th>
+                    <th width="30%">Bagian/Unit</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- SINTAKS TERA UNTUK LOOP -->
+                {% for p in personel %}
+                <tr>
+                    <td align="center">{{ loop.index }}</td>
+                    <td>{{ p.nama }}</td>
+                    <td>{{ p.jabatan }}</td>
+                    <td>{{ p.unit }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <table class="no-border">
+            <tr>
+                <td width="20%">Alasan Perjalanan</td>
+                <td width="2%">:</td>
+                <td width="38%"><span class="square">{% if alasan == "kunjungan" %}√{% endif %}</span>
+                    Kunjungan/Undangan</td>
+                <td width="40%"><span class="square">{% if alasan == "tugas" %}√{% endif %}</span> Tugas Lembaga/Dinas
+                </td>
+            </tr>
+            <tr>
+                <td>Tujuan Kota</td>
+                <td>:</td>
+                <td><span>{{ tujuan_kota }}</span></td>
+                <td><span class="square">{% if alasan == "workshop" %}√{% endif %}</span> Pelatihan/Seminar/Workshop
+                </td>
+            </tr>
+            <tr>
+                <td>Alamat</td>
+                <td>:</td>
+                <td colspan="2"><span>{{ alamat }}</span></td>
+            </tr>
+            <tr>
+                <td>Nama Kegiatan</td>
+                <td>:</td>
+                <td colspan="2"><span>{{ nama_kegiatan }}</span></td>
+            </tr>
+            <tr>
+                <td>Tanggal Berangkat</td>
+                <td>:</td>
+                <td><span>{{ tgl_berangkat }}</span></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>Tanggal Kembali</td>
+                <td>:</td>
+                <td><span>{{ tgl_kembali }}</span></td>
+                <td></td>
+            </tr>
+        </table>
+
+        <p><strong>Rincian Tugas Dalam Perjalanan Dinas :</strong></p>
+        <table class="bordered">
+            <thead>
+                <tr>
+                    <th width="15%">Tanggal</th>
+                    <th width="10%">Jam</th>
+                    <th width="25%">Rundown Perjalanan</th>
+                    <th width="20%">Lokasi</th>
+                    <th width="30%">Penjelasan Tujuan</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- LOOP BARIS KOSONG DI TERA -->
+                {% for i in range(end=empty_row_count) %}
+                <tr>
+                    <td height="28px"></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- HALAMAN 2 -->
+    <div class="page page-break">
+        <div class="signature-container">
+            <p style="text-align: left; margin-left: 20px;">Ditetapkan di : <span>{{ penandatangan_tempat }}</span></p>
+            <p style="text-align: left; margin-left: 20px;">Pada Tanggal : <span>{{ penandatangan_tanggal }}</span></p>
+            <p style="margin-top: 15px;"><strong>SEKOLAH TINGGI ILMU KESEHATAN RESPATI</strong></p>
+
+            <!-- PERUBAHAN: Jabatan dibuat dinamis -->
+            <p>{{ penandatangan_jabatan }}</p>
+
+            <div class="spacer"></div>
+            <p><strong><u><span>{{ penandatangan_nama }}</span></u></strong><br>
+                NIK : <span>{{ penandatangan_nik }}</span></p>
+        </div>
+
+        <div class="tembusan-section">
+            Tembusan disampaikan Kepada Yth :
+            <ul style="margin-top: 5px; list-style-type: decimal;">
+                {% for item in tembusan %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="dashed-line"></div>
+
+        <p style="margin-top: 5px;"><strong>Bukti Perjalanan Dinas:</strong></p>
+        <table class="bordered">
+            <tr>
+                <th width="50%">DATANG</th>
+                <th width="50%">PULANG</th>
+            </tr>
+            <tr>
+                <td height="110px">
+                    Hari : _________________________<br>
+                    Tanggal : ______________________<br><br><br><br><br><br>
+                    ( _____________________________ )
+                </td>
+                <td>
+                    Hari : _________________________<br>
+                    Tanggal : ______________________<br><br><br><br><br><br>
+                    ( _____________________________ )
+                </td>
+            </tr>
+        </table>
+
+        <div class="footer-notes">
+            <strong>Keterangan:</strong>
+            <ol>
+                <li>Laporan pertanggungjawaban Surat Tugas dan Berkas Hard Copy Serahkan ke bidang Administrasi SDM</li>
+                <li>Bertanggung Jawab atas amanah tugas yang diberikan.</li>
+                <li>Memberikan Solusi atas pertanggungjawaban tugas yang dibebankan kepada pimpinan/karyawan/dosen.</li>
+            </ol>
+        </div>
+    </div>
+
+</body>
+
+</html>

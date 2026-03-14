@@ -1,24 +1,24 @@
 // src/modules/sdm/surat_tugas_routes.rs
 use super::surat_tugas_handler as handler;
-use crate::{modules::auth::middleware::require_role, db::DbPool};
-use axum::{
-    middleware,
-    routing::{get},
-    Router,
-};
+use crate::{db::DbPool, modules::auth::middleware::require_role};
+use axum::{Router, middleware, routing::get};
 
 pub fn surat_tugas_router() -> Router<DbPool> {
     Router::new()
         .route(
             "/sdm/surat-tugas",
-            get(handler::get_all_surat_tugas_handler)
-                .post(handler::create_surat_tugas_handler),
+            get(handler::get_all_surat_tugas_handler).post(handler::create_surat_tugas_handler),
         )
         .route(
             "/sdm/surat-tugas/{id}",
             get(handler::get_surat_tugas_detail_handler)
                 .put(handler::update_surat_tugas_handler)
                 .delete(handler::delete_surat_tugas_handler),
+        )
+        // --- TAMBAHAN ROUTE UNTUK PREVIEW HTML ---
+        .route(
+            "/sdm/surat-tugas/{id}/preview",
+            get(handler::preview_sppd_handler),
         )
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),

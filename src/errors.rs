@@ -23,6 +23,7 @@ pub enum AppError {
     AnyhowError(anyhow::Error),
     Forbidden(String),
     BadRequest(String),
+    InternalServerError(String),
     MultipartError(MultipartError),
     DuplicateEntry(String),
     IoError(IoError),
@@ -201,6 +202,9 @@ impl IntoResponse for AppError {
             AppError::AnyhowError(err) => (StatusCode::UNAUTHORIZED, err.to_string()),
             AppError::Forbidden(message) => (StatusCode::FORBIDDEN, message.clone()),
             AppError::BadRequest(message) => (StatusCode::BAD_REQUEST, message.clone()),
+            AppError::InternalServerError(message) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, message.clone())
+            }
             AppError::MultipartError(err) => (
                 StatusCode::BAD_REQUEST,
                 format!("Request upload tidak valid: {}", err),
