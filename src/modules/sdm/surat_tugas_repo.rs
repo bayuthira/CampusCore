@@ -1,16 +1,12 @@
 // src/modules/sdm/surat_tugas_repo.rs
-use super::{
-    surat_tugas_model::{
-        CreateSuratTugasPayload, PenerimaTugasDetail, SuratTugas,
-        SuratTugasDetail, UpdateSuratTugasPayload
-    },
+use super::surat_tugas_model::{
+    CreateSuratTugasPayload, PenerimaTugasDetail, SuratTugas, SuratTugasDetail,
+    UpdateSuratTugasPayload,
 };
 use crate::{db::DbPool, errors::AppError};
-use time::{OffsetDateTime}; 
+use time::OffsetDateTime;
 use uuid::Uuid;
 
-/// Helper internal untuk generate nomor surat baru (e.g., 001/ST/XI/2025)
-/// Fungsi ini harus dipanggil di dalam transaksi
 async fn generate_nomor_surat_repo(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     kode: &str, // 'ST' atau 'SPPD'
@@ -20,8 +16,18 @@ async fn generate_nomor_surat_repo(
     let month_num = now.month() as u8;
 
     let month_romawi = match month_num {
-        1 => "I", 2 => "II", 3 => "III", 4 => "IV", 5 => "V", 6 => "VI",
-        7 => "VII", 8 => "VIII", 9 => "IX", 10 => "X", 11 => "XI", 12 => "XII",
+        1 => "I",
+        2 => "II",
+        3 => "III",
+        4 => "IV",
+        5 => "V",
+        6 => "VI",
+        7 => "VII",
+        8 => "VIII",
+        9 => "IX",
+        10 => "X",
+        11 => "XI",
+        12 => "XII",
         _ => "?",
     };
 
@@ -40,19 +46,18 @@ async fn generate_nomor_surat_repo(
     .await?;
 
     let nomor_urut = record.counter;
-    // Format nomor surat, e.g., "001/ST/STIKES-R/XI/2025"
-    let nomor_surat = format!("{:03}/{}/STIKES-R/{}/{}", nomor_urut, kode, month_romawi, year);
+    let nomor_surat = format!(
+        "{:03}/{}/STIKES-R/{}/{}",
+        nomor_urut, kode, month_romawi, year
+    );
 
     Ok(nomor_surat)
 }
 
-/// Helper internal untuk mengambil detail lengkap satu Surat Tugas
 pub async fn get_surat_tugas_detail_repo(
     pool: &DbPool,
     id: Uuid,
 ) -> Result<SuratTugasDetail, AppError> {
-    
-    // 1. Ambil data master surat (sebutkan semua kolom)
     let master = sqlx::query_as!(
         SuratTugas,
         r#"
@@ -60,7 +65,6 @@ pub async fn get_surat_tugas_detail_repo(
             id, nomor_surat, dasar_tugas, tugas, tempat_tugas, tanggal_mulai, 
             tanggal_selesai, penandatangan_id, tembusan, user_pembuat_id, 
             created_at, updated_at,
-            -- Kolom SPPD baru
             nomor_sppd, alat_angkut, tempat_berangkat, lama_perjalanan,
             pembebanan_anggaran_instansi, pembebanan_anggaran_mak,
             ppk_pegawai_id, kpa_pegawai_id, keterangan_lain
@@ -72,7 +76,6 @@ pub async fn get_surat_tugas_detail_repo(
     .fetch_one(pool)
     .await?;
 
-    // 2. Ambil data penandatangan
     let penandatangan = sqlx::query!(
         r#"SELECT p.nik, p.nama_lengkap, pp.jabatan as "jabatan?"
            FROM pegawai p
@@ -83,19 +86,24 @@ pub async fn get_surat_tugas_detail_repo(
     .fetch_one(pool)
     .await?;
 
-    // 3. Ambil data PPK (jika ada)
     let ppk = if let Some(ppk_id) = master.ppk_pegawai_id {
         sqlx::query!("SELECT nama_lengkap FROM pegawai WHERE id = $1", ppk_id)
-            .fetch_one(pool).await.ok()
-    } else { None };
-    
-    // 4. Ambil data KPA (jika ada)
+            .fetch_one(pool)
+            .await
+            .ok()
+    } else {
+        None
+    };
+
     let kpa = if let Some(kpa_id) = master.kpa_pegawai_id {
         sqlx::query!("SELECT nama_lengkap FROM pegawai WHERE id = $1", kpa_id)
-            .fetch_one(pool).await.ok()
-    } else { None };
+            .fetch_one(pool)
+            .await
+            .ok()
+    } else {
+        None
+    };
 
-    // 5. Ambil data penerima tugas (sudah termasuk peran)
     let penerima_list = sqlx::query_as!(
         PenerimaTugasDetail,
         r#"
@@ -104,7 +112,7 @@ pub async fn get_surat_tugas_detail_repo(
             p.nama_lengkap as "nama_lengkap!",
             p.nik as "nip!",
             pp.jabatan as "jabatan?",
-            NULL as "pangkat_golongan?", -- Placeholder
+            NULL as "pangkat_golongan?",
             stp.peran as "peran: _"
         FROM surat_tugas_penerima stp
         JOIN pegawai p ON stp.pegawai_id = p.id
@@ -116,7 +124,6 @@ pub async fn get_surat_tugas_detail_repo(
     .fetch_all(pool)
     .await?;
 
-    // 6. Gabungkan semua
     let detail = SuratTugasDetail {
         id: master.id,
         nomor_surat: master.nomor_surat,
@@ -126,13 +133,12 @@ pub async fn get_surat_tugas_detail_repo(
         tanggal_mulai: master.tanggal_mulai,
         tanggal_selesai: master.tanggal_selesai,
         penandatangan_id: master.penandatangan_id,
-    nama_penandatangan: penandatangan.nama_lengkap,
-    jabatan_penandatangan: penandatangan.jabatan,
-    nip_penandatangan: penandatangan.nik,
+        nama_penandatangan: penandatangan.nama_lengkap,
+        jabatan_penandatangan: penandatangan.jabatan,
+        nip_penandatangan: penandatangan.nik,
         daftar_penerima: penerima_list,
         tembusan: master.tembusan.unwrap_or_default(),
         created_at: master.created_at,
-        // Data SPPD
         nomor_sppd: master.nomor_sppd,
         alat_angkut: master.alat_angkut,
         tempat_berangkat: master.tempat_berangkat,
@@ -149,7 +155,6 @@ pub async fn get_surat_tugas_detail_repo(
     Ok(detail)
 }
 
-/// Membuat Surat Tugas baru (termasuk data SPPD)
 pub async fn create_surat_tugas_repo(
     pool: &DbPool,
     user_pembuat_id: Uuid,
@@ -159,16 +164,19 @@ pub async fn create_surat_tugas_repo(
 
     // 1. Tentukan jenis surat (ST atau SPPD)
     let is_sppd = payload.ppk_pegawai_id.is_some() || payload.kpa_pegawai_id.is_some();
-    
-    // 2. Generate Nomor Surat
-    let nomor_surat = generate_nomor_surat_repo(&mut tx, "ST").await?;
-    let nomor_sppd = if is_sppd {
-        Some(generate_nomor_surat_repo(&mut tx, "SPPD").await?)
+
+    // --- 2. PERBAIKAN LOGIKA GENERATE NOMOR ---
+    // Jika SPPD, nomor ST dikosongkan (None)
+    // Jika hanya ST, nomor SPPD dikosongkan (None)
+    let (nomor_surat, nomor_sppd) = if is_sppd {
+        (
+            None,
+            Some(generate_nomor_surat_repo(&mut tx, "SPPD").await?),
+        )
     } else {
-        None
+        (Some(generate_nomor_surat_repo(&mut tx, "ST").await?), None)
     };
 
-    // 3. Insert ke tabel master (tidak berubah)
     let new_id = sqlx::query_scalar(
         r#"
         INSERT INTO surat_tugas_master (
@@ -181,38 +189,44 @@ pub async fn create_surat_tugas_repo(
         RETURNING id
         "#,
     )
-    .bind(nomor_surat).bind(payload.dasar_tugas).bind(payload.tugas).bind(payload.tempat_tugas)
-    .bind(payload.tanggal_mulai).bind(payload.tanggal_selesai).bind(payload.penandatangan_id)
-    .bind(payload.tembusan.as_deref()).bind(user_pembuat_id)
-    .bind(nomor_sppd).bind(payload.alat_angkut).bind(payload.tempat_berangkat).bind(payload.lama_perjalanan)
-    .bind(payload.pembebanan_anggaran_instansi).bind(payload.pembebanan_anggaran_mak)
-    .bind(payload.ppk_pegawai_id).bind(payload.kpa_pegawai_id).bind(payload.keterangan_lain)
+    .bind(nomor_surat)
+    .bind(payload.dasar_tugas)
+    .bind(payload.tugas)
+    .bind(payload.tempat_tugas)
+    .bind(payload.tanggal_mulai)
+    .bind(payload.tanggal_selesai)
+    .bind(payload.penandatangan_id)
+    .bind(payload.tembusan.as_deref())
+    .bind(user_pembuat_id)
+    .bind(nomor_sppd)
+    .bind(payload.alat_angkut)
+    .bind(payload.tempat_berangkat)
+    .bind(payload.lama_perjalanan)
+    .bind(payload.pembebanan_anggaran_instansi)
+    .bind(payload.pembebanan_anggaran_mak)
+    .bind(payload.ppk_pegawai_id)
+    .bind(payload.kpa_pegawai_id)
+    .bind(payload.keterangan_lain)
     .fetch_one(&mut *tx)
     .await?;
 
-    // 4. Insert ke tabel penerima (Many-to-Many dengan Peran)
-    // --- PERBAIKAN DI SINI ---
     for penerima in payload.penerima_tugas {
-        sqlx::query( // Ganti dari `sqlx::query!` menjadi `sqlx::query()`
+        sqlx::query(
             "INSERT INTO surat_tugas_penerima (surat_tugas_id, pegawai_id, peran) VALUES ($1, $2, $3::\"PeranPerjalanan\")"
         )
         .bind(new_id)
         .bind(penerima.pegawai_id)
-        .bind(penerima.peran.as_str()) // Bind string
+        .bind(penerima.peran.as_str())
         .execute(&mut *tx)
         .await?;
     }
-    // --- AKHIR PERBAIKAN ---
 
-    // 5. Selesaikan transaksi
     tx.commit().await?;
-    
+
     get_surat_tugas_detail_repo(pool, new_id).await
 }
 
-/// Mengambil semua Surat Tugas (list ringan)
 pub async fn get_all_surat_tugas_repo(pool: &DbPool) -> Result<Vec<SuratTugas>, AppError> {
-    // HARUS menyebutkan semua kolom agar `query_as!` tidak gagal
     let list = sqlx::query_as!(
         SuratTugas,
         r#"
@@ -231,7 +245,6 @@ pub async fn get_all_surat_tugas_repo(pool: &DbPool) -> Result<Vec<SuratTugas>, 
     Ok(list)
 }
 
-/// Mengupdate Surat Tugas
 pub async fn update_surat_tugas_repo(
     pool: &DbPool,
     id: Uuid,
@@ -239,8 +252,6 @@ pub async fn update_surat_tugas_repo(
 ) -> Result<SuratTugasDetail, AppError> {
     let mut tx = pool.begin().await?;
 
-    // 1. Ambil data lama
-    // Kita harus menyebutkan semua kolom secara eksplisit karena SELECT * bermasalah
     let old_data = sqlx::query_as!(
         SuratTugas,
         r#"
@@ -259,7 +270,6 @@ pub async fn update_surat_tugas_repo(
     .fetch_one(&mut *tx)
     .await?;
 
-    // 2. Lakukan UPDATE dengan semua field
     sqlx::query(
         r#"
         UPDATE surat_tugas_master SET
@@ -273,33 +283,44 @@ pub async fn update_surat_tugas_repo(
         "#,
     )
     .bind(payload.dasar_tugas.or(old_data.dasar_tugas))
-    .bind(payload.tugas.unwrap_or(old_data.tugas)) // <-- Field ini sekarang dibaca
-    .bind(payload.tempat_tugas.unwrap_or(old_data.tempat_tugas)) // <-- Field ini sekarang dibaca
-    .bind(payload.tanggal_mulai.unwrap_or(old_data.tanggal_mulai)) // <-- Field ini sekarang dibaca
-    .bind(payload.tanggal_selesai.unwrap_or(old_data.tanggal_selesai)) // <-- Field ini sekarang dibaca
-    .bind(payload.penandatangan_id.unwrap_or(old_data.penandatangan_id)) // <-- Field ini sekarang dibaca
-    .bind(payload.tembusan.as_deref()) // <-- Field ini sekarang dibaca
-    // Bind SPPD
-    .bind(payload.alat_angkut.or(old_data.alat_angkut)) // <-- Field ini sekarang dibaca
-    .bind(payload.tempat_berangkat.or(old_data.tempat_berangkat)) // <-- Field ini sekarang dibaca
-    .bind(payload.lama_perjalanan.or(old_data.lama_perjalanan)) // <-- Field ini sekarang dibaca
-    .bind(payload.pembebanan_anggaran_instansi.or(old_data.pembebanan_anggaran_instansi)) // <-- Field ini sekarang dibaca
-    .bind(payload.pembebanan_anggaran_mak.or(old_data.pembebanan_anggaran_mak)) // <-- Field ini sekarang dibaca
-    .bind(payload.ppk_pegawai_id.or(old_data.ppk_pegawai_id)) // <-- Field ini sekarang dibaca
-    .bind(payload.kpa_pegawai_id.or(old_data.kpa_pegawai_id)) // <-- Field ini sekarang dibaca
-    .bind(payload.keterangan_lain.or(old_data.keterangan_lain)) // <-- Field ini sekarang dibaca
-    // ID
+    .bind(payload.tugas.unwrap_or(old_data.tugas))
+    .bind(payload.tempat_tugas.unwrap_or(old_data.tempat_tugas))
+    .bind(payload.tanggal_mulai.unwrap_or(old_data.tanggal_mulai))
+    .bind(payload.tanggal_selesai.unwrap_or(old_data.tanggal_selesai))
+    .bind(
+        payload
+            .penandatangan_id
+            .unwrap_or(old_data.penandatangan_id),
+    )
+    .bind(payload.tembusan.as_deref())
+    .bind(payload.alat_angkut.or(old_data.alat_angkut))
+    .bind(payload.tempat_berangkat.or(old_data.tempat_berangkat))
+    .bind(payload.lama_perjalanan.or(old_data.lama_perjalanan))
+    .bind(
+        payload
+            .pembebanan_anggaran_instansi
+            .or(old_data.pembebanan_anggaran_instansi),
+    )
+    .bind(
+        payload
+            .pembebanan_anggaran_mak
+            .or(old_data.pembebanan_anggaran_mak),
+    )
+    .bind(payload.ppk_pegawai_id.or(old_data.ppk_pegawai_id))
+    .bind(payload.kpa_pegawai_id.or(old_data.kpa_pegawai_id))
+    .bind(payload.keterangan_lain.or(old_data.keterangan_lain))
     .bind(id)
     .execute(&mut *tx)
     .await?;
 
-    // 3. Sinkronkan penerima tugas (jika ada di payload)
     if let Some(penerima_list) = payload.penerima_tugas {
-        // Hapus semua penerima lama
-        sqlx::query!("DELETE FROM surat_tugas_penerima WHERE surat_tugas_id = $1", id)
-            .execute(&mut *tx).await?;
-        
-        // Tambahkan yang baru
+        sqlx::query!(
+            "DELETE FROM surat_tugas_penerima WHERE surat_tugas_id = $1",
+            id
+        )
+        .execute(&mut *tx)
+        .await?;
+
         for penerima in penerima_list {
             sqlx::query(
                 "INSERT INTO surat_tugas_penerima (surat_tugas_id, pegawai_id, peran) VALUES ($1, $2, $3::\"PeranPerjalanan\")"
@@ -313,17 +334,17 @@ pub async fn update_surat_tugas_repo(
     }
 
     tx.commit().await?;
-    
+
     get_surat_tugas_detail_repo(pool, id).await
 }
 
-
-
-/// Menghapus Surat Tugas
 pub async fn delete_surat_tugas_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
-    // ON DELETE CASCADE akan otomatis menghapus data di surat_tugas_penerima
     let rows = sqlx::query!("DELETE FROM surat_tugas_master WHERE id = $1", id)
-        .execute(pool).await?.rows_affected();
-    if rows == 0 { return Err(sqlx::Error::RowNotFound.into()); }
+        .execute(pool)
+        .await?
+        .rows_affected();
+    if rows == 0 {
+        return Err(sqlx::Error::RowNotFound.into());
+    }
     Ok(())
 }

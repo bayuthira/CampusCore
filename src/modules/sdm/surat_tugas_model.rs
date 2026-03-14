@@ -24,11 +24,10 @@ impl PeranPerjalanan {
 }
 
 // --- STRUCT UNTUK DATABASE (Raw) ---
-// Merepresentasikan satu baris di tabel surat_tugas_master (SUDAH DIPERBARUI)
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct SuratTugas {
     pub id: Uuid,
-    pub nomor_surat: String,
+    pub nomor_surat: Option<String>, // <-- PERBAIKAN: Menjadi Option
     pub dasar_tugas: Option<String>,
     pub tugas: String,
     pub tempat_tugas: String,
@@ -61,13 +60,13 @@ pub struct PenerimaTugasDetail {
     pub nip: String,
     pub jabatan: Option<String>,
     pub pangkat_golongan: Option<String>,
-    pub peran: PeranPerjalanan, // <-- TAMBAHAN BARU
+    pub peran: PeranPerjalanan,
 }
 
 #[derive(Debug, Serialize)]
 pub struct SuratTugasDetail {
     pub id: Uuid,
-    pub nomor_surat: String,
+    pub nomor_surat: Option<String>, // <-- PERBAIKAN: Menjadi Option
     pub dasar_tugas: Option<String>,
     pub tugas: String,
     pub tempat_tugas: String,
@@ -93,19 +92,17 @@ pub struct SuratTugasDetail {
     pub lama_perjalanan: Option<i32>,
     pub pembebanan_anggaran_instansi: Option<String>,
     pub pembebanan_anggaran_mak: Option<String>,
-    
+
     // Info Pejabat SPPD (Opsional)
     pub ppk_pegawai_id: Option<Uuid>,
-    pub nama_ppk: Option<String>, // Akan di-JOIN
+    pub nama_ppk: Option<String>,
     pub kpa_pegawai_id: Option<Uuid>,
-    pub nama_kpa: Option<String>, // Akan di-JOIN
-    
+    pub nama_kpa: Option<String>,
+
     pub keterangan_lain: Option<String>,
 }
 
 // --- STRUCT UNTUK PAYLOAD (Create/Update) ---
-
-// Struct baru untuk payload penerima tugas
 #[derive(Debug, Deserialize)]
 pub struct PenerimaTugasPayload {
     pub pegawai_id: Uuid,
@@ -114,7 +111,6 @@ pub struct PenerimaTugasPayload {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateSuratTugasPayload {
-    // Data Surat Tugas Inti
     pub dasar_tugas: Option<String>,
     pub tugas: String,
     pub tempat_tugas: String,
@@ -122,12 +118,7 @@ pub struct CreateSuratTugasPayload {
     pub tanggal_selesai: Date,
     pub penandatangan_id: Uuid,
     pub tembusan: Option<Vec<String>>,
-    
-    // Daftar Penerima (Sekarang dengan Peran)
     pub penerima_tugas: Vec<PenerimaTugasPayload>,
-
-    // Data SPPD Opsional
-    // Jika frontend mengisi ini, maka surat ini adalah SPPD
     pub alat_angkut: Option<String>,
     pub tempat_berangkat: Option<String>,
     pub lama_perjalanan: Option<i32>,
@@ -140,7 +131,6 @@ pub struct CreateSuratTugasPayload {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateSuratTugasPayload {
-    // Data Surat Tugas Inti
     pub dasar_tugas: Option<String>,
     pub tugas: Option<String>,
     pub tempat_tugas: Option<String>,
@@ -150,11 +140,7 @@ pub struct UpdateSuratTugasPayload {
     pub tanggal_selesai: Option<Date>,
     pub penandatangan_id: Option<Uuid>,
     pub tembusan: Option<Vec<String>>,
-    
-    // Daftar Penerima (Opsional, jika diisi akan me-replace)
     pub penerima_tugas: Option<Vec<PenerimaTugasPayload>>,
-
-    // Data SPPD Opsional
     pub alat_angkut: Option<String>,
     pub tempat_berangkat: Option<String>,
     pub lama_perjalanan: Option<i32>,
