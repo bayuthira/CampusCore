@@ -156,9 +156,10 @@
                 </tr>
             </thead>
             <tbody>
-                <!-- SINTAKS TERA UNTUK LOOP -->
+                <!-- LOOP PERSONEL -->
                 {% for p in personel %}
                 <tr>
+                    <!-- loop.index otomatis memberikan angka 1, 2, 3... -->
                     <td align="center">{{ loop.index }}</td>
                     <td>{{ p.nama }}</td>
                     <td>{{ p.jabatan }}</td>
@@ -172,6 +173,7 @@
             <tr>
                 <td width="20%">Alasan Perjalanan</td>
                 <td width="2%">:</td>
+                <!-- Logika Checkbox Dinamis berdasarkan String dari Backend -->
                 <td width="38%"><span class="square">{% if alasan == "kunjungan" %}√{% endif %}</span>
                     Kunjungan/Undangan</td>
                 <td width="40%"><span class="square">{% if alasan == "tugas" %}√{% endif %}</span> Tugas Lembaga/Dinas
@@ -220,7 +222,7 @@
                 </tr>
             </thead>
             <tbody>
-                <!-- LOOP BARIS KOSONG DI TERA -->
+                <!-- LOOP BARIS KOSONG BERDASARKAN SISA RUANG -->
                 {% for i in range(end=empty_row_count) %}
                 <tr>
                     <td height="28px"></td>
@@ -241,7 +243,7 @@
             <p style="text-align: left; margin-left: 20px;">Pada Tanggal : <span>{{ penandatangan_tanggal }}</span></p>
             <p style="margin-top: 15px;"><strong>SEKOLAH TINGGI ILMU KESEHATAN RESPATI</strong></p>
 
-            <!-- PERUBAHAN: Jabatan dibuat dinamis -->
+            <!-- JABATAN PENANDATANGAN (Dinamis dari DB) -->
             <p>{{ penandatangan_jabatan }}</p>
 
             <div class="spacer"></div>

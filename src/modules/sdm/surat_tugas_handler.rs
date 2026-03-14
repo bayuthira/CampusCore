@@ -17,7 +17,7 @@ use tera::{Context, Tera};
 use time::{Month, Weekday};
 use uuid::Uuid;
 
-// Inisialisasi Tera secara global (Hanya dicompile sekali saat server menyala)
+// Inisialisasi Tera secara global
 lazy_static! {
     pub static ref TERA: Tera = {
         let mut tera = match Tera::new("templates/**/*") {
@@ -32,7 +32,7 @@ lazy_static! {
     };
 }
 
-// Helper untuk format tanggal ke dalam Bahasa Indonesia (Hari, DD Bulan YYYY)
+// Helper untuk format tanggal Bahasa Indonesia
 fn format_tanggal_indo(tanggal: time::Date) -> String {
     let hari = match tanggal.weekday() {
         Weekday::Monday => "Senin",
@@ -71,10 +71,10 @@ pub async fn preview_sppd_handler(
     State(pool): State<DbPool>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    // 1. Ambil data
+    // 1. Ambil data dari DB
     let detail = repo::get_surat_tugas_detail_repo(&pool, id).await?;
 
-    // 2. Format Data Personel (Jauh lebih bersih tanpa query di dalam loop)
+    // 2. Format Data Personel
     let mut list_personel = Vec::new();
     for penerima in &detail.daftar_penerima {
         list_personel.push(super::print_model::PersonelPrint {
@@ -83,7 +83,7 @@ pub async fn preview_sppd_handler(
             unit: penerima
                 .unit_kerja
                 .clone()
-                .unwrap_or_else(|| "-".to_string()), // Ambil langsung dari data repo
+                .unwrap_or_else(|| "-".to_string()),
         });
     }
 
@@ -95,44 +95,55 @@ pub async fn preview_sppd_handler(
         empty_rows = 3;
     }
 
-    // 3. Masukkan ke Struct Serde
+    // --- 3. LOGIKA BARU UNTUK ALASAN PERJALANAN ---
+    // Ubah angka dari database menjadi string untuk template Tera
+    let alasan_string = match detail.alasan_perjalanan {
+        Some(1) => "kunjungan".to_string(),
+        Some(2) => "tugas".to_string(),
+        Some(3) => "workshop".to_string(),
+        _ => "".to_string(), // Kosong jika belum diisi
+    };
+
+    // 4. Masukkan ke Struct Serde untuk di-render
     let template_data = super::print_model::SppdTemplateContext {
         nomor_sppd: detail.nomor_sppd.unwrap_or_else(|| "-".to_string()),
         personel: list_personel,
-        alasan: "workshop".to_string(), // TBD logika dari DB
-        tujuan_kota: detail.tempat_tugas.clone(),
+
+        // --- DATA BARU DARI DATABASE ---
+        alasan: alasan_string,
+        tujuan_kota: detail
+            .tujuan_kota
+            .clone()
+            .unwrap_or_else(|| "-".to_string()),
+
         alamat: detail.tempat_tugas,
         nama_kegiatan: detail.tugas,
-
-        // Format Tanggal Indo digunakan di sini
         tgl_berangkat: format_tanggal_indo(detail.tanggal_mulai),
         tgl_kembali: format_tanggal_indo(detail.tanggal_selesai),
-
         penandatangan_tempat: "Tasikmalaya".to_string(),
         penandatangan_tanggal: format_tanggal_indo(detail.created_at.date()),
-
-        // Data Penandatanganan
         penandatangan_jabatan: detail
             .jabatan_penandatangan
             .unwrap_or_else(|| "Ketua".to_string()),
         penandatangan_nama: detail.nama_penandatangan,
         penandatangan_nik: detail.nip_penandatangan,
-
         empty_row_count: empty_rows,
         tembusan: detail.tembusan,
     };
 
-    // 4. Ubah Struct menjadi Tera Context
     let context = Context::from_serialize(&template_data)
         .map_err(|_| AppError::InternalServerError("Gagal membuat konteks template".to_string()))?;
 
-    // 5. Render HTML dengan Engine Tera
     let rendered_html = TERA
         .render("sppd.html", &context)
         .map_err(|e| AppError::InternalServerError(format!("Template error: {}", e)))?;
 
     Ok(Html(rendered_html))
 }
+
+// ==========================================
+// HANDLER STANDAR CRUD
+// ==========================================
 
 pub async fn create_surat_tugas_handler(
     State(pool): State<DbPool>,

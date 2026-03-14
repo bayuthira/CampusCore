@@ -41,6 +41,8 @@ pub struct SuratTugas {
 
     // Kolom SPPD (Opsional)
     pub nomor_sppd: Option<String>,
+    pub alasan_perjalanan: Option<i32>, // 1: Kunjungan/Undangan, 2: Tugas Lembaga, 3: Pelatihan
+    pub tujuan_kota: Option<String>,
     pub alat_angkut: Option<String>,
     pub tempat_berangkat: Option<String>,
     pub lama_perjalanan: Option<i32>,
@@ -59,7 +61,7 @@ pub struct PenerimaTugasDetail {
     pub nama_lengkap: String,
     pub nip: String,
     pub jabatan: Option<String>,
-    pub unit_kerja: Option<String>,
+    pub unit_kerja: Option<String>, // <-- TAMBAHAN (Pastikan ini ada)
     pub pangkat_golongan: Option<String>,
     pub peran: PeranPerjalanan,
 }
@@ -88,6 +90,8 @@ pub struct SuratTugasDetail {
 
     // Kolom SPPD (Opsional)
     pub nomor_sppd: Option<String>,
+    pub alasan_perjalanan: Option<i32>,
+    pub tujuan_kota: Option<String>,
     pub alat_angkut: Option<String>,
     pub tempat_berangkat: Option<String>,
     pub lama_perjalanan: Option<i32>,
@@ -120,6 +124,10 @@ pub struct CreateSuratTugasPayload {
     pub penandatangan_id: Uuid,
     pub tembusan: Option<Vec<String>>,
     pub penerima_tugas: Vec<PenerimaTugasPayload>,
+
+    // Kolom Tambahan SPPD
+    pub alasan_perjalanan: Option<i32>,
+    pub tujuan_kota: Option<String>,
     pub alat_angkut: Option<String>,
     pub tempat_berangkat: Option<String>,
     pub lama_perjalanan: Option<i32>,
@@ -142,6 +150,10 @@ pub struct UpdateSuratTugasPayload {
     pub penandatangan_id: Option<Uuid>,
     pub tembusan: Option<Vec<String>>,
     pub penerima_tugas: Option<Vec<PenerimaTugasPayload>>,
+
+    // Kolom Tambahan SPPD
+    pub alasan_perjalanan: Option<i32>,
+    pub tujuan_kota: Option<String>,
     pub alat_angkut: Option<String>,
     pub tempat_berangkat: Option<String>,
     pub lama_perjalanan: Option<i32>,

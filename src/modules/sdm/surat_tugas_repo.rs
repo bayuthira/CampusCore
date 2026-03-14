@@ -65,7 +65,7 @@ pub async fn get_surat_tugas_detail_repo(
             id, nomor_surat, dasar_tugas, tugas, tempat_tugas, tanggal_mulai, 
             tanggal_selesai, penandatangan_id, tembusan, user_pembuat_id, 
             created_at, updated_at,
-            nomor_sppd, alat_angkut, tempat_berangkat, lama_perjalanan,
+            nomor_sppd, alasan_perjalanan, tujuan_kota, alat_angkut, tempat_berangkat, lama_perjalanan,
             pembebanan_anggaran_instansi, pembebanan_anggaran_mak,
             ppk_pegawai_id, kpa_pegawai_id, keterangan_lain
         FROM surat_tugas_master 
@@ -142,6 +142,8 @@ pub async fn get_surat_tugas_detail_repo(
         tembusan: master.tembusan.unwrap_or_default(),
         created_at: master.created_at,
         nomor_sppd: master.nomor_sppd,
+        alasan_perjalanan: master.alasan_perjalanan,
+        tujuan_kota: master.tujuan_kota,
         alat_angkut: master.alat_angkut,
         tempat_berangkat: master.tempat_berangkat,
         lama_perjalanan: master.lama_perjalanan,
@@ -167,9 +169,6 @@ pub async fn create_surat_tugas_repo(
     // 1. Tentukan jenis surat (ST atau SPPD)
     let is_sppd = payload.ppk_pegawai_id.is_some() || payload.kpa_pegawai_id.is_some();
 
-    // --- 2. PERBAIKAN LOGIKA GENERATE NOMOR ---
-    // Jika SPPD, nomor ST dikosongkan (None)
-    // Jika hanya ST, nomor SPPD dikosongkan (None)
     let (nomor_surat, nomor_sppd) = if is_sppd {
         (
             None,
@@ -184,31 +183,20 @@ pub async fn create_surat_tugas_repo(
         INSERT INTO surat_tugas_master (
             nomor_surat, dasar_tugas, tugas, tempat_tugas, tanggal_mulai, 
             tanggal_selesai, penandatangan_id, tembusan, user_pembuat_id,
-            nomor_sppd, alat_angkut, tempat_berangkat, lama_perjalanan,
+            nomor_sppd, alasan_perjalanan, tujuan_kota, alat_angkut, tempat_berangkat, lama_perjalanan,
             pembebanan_anggaran_instansi, pembebanan_anggaran_mak,
             ppk_pegawai_id, kpa_pegawai_id, keterangan_lain
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         RETURNING id
         "#,
     )
-    .bind(nomor_surat)
-    .bind(payload.dasar_tugas)
-    .bind(payload.tugas)
-    .bind(payload.tempat_tugas)
-    .bind(payload.tanggal_mulai)
-    .bind(payload.tanggal_selesai)
-    .bind(payload.penandatangan_id)
-    .bind(payload.tembusan.as_deref())
-    .bind(user_pembuat_id)
-    .bind(nomor_sppd)
-    .bind(payload.alat_angkut)
-    .bind(payload.tempat_berangkat)
-    .bind(payload.lama_perjalanan)
-    .bind(payload.pembebanan_anggaran_instansi)
-    .bind(payload.pembebanan_anggaran_mak)
-    .bind(payload.ppk_pegawai_id)
-    .bind(payload.kpa_pegawai_id)
-    .bind(payload.keterangan_lain)
+    .bind(nomor_surat).bind(payload.dasar_tugas).bind(payload.tugas).bind(payload.tempat_tugas)
+    .bind(payload.tanggal_mulai).bind(payload.tanggal_selesai).bind(payload.penandatangan_id)
+    .bind(payload.tembusan.as_deref()).bind(user_pembuat_id)
+    .bind(nomor_sppd).bind(payload.alasan_perjalanan).bind(payload.tujuan_kota)
+    .bind(payload.alat_angkut).bind(payload.tempat_berangkat).bind(payload.lama_perjalanan)
+    .bind(payload.pembebanan_anggaran_instansi).bind(payload.pembebanan_anggaran_mak)
+    .bind(payload.ppk_pegawai_id).bind(payload.kpa_pegawai_id).bind(payload.keterangan_lain)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -236,7 +224,7 @@ pub async fn get_all_surat_tugas_repo(pool: &DbPool) -> Result<Vec<SuratTugas>, 
             id, nomor_surat, dasar_tugas, tugas, tempat_tugas, tanggal_mulai, 
             tanggal_selesai, penandatangan_id, tembusan, user_pembuat_id, 
             created_at, updated_at,
-            nomor_sppd, alat_angkut, tempat_berangkat, lama_perjalanan,
+            nomor_sppd, alasan_perjalanan, tujuan_kota, alat_angkut, tempat_berangkat, lama_perjalanan,
             pembebanan_anggaran_instansi, pembebanan_anggaran_mak,
             ppk_pegawai_id, kpa_pegawai_id, keterangan_lain
         FROM surat_tugas_master ORDER BY created_at DESC
@@ -261,7 +249,7 @@ pub async fn update_surat_tugas_repo(
             id, nomor_surat, dasar_tugas, tugas, tempat_tugas, tanggal_mulai, 
             tanggal_selesai, penandatangan_id, tembusan, user_pembuat_id, 
             created_at, updated_at,
-            nomor_sppd, alat_angkut, tempat_berangkat, lama_perjalanan,
+            nomor_sppd, alasan_perjalanan, tujuan_kota, alat_angkut, tempat_berangkat, lama_perjalanan,
             pembebanan_anggaran_instansi, pembebanan_anggaran_mak,
             ppk_pegawai_id, kpa_pegawai_id, keterangan_lain
         FROM surat_tugas_master 
@@ -277,11 +265,11 @@ pub async fn update_surat_tugas_repo(
         UPDATE surat_tugas_master SET
             dasar_tugas = $1, tugas = $2, tempat_tugas = $3, tanggal_mulai = $4,
             tanggal_selesai = $5, penandatangan_id = $6, tembusan = $7,
-            alat_angkut = $8, tempat_berangkat = $9, lama_perjalanan = $10,
-            pembebanan_anggaran_instansi = $11, pembebanan_anggaran_mak = $12,
-            ppk_pegawai_id = $13, kpa_pegawai_id = $14, keterangan_lain = $15,
+            alasan_perjalanan = $8, tujuan_kota = $9, alat_angkut = $10, tempat_berangkat = $11, lama_perjalanan = $12,
+            pembebanan_anggaran_instansi = $13, pembebanan_anggaran_mak = $14,
+            ppk_pegawai_id = $15, kpa_pegawai_id = $16, keterangan_lain = $17,
             updated_at = now()
-        WHERE id = $16
+        WHERE id = $18
         "#,
     )
     .bind(payload.dasar_tugas.or(old_data.dasar_tugas))
@@ -289,25 +277,15 @@ pub async fn update_surat_tugas_repo(
     .bind(payload.tempat_tugas.unwrap_or(old_data.tempat_tugas))
     .bind(payload.tanggal_mulai.unwrap_or(old_data.tanggal_mulai))
     .bind(payload.tanggal_selesai.unwrap_or(old_data.tanggal_selesai))
-    .bind(
-        payload
-            .penandatangan_id
-            .unwrap_or(old_data.penandatangan_id),
-    )
+    .bind(payload.penandatangan_id.unwrap_or(old_data.penandatangan_id))
     .bind(payload.tembusan.as_deref())
+    .bind(payload.alasan_perjalanan.or(old_data.alasan_perjalanan))
+    .bind(payload.tujuan_kota.or(old_data.tujuan_kota))
     .bind(payload.alat_angkut.or(old_data.alat_angkut))
     .bind(payload.tempat_berangkat.or(old_data.tempat_berangkat))
     .bind(payload.lama_perjalanan.or(old_data.lama_perjalanan))
-    .bind(
-        payload
-            .pembebanan_anggaran_instansi
-            .or(old_data.pembebanan_anggaran_instansi),
-    )
-    .bind(
-        payload
-            .pembebanan_anggaran_mak
-            .or(old_data.pembebanan_anggaran_mak),
-    )
+    .bind(payload.pembebanan_anggaran_instansi.or(old_data.pembebanan_anggaran_instansi))
+    .bind(payload.pembebanan_anggaran_mak.or(old_data.pembebanan_anggaran_mak))
     .bind(payload.ppk_pegawai_id.or(old_data.ppk_pegawai_id))
     .bind(payload.kpa_pegawai_id.or(old_data.kpa_pegawai_id))
     .bind(payload.keterangan_lain.or(old_data.keterangan_lain))
