@@ -76,8 +76,12 @@ pub async fn get_surat_tugas_detail_repo(
     .fetch_one(pool)
     .await?;
 
+    // 1. REVISI QUERY PENANDATANGAN
     let penandatangan = sqlx::query!(
-        r#"SELECT p.nik, p.nama_lengkap, pp.jabatan as "jabatan?"
+        r#"SELECT 
+            p.nik, 
+            TRIM(COALESCE(NULLIF(TRIM(p.gelar_depan), '') || ' ', '') || TRIM(p.nama_lengkap) || COALESCE(', ' || NULLIF(TRIM(p.gelar_belakang), ''), '')) as "nama_lengkap!", 
+            pp.jabatan as "jabatan?"
            FROM pegawai p
            LEFT JOIN penempatan_pegawai pp ON p.id = pp.pegawai_id AND pp.tanggal_selesai IS NULL
            WHERE p.id = $1"#,
@@ -86,8 +90,13 @@ pub async fn get_surat_tugas_detail_repo(
     .fetch_one(pool)
     .await?;
 
+    // 2. REVISI QUERY PPK
     let ppk = if let Some(ppk_id) = master.ppk_pegawai_id {
-        sqlx::query!("SELECT nama_lengkap FROM pegawai WHERE id = $1", ppk_id)
+        sqlx::query!(
+            r#"SELECT TRIM(COALESCE(NULLIF(TRIM(gelar_depan), '') || ' ', '') || TRIM(nama_lengkap) || COALESCE(', ' || NULLIF(TRIM(gelar_belakang), ''), '')) as "nama_lengkap!" 
+               FROM pegawai WHERE id = $1"#,
+            ppk_id
+        )
             .fetch_one(pool)
             .await
             .ok()
@@ -95,8 +104,13 @@ pub async fn get_surat_tugas_detail_repo(
         None
     };
 
+    // 3. REVISI QUERY KPA
     let kpa = if let Some(kpa_id) = master.kpa_pegawai_id {
-        sqlx::query!("SELECT nama_lengkap FROM pegawai WHERE id = $1", kpa_id)
+        sqlx::query!(
+            r#"SELECT TRIM(COALESCE(NULLIF(TRIM(gelar_depan), '') || ' ', '') || TRIM(nama_lengkap) || COALESCE(', ' || NULLIF(TRIM(gelar_belakang), ''), '')) as "nama_lengkap!" 
+               FROM pegawai WHERE id = $1"#,
+            kpa_id
+        )
             .fetch_one(pool)
             .await
             .ok()
@@ -104,12 +118,13 @@ pub async fn get_surat_tugas_detail_repo(
         None
     };
 
+    // 4. REVISI QUERY PENERIMA TUGAS
     let penerima_list = sqlx::query_as!(
         PenerimaTugasDetail,
         r#"
         SELECT 
             p.id as "pegawai_id!",
-            p.nama_lengkap as "nama_lengkap!",
+            TRIM(COALESCE(NULLIF(TRIM(p.gelar_depan), '') || ' ', '') || TRIM(p.nama_lengkap) || COALESCE(', ' || NULLIF(TRIM(p.gelar_belakang), ''), '')) as "nama_lengkap!",
             p.nik as "nip!",
             pp.jabatan as "jabatan?",
             uk.nama_unit as "unit_kerja?",
