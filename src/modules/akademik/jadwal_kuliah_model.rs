@@ -261,3 +261,33 @@ pub struct UpdateJadwalKuliahPayload {
 
     pub dosen_pengampu: Vec<DosenPengampuPayload>,
 }
+
+// =========================================================
+// --- IMPORT CSV JADWAL ---
+// =========================================================
+
+#[derive(Debug, Deserialize)]
+pub struct JadwalKuliahCsvRecord {
+    #[serde(rename = "Hari")]
+    pub hari: String,
+    #[serde(rename = "Jam")]
+    pub jam: String,
+    #[serde(rename = "Kode MK")]
+    pub kode_mk: String,
+    #[serde(rename = "Dosen Pengampu")]
+    pub dosen_pengampu: String,
+    #[serde(rename = "Kelas")]
+    pub kelas: String,
+    #[serde(rename = "Ruangan")]
+    pub ruangan: String,
+    #[serde(rename = "tahun akademik")]
+    pub tahun_akademik: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImportJadwalResult {
+    pub status: String,
+    pub total_baris_dipindai: u32,
+    pub baris_berhasil_disimpan: u32,
+    pub detail_error: Vec<String>,
+}

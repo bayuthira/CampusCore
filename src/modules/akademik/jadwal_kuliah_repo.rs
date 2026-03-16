@@ -1,7 +1,8 @@
 // src/modules/akademik/jadwal_kuliah_repo.rs
 use super::jadwal_kuliah_model::{
-    CreateJadwalKuliahPayload, DayOfWeek, DosenPengampuDetail, JadwalKuliahDetail,
-    JadwalKuliahFilter, PlotJadwalRuanganPayload, TimeWithOffset, UpdateJadwalKuliahPayload,
+    CreateJadwalKuliahPayload, DayOfWeek, DosenPengampuDetail, ImportJadwalResult,
+    JadwalKuliahCsvRecord, JadwalKuliahDetail, JadwalKuliahFilter, PlotJadwalRuanganPayload,
+    TimeWithOffset, UpdateJadwalKuliahPayload,
 };
 use crate::{db::DbPool, errors::AppError};
 use rust_decimal::Decimal;
@@ -280,12 +281,14 @@ pub async fn get_all_jadwal_kuliah_repo(
     let mut jadwal_details = Vec::new();
 
     for row in jadwal_rows {
-        // Ambil list dosen pengampu dengan detail Feeder Aktivitas Mengajarnya
+        // --- REVISI QUERY: Ambil list dosen pengampu dengan gabungan gelar dan force NOT NULL (!) ---
         let dosen_pengampu = sqlx::query_as!(
             DosenPengampuDetail,
             r#"
             SELECT 
-                d.id as dosen_id, p.nama_lengkap as nama_dosen, jdp.peran as "peran: _",
+                d.id as dosen_id, 
+                TRIM(COALESCE(NULLIF(TRIM(p.gelar_depan), '') || ' ', '') || TRIM(p.nama_lengkap) || COALESCE(', ' || NULLIF(TRIM(p.gelar_belakang), ''), '')) as "nama_dosen!", 
+                jdp.peran as "peran: _",
                 jdp.id_aktivitas_mengajar_feeder, 
                 jdp.sks_substansi_total as "sks_substansi_total: Decimal", 
                 jdp.rencana_tatap_muka as "rencana_tatap_muka: i32", 
@@ -456,4 +459,392 @@ pub async fn delete_jadwal_kuliah_repo(pool: &DbPool, id: Uuid) -> Result<(), Ap
         return Err(sqlx::Error::RowNotFound.into());
     }
     Ok(())
+}
+
+// =========================================================
+// --- FUNGSI IMPORT CSV JADWAL (TERMASUK PLOT RUANGAN) ---
+// =========================================================
+pub async fn import_jadwal_from_csv_repo(
+    pool: &DbPool,
+    file_data: bytes::Bytes,
+    user_pembuat_id: Uuid,
+) -> Result<ImportJadwalResult, AppError> {
+    let mut rdr = csv::ReaderBuilder::new()
+        .delimiter(b';')
+        .from_reader(file_data.as_ref());
+
+    let mut success_count = 0;
+    let mut failed_count = 0;
+    let mut errors = Vec::new();
+
+    // FASE 1: Parsing ke struct sementara
+    let mut valid_rows = Vec::new();
+    for (index, result) in rdr.deserialize::<JadwalKuliahCsvRecord>().enumerate() {
+        match result {
+            Ok(row) => valid_rows.push((index + 2, row)),
+            Err(e) => {
+                failed_count += 1;
+                errors.push(format!(
+                    "Baris {}: Format CSV tidak valid - {}",
+                    index + 2,
+                    e
+                ));
+            }
+        }
+    }
+
+    let mut tx = pool.begin().await?;
+
+    // FASE 2: Validasi dan Insert ke DB
+    for (row_num, row) in valid_rows {
+        // Buat savepoint per baris agar jika error tidak merusak insert sebelumnya
+        let sp_name = format!("sp_jadwal_{}", row_num);
+        sqlx::query(&format!("SAVEPOINT {}", sp_name))
+            .execute(&mut *tx)
+            .await?;
+
+        // 1. Parsing Hari
+        let hari_enum = match row.hari.trim().to_lowercase().as_str() {
+            "senin" => DayOfWeek::Senin,
+            "selasa" => DayOfWeek::Selasa,
+            "rabu" => DayOfWeek::Rabu,
+            "kamis" => DayOfWeek::Kamis,
+            "jumat" => DayOfWeek::Jumat,
+            "sabtu" => DayOfWeek::Sabtu,
+            "minggu" => DayOfWeek::Minggu,
+            _ => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                    .execute(&mut *tx)
+                    .await?;
+                failed_count += 1;
+                errors.push(format!(
+                    "Baris {}: Hari '{}' tidak valid.",
+                    row_num, row.hari
+                ));
+                continue;
+            }
+        };
+
+        // 2. Parsing Jam (Pisahkan jam mulai dan selesai)
+        let jam_parts: Vec<&str> = row.jam.split(|c| c == '-' || c == '–').collect();
+        if jam_parts.len() != 2 {
+            sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                .execute(&mut *tx)
+                .await?;
+            failed_count += 1;
+            errors.push(format!(
+                "Baris {}: Format jam '{}' tidak valid. Gunakan pemisah - atau –",
+                row_num, row.jam
+            ));
+            continue;
+        }
+
+        let time_fmt = time::macros::format_description!("[hour]:[minute]");
+        let t_mulai = match time::Time::parse(jam_parts[0].trim(), &time_fmt) {
+            Ok(t) => t,
+            Err(_) => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                    .execute(&mut *tx)
+                    .await?;
+                failed_count += 1;
+                errors.push(format!(
+                    "Baris {}: Jam mulai '{}' gagal dibaca.",
+                    row_num, jam_parts[0]
+                ));
+                continue;
+            }
+        };
+        let t_selesai = match time::Time::parse(jam_parts[1].trim(), &time_fmt) {
+            Ok(t) => t,
+            Err(_) => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                    .execute(&mut *tx)
+                    .await?;
+                failed_count += 1;
+                errors.push(format!(
+                    "Baris {}: Jam selesai '{}' gagal dibaca.",
+                    row_num, jam_parts[1]
+                ));
+                continue;
+            }
+        };
+
+        let offset = time::UtcOffset::from_hms(7, 0, 0).unwrap(); // Default WIB
+        let jam_mulai = TimeWithOffset {
+            time: t_mulai,
+            offset,
+        };
+        let jam_selesai = TimeWithOffset {
+            time: t_selesai,
+            offset,
+        };
+
+        // 3. Cari Data Mata Kuliah
+        // PERBAIKAN E0609: Tambahkan 'kode_mk' ke dalam query SELECT
+        let mk = match sqlx::query!(
+            "SELECT id, sks, kode_mk FROM mata_kuliah WHERE kode_mk = $1",
+            row.kode_mk.trim()
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        {
+            Some(m) => m,
+            None => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                    .execute(&mut *tx)
+                    .await?;
+                failed_count += 1;
+                errors.push(format!(
+                    "Baris {}: Mata Kuliah dengan kode '{}' tidak ditemukan.",
+                    row_num, row.kode_mk
+                ));
+                continue;
+            }
+        };
+
+        // 4. Cari Data Tahun Akademik (bisa berdasarkan id_feeder 20252 atau nama)
+        let ta_str = row.tahun_akademik.trim().to_string();
+        let ta = match sqlx::query!("SELECT id, tanggal_mulai, tanggal_selesai FROM tahun_akademik WHERE id_semester_feeder = $1 OR nama = $1 LIMIT 1", ta_str)
+            .fetch_optional(&mut *tx).await? {
+            Some(t) => t,
+            None => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name)).execute(&mut *tx).await?;
+                failed_count += 1;
+                errors.push(format!("Baris {}: Tahun Akademik '{}' tidak terdaftar.", row_num, row.tahun_akademik));
+                continue;
+            }
+        };
+
+        // 5. Cek Duplikat Jadwal Utama
+        let kelas_clean = row.kelas.trim();
+        let is_duplicate = sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM jadwal_kuliah WHERE matakuliah_id = $1 AND tahun_akademik_id = $2 AND kelas = $3)",
+            mk.id, ta.id, kelas_clean
+        ).fetch_one(&mut *tx).await?.unwrap_or(false);
+
+        if is_duplicate {
+            sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                .execute(&mut *tx)
+                .await?;
+            failed_count += 1;
+            errors.push(format!(
+                "Baris {}: Jadwal untuk kelas '{}' MK '{}' sudah ada. Silakan gunakan Update.",
+                row_num, kelas_clean, row.kode_mk
+            ));
+            continue;
+        }
+
+        // 6. Buat Jadwal Induk
+        let jadwal_id = match sqlx::query_scalar::<_, Uuid>(
+            r#"
+            INSERT INTO jadwal_kuliah 
+            (matakuliah_id, tahun_akademik_id, hari, jam_mulai, jam_selesai, kelas, nama_kelas_kuliah)
+            VALUES ($1, $2, $3::"DayOfWeek", $4, $5, $6, $7) RETURNING id
+            "#
+        )
+        .bind(mk.id)
+        .bind(ta.id)
+        .bind(hari_enum.as_str())
+        .bind(&jam_mulai)
+        .bind(&jam_selesai)
+        .bind(kelas_clean)
+        .bind(kelas_clean) // Default nama kelas sama dengan kode kelas
+        .fetch_one(&mut *tx).await {
+            Ok(id) => id,
+            Err(e) => {
+                sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name)).execute(&mut *tx).await?;
+                failed_count += 1;
+                errors.push(format!("Baris {}: Gagal menyimpan jadwal: {}", row_num, e));
+                continue;
+            }
+        };
+
+        // 7. Pengolahan Data Dosen Pengampu & SKS
+        let dosen_names: Vec<&str> = row.dosen_pengampu.split(" - ").collect();
+        if dosen_names.is_empty() || dosen_names[0].trim().is_empty() {
+            sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                .execute(&mut *tx)
+                .await?;
+            failed_count += 1;
+            errors.push(format!("Baris {}: Kolom Dosen Pengampu kosong.", row_num));
+            continue;
+        }
+
+        let n = dosen_names.len() as i32;
+        let total_sks_dec = Decimal::from(mk.sks);
+        let n_dec = Decimal::from(n);
+
+        // Logika "Bagi rata, sisa berikan ke Koordinator (dosen urutan 1)"
+        // PERBAIKAN E0599: Gunakan round_dp(2) sebagai ganti floor_dp
+        let base_sks = (total_sks_dec / n_dec).round_dp(2);
+        let koordinator_sks = total_sks_dec - (base_sks * Decimal::from(n - 1));
+
+        let base_tm = 16 / n; // Integer division
+        let koordinator_tm = base_tm + (16 % n); // Sisa tatap muka untuk koordinator
+
+        let mut dosen_success = true;
+
+        for (i, dosen_str) in dosen_names.iter().enumerate() {
+            let is_koordinator = i == 0;
+            let peran = if is_koordinator {
+                "Koordinator"
+            } else {
+                "Anggota"
+            };
+            let sks_substansi = if is_koordinator {
+                koordinator_sks
+            } else {
+                base_sks
+            };
+            let tatap_muka = if is_koordinator {
+                koordinator_tm
+            } else {
+                base_tm
+            };
+
+            let nama_dosen_full = dosen_str.trim();
+            // Ambil bagian awal sebelum gelar untuk metode pencarian fuzzy
+            let nama_clean = nama_dosen_full
+                .split(',')
+                .next()
+                .unwrap_or(nama_dosen_full)
+                .trim();
+            let search_pattern = format!("%{}%", nama_clean);
+
+            // Mencari ID Dosen (Prioritas: Exact Match String Gabungan, Fallback: ILIKE nama_lengkap)
+            let dosen_id = match sqlx::query_scalar::<_, Uuid>(
+                r#"
+                SELECT d.id 
+                FROM dosen d 
+                JOIN pegawai p ON d.pegawai_id = p.id 
+                WHERE TRIM(COALESCE(NULLIF(TRIM(p.gelar_depan), '') || ' ', '') || TRIM(p.nama_lengkap) || COALESCE(', ' || NULLIF(TRIM(p.gelar_belakang), ''), '')) = $1
+                   OR p.nama_lengkap ILIKE $2
+                LIMIT 1
+                "#
+            )
+            .bind(nama_dosen_full)
+            .bind(&search_pattern)
+            .fetch_optional(&mut *tx).await {
+                Ok(Some(id)) => id,
+                Ok(None) => {
+                    errors.push(format!("Baris {}: Dosen dengan nama '{}' tidak ditemukan di database.", row_num, nama_dosen_full));
+                    dosen_success = false;
+                    break;
+                },
+                Err(e) => {
+                    errors.push(format!("Baris {}: Error saat query dosen '{}': {}", row_num, nama_dosen_full, e));
+                    dosen_success = false;
+                    break;
+                }
+            };
+
+            // Masukkan data Dosen ke DB
+            if let Err(e) = sqlx::query(
+                r#"
+                INSERT INTO jadwal_dosen_pengampu (
+                    jadwal_kuliah_id, dosen_id, peran, 
+                    sks_substansi_total, rencana_tatap_muka, realisasi_tatap_muka
+                ) VALUES ($1, $2, $3::"PeranDosenPengampu", $4, $5, 0)
+                "#,
+            )
+            .bind(jadwal_id)
+            .bind(dosen_id)
+            .bind(peran)
+            .bind(sks_substansi)
+            .bind(tatap_muka)
+            .execute(&mut *tx)
+            .await
+            {
+                errors.push(format!(
+                    "Baris {}: Gagal assign dosen '{}': {}",
+                    row_num, nama_dosen_full, e
+                ));
+                dosen_success = false;
+                break;
+            }
+        }
+
+        if !dosen_success {
+            sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
+                .execute(&mut *tx)
+                .await?;
+            failed_count += 1;
+            continue;
+        }
+
+        // 8. Pengolahan Data Ruangan (Plotting Semester Otomatis)
+        let nama_ruangan = row.ruangan.trim();
+        if !nama_ruangan.is_empty() && nama_ruangan != "-" {
+            // Cari Ruangan ID
+            let ruangan_id = match sqlx::query_scalar::<_, Uuid>(
+                "SELECT id FROM ruangan WHERE nama_ruangan ILIKE $1 OR kode_ruangan ILIKE $1 LIMIT 1"
+            )
+            .bind(nama_ruangan)
+            .fetch_optional(&mut *tx).await {
+                Ok(Some(id)) => Some(id),
+                Ok(None) => {
+                    // Jangan digagalkan (Rollback), tapi berikan Warning!
+                    errors.push(format!("Baris {}: (Warning) Ruangan '{}' tidak ditemukan. Jadwal dibuat tanpa ruangan ter-plot.", row_num, nama_ruangan));
+                    None
+                },
+                Err(_) => None,
+            };
+
+            if let Some(r_id) = ruangan_id {
+                let target_weekday = match hari_enum {
+                    DayOfWeek::Senin => Weekday::Monday,
+                    DayOfWeek::Selasa => Weekday::Tuesday,
+                    DayOfWeek::Rabu => Weekday::Wednesday,
+                    DayOfWeek::Kamis => Weekday::Thursday,
+                    DayOfWeek::Jumat => Weekday::Friday,
+                    DayOfWeek::Sabtu => Weekday::Saturday,
+                    DayOfWeek::Minggu => Weekday::Sunday,
+                };
+
+                let mut current_date = ta.tanggal_mulai;
+
+                // Looping semua hari dalam 1 semester untuk dipesan/diplot
+                while current_date <= ta.tanggal_selesai {
+                    if current_date.weekday() == target_weekday {
+                        let w_mulai = current_date
+                            .with_time(jam_mulai.time)
+                            .assume_offset(jam_mulai.offset);
+                        let w_selesai = current_date
+                            .with_time(jam_selesai.time)
+                            .assume_offset(jam_selesai.offset);
+
+                        // Insert ignoring conflicts untuk mencegah baris ini error total karena ruangan bertabrakan
+                        let _ = sqlx::query!(
+                            "INSERT INTO jadwal_ruangan (ruangan_id, judul_kegiatan, jadwal_kuliah_id, waktu_mulai, waktu_selesai, user_pembuat_id) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
+                            r_id, mk.kode_mk, jadwal_id, w_mulai, w_selesai, user_pembuat_id
+                        ).execute(&mut *tx).await;
+                    }
+                    current_date += Duration::days(1);
+                }
+            }
+        }
+
+        // Sukses! Lepaskan savepoint ini.
+        sqlx::query(&format!("RELEASE SAVEPOINT {}", sp_name))
+            .execute(&mut *tx)
+            .await?;
+        success_count += 1;
+    }
+
+    if failed_count > 0 && success_count == 0 {
+        tx.rollback().await?;
+    } else {
+        tx.commit().await?; // Simpan yang berhasil
+    }
+
+    Ok(ImportJadwalResult {
+        status: if failed_count == 0 {
+            "SUKSES".to_string()
+        } else {
+            "SEBAGIAN BERHASIL".to_string()
+        },
+        total_baris_dipindai: success_count + failed_count,
+        baris_berhasil_disimpan: success_count,
+        detail_error: errors,
+    })
 }
