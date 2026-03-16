@@ -107,7 +107,6 @@ pub async fn create_mahasiswa_repo(
     Ok(new_mahasiswa)
 }
 
-// Query untuk mengambil detail mahasiswa menggunakan JOIN 4 tabel
 pub async fn get_mahasiswa_by_id_repo(
     pool: &DbPool,
     id: Uuid,
@@ -116,10 +115,18 @@ pub async fn get_mahasiswa_by_id_repo(
         MahasiswaDetail,
         r#"
         SELECT 
-            m.id, rm.id as registrasi_id, m.nik, m.nama_mahasiswa, m.email,
-            rm.nim, rm.angkatan, rm.prodi_id, rm.status_mahasiswa,
+            m.id, 
+            rm.id as "registrasi_id?", 
+            m.nik, 
+            m.nama_mahasiswa, 
+            m.email,
+            rm.nim as "nim?", 
+            rm.angkatan as "angkatan?", 
+            rm.prodi_id as "prodi_id?", 
+            rm.status_mahasiswa as "status_mahasiswa?",
             COALESCE(p.nama_prodi, 'Prodi Tidak Ada') as "nama_prodi!",
-            m.user_id, COALESCE(u.username, 'Akun Tidak Terhubung') as "username!"
+            m.user_id, 
+            COALESCE(u.username, 'Akun Tidak Terhubung') as "username!"
         FROM mahasiswa m
         LEFT JOIN registrasi_mahasiswa rm ON rm.mahasiswa_id = m.id
         LEFT JOIN prodi p ON rm.prodi_id = p.id
@@ -139,10 +146,18 @@ pub async fn get_all_mahasiswa_repo(pool: &DbPool) -> Result<Vec<MahasiswaDetail
         MahasiswaDetail,
         r#"
         SELECT 
-            m.id, rm.id as registrasi_id, m.nik, m.nama_mahasiswa, m.email,
-            rm.nim, rm.angkatan, rm.prodi_id, rm.status_mahasiswa,
+            m.id, 
+            rm.id as "registrasi_id?", 
+            m.nik, 
+            m.nama_mahasiswa, 
+            m.email,
+            rm.nim as "nim?", 
+            rm.angkatan as "angkatan?", 
+            rm.prodi_id as "prodi_id?", 
+            rm.status_mahasiswa as "status_mahasiswa?",
             COALESCE(p.nama_prodi, 'Prodi Tidak Ada') as "nama_prodi!",
-            m.user_id, COALESCE(u.username, 'Akun Tidak Terhubung') as "username!"
+            m.user_id, 
+            COALESCE(u.username, 'Akun Tidak Terhubung') as "username!"
         FROM mahasiswa m
         LEFT JOIN registrasi_mahasiswa rm ON rm.mahasiswa_id = m.id
         LEFT JOIN prodi p ON rm.prodi_id = p.id
