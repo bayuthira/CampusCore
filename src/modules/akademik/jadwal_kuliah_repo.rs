@@ -497,7 +497,6 @@ pub async fn import_jadwal_from_csv_repo(
 
     // FASE 2: Validasi dan Insert ke DB
     for (row_num, row) in valid_rows {
-        // Buat savepoint per baris agar jika error tidak merusak insert sebelumnya
         let sp_name = format!("sp_jadwal_{}", row_num);
         sqlx::query(&format!("SAVEPOINT {}", sp_name))
             .execute(&mut *tx)
@@ -525,7 +524,7 @@ pub async fn import_jadwal_from_csv_repo(
             }
         };
 
-        // 2. Parsing Jam (Pisahkan jam mulai dan selesai)
+        // 2. Parsing Jam
         let jam_parts: Vec<&str> = row.jam.split(|c| c == '-' || c == '–').collect();
         if jam_parts.len() != 2 {
             sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
@@ -569,7 +568,7 @@ pub async fn import_jadwal_from_csv_repo(
             }
         };
 
-        let offset = time::UtcOffset::from_hms(7, 0, 0).unwrap(); // Default WIB
+        let offset = time::UtcOffset::from_hms(7, 0, 0).unwrap();
         let jam_mulai = TimeWithOffset {
             time: t_mulai,
             offset,
@@ -580,7 +579,6 @@ pub async fn import_jadwal_from_csv_repo(
         };
 
         // 3. Cari Data Mata Kuliah
-        // PERBAIKAN E0609: Tambahkan 'kode_mk' ke dalam query SELECT
         let mk = match sqlx::query!(
             "SELECT id, sks, kode_mk FROM mata_kuliah WHERE kode_mk = $1",
             row.kode_mk.trim()
@@ -602,7 +600,7 @@ pub async fn import_jadwal_from_csv_repo(
             }
         };
 
-        // 4. Cari Data Tahun Akademik (bisa berdasarkan id_feeder 20252 atau nama)
+        // 4. Cari Data Tahun Akademik
         let ta_str = row.tahun_akademik.trim().to_string();
         let ta = match sqlx::query!("SELECT id, tanggal_mulai, tanggal_selesai FROM tahun_akademik WHERE id_semester_feeder = $1 OR nama = $1 LIMIT 1", ta_str)
             .fetch_optional(&mut *tx).await? {
@@ -615,7 +613,7 @@ pub async fn import_jadwal_from_csv_repo(
             }
         };
 
-        // 5. Cek Duplikat Jadwal Utama
+        // 5. Cek Duplikat
         let kelas_clean = row.kelas.trim();
         let is_duplicate = sqlx::query_scalar!(
             "SELECT EXISTS(SELECT 1 FROM jadwal_kuliah WHERE matakuliah_id = $1 AND tahun_akademik_id = $2 AND kelas = $3)",
@@ -648,7 +646,7 @@ pub async fn import_jadwal_from_csv_repo(
         .bind(&jam_mulai)
         .bind(&jam_selesai)
         .bind(kelas_clean)
-        .bind(kelas_clean) // Default nama kelas sama dengan kode kelas
+        .bind(kelas_clean)
         .fetch_one(&mut *tx).await {
             Ok(id) => id,
             Err(e) => {
@@ -660,7 +658,15 @@ pub async fn import_jadwal_from_csv_repo(
         };
 
         // 7. Pengolahan Data Dosen Pengampu & SKS
-        let dosen_names: Vec<&str> = row.dosen_pengampu.split(" - ").collect();
+        // --- PERBAIKAN: Normalisasi segala jenis strip (En-Dash, Em-Dash) menjadi tanda hubung biasa (-)
+        let dosen_pengampu_clean = row
+            .dosen_pengampu
+            .replace(" – ", " - ")
+            .replace(" — ", " - ")
+            .replace(" / ", " - ");
+
+        let dosen_names: Vec<&str> = dosen_pengampu_clean.split(" - ").collect();
+
         if dosen_names.is_empty() || dosen_names[0].trim().is_empty() {
             sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
                 .execute(&mut *tx)
@@ -674,13 +680,11 @@ pub async fn import_jadwal_from_csv_repo(
         let total_sks_dec = Decimal::from(mk.sks);
         let n_dec = Decimal::from(n);
 
-        // Logika "Bagi rata, sisa berikan ke Koordinator (dosen urutan 1)"
-        // PERBAIKAN E0599: Gunakan round_dp(2) sebagai ganti floor_dp
         let base_sks = (total_sks_dec / n_dec).round_dp(2);
         let koordinator_sks = total_sks_dec - (base_sks * Decimal::from(n - 1));
 
-        let base_tm = 16 / n; // Integer division
-        let koordinator_tm = base_tm + (16 % n); // Sisa tatap muka untuk koordinator
+        let base_tm = 16 / n;
+        let koordinator_tm = base_tm + (16 % n);
 
         let mut dosen_success = true;
 
@@ -703,27 +707,39 @@ pub async fn import_jadwal_from_csv_repo(
             };
 
             let nama_dosen_full = dosen_str.trim();
-            // Ambil bagian awal sebelum gelar untuk metode pencarian fuzzy
-            let nama_clean = nama_dosen_full
-                .split(',')
-                .next()
-                .unwrap_or(nama_dosen_full)
-                .trim();
-            let search_pattern = format!("%{}%", nama_clean);
 
-            // Mencari ID Dosen (Prioritas: Exact Match String Gabungan, Fallback: ILIKE nama_lengkap)
+            // --- PERBAIKAN: Pencarian Dua Arah (Bidirectional Fuzzy Search) ---
+            // Kita cari menggunakan full text terlebih dahulu (jika cocok 100%),
+            // Jika tidak, kita cek apakah nama di CSV mengandung nama dari Database
+            // cth: "Bdn. Annisa Rahmidini, S.ST" (CSV) -> MENGANDUNG -> "Annisa Rahmidini" (Database)
+            let search_csv_term = format!("%{}%", nama_dosen_full);
+            let search_db_term = format!(
+                "%{}%",
+                nama_dosen_full.split(',').next().unwrap_or("").trim()
+            );
+
             let dosen_id = match sqlx::query_scalar::<_, Uuid>(
                 r#"
                 SELECT d.id 
                 FROM dosen d 
                 JOIN pegawai p ON d.pegawai_id = p.id 
-                WHERE TRIM(COALESCE(NULLIF(TRIM(p.gelar_depan), '') || ' ', '') || TRIM(p.nama_lengkap) || COALESCE(', ' || NULLIF(TRIM(p.gelar_belakang), ''), '')) = $1
+                WHERE 
+                   -- Kondisi 1: Pencocokan exact (Termasuk Gelar)
+                   TRIM(COALESCE(NULLIF(TRIM(p.gelar_depan), '') || ' ', '') || TRIM(p.nama_lengkap) || COALESCE(', ' || NULLIF(TRIM(p.gelar_belakang), ''), '')) = $1
+                   
+                   -- Kondisi 2: Nama di CSV (berserta gelar) MENGANDUNG nama lengkap (tanpa gelar) dari database
+                   OR $1 ILIKE '%' || p.nama_lengkap || '%'
+                   
+                   -- Kondisi 3: Nama lengkap di database MENGANDUNG nama depan dari CSV
                    OR p.nama_lengkap ILIKE $2
+                   
+                -- Prioritaskan nama yang paling panjang (Untuk menghindari "Siti" tertukar dengan "Siti Aminah")
+                ORDER BY LENGTH(p.nama_lengkap) DESC
                 LIMIT 1
                 "#
             )
             .bind(nama_dosen_full)
-            .bind(&search_pattern)
+            .bind(&search_db_term)
             .fetch_optional(&mut *tx).await {
                 Ok(Some(id)) => id,
                 Ok(None) => {
@@ -772,10 +788,9 @@ pub async fn import_jadwal_from_csv_repo(
             continue;
         }
 
-        // 8. Pengolahan Data Ruangan (Plotting Semester Otomatis)
+        // 8. Pengolahan Data Ruangan
         let nama_ruangan = row.ruangan.trim();
         if !nama_ruangan.is_empty() && nama_ruangan != "-" {
-            // Cari Ruangan ID
             let ruangan_id = match sqlx::query_scalar::<_, Uuid>(
                 "SELECT id FROM ruangan WHERE nama_ruangan ILIKE $1 OR kode_ruangan ILIKE $1 LIMIT 1"
             )
@@ -783,7 +798,6 @@ pub async fn import_jadwal_from_csv_repo(
             .fetch_optional(&mut *tx).await {
                 Ok(Some(id)) => Some(id),
                 Ok(None) => {
-                    // Jangan digagalkan (Rollback), tapi berikan Warning!
                     errors.push(format!("Baris {}: (Warning) Ruangan '{}' tidak ditemukan. Jadwal dibuat tanpa ruangan ter-plot.", row_num, nama_ruangan));
                     None
                 },
@@ -803,7 +817,6 @@ pub async fn import_jadwal_from_csv_repo(
 
                 let mut current_date = ta.tanggal_mulai;
 
-                // Looping semua hari dalam 1 semester untuk dipesan/diplot
                 while current_date <= ta.tanggal_selesai {
                     if current_date.weekday() == target_weekday {
                         let w_mulai = current_date
@@ -813,7 +826,6 @@ pub async fn import_jadwal_from_csv_repo(
                             .with_time(jam_selesai.time)
                             .assume_offset(jam_selesai.offset);
 
-                        // Insert ignoring conflicts untuk mencegah baris ini error total karena ruangan bertabrakan
                         let _ = sqlx::query!(
                             "INSERT INTO jadwal_ruangan (ruangan_id, judul_kegiatan, jadwal_kuliah_id, waktu_mulai, waktu_selesai, user_pembuat_id) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
                             r_id, mk.kode_mk, jadwal_id, w_mulai, w_selesai, user_pembuat_id
@@ -824,7 +836,6 @@ pub async fn import_jadwal_from_csv_repo(
             }
         }
 
-        // Sukses! Lepaskan savepoint ini.
         sqlx::query(&format!("RELEASE SAVEPOINT {}", sp_name))
             .execute(&mut *tx)
             .await?;
@@ -834,7 +845,7 @@ pub async fn import_jadwal_from_csv_repo(
     if failed_count > 0 && success_count == 0 {
         tx.rollback().await?;
     } else {
-        tx.commit().await?; // Simpan yang berhasil
+        tx.commit().await?;
     }
 
     Ok(ImportJadwalResult {
