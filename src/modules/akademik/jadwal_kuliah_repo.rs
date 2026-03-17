@@ -524,8 +524,11 @@ pub async fn import_jadwal_from_csv_repo(
             }
         };
 
-        // 2. Parsing Jam
-        let jam_parts: Vec<&str> = row.jam.split(|c| c == '-' || c == '–').collect();
+        // 2. Parsing Jam (Pisahkan jam mulai dan selesai)
+        // --- PERBAIKAN: Ubah titik menjadi titik dua agar format 13.00 bisa terbaca sebagai 13:00 ---
+        let jam_normalized = row.jam.replace(".", ":");
+        let jam_parts: Vec<&str> = jam_normalized.split(|c| c == '-' || c == '–').collect();
+
         if jam_parts.len() != 2 {
             sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", sp_name))
                 .execute(&mut *tx)
@@ -712,7 +715,7 @@ pub async fn import_jadwal_from_csv_repo(
             // Kita cari menggunakan full text terlebih dahulu (jika cocok 100%),
             // Jika tidak, kita cek apakah nama di CSV mengandung nama dari Database
             // cth: "Bdn. Annisa Rahmidini, S.ST" (CSV) -> MENGANDUNG -> "Annisa Rahmidini" (Database)
-            let search_csv_term = format!("%{}%", nama_dosen_full);
+            let _search_csv_term = format!("%{}%", nama_dosen_full);
             let search_db_term = format!(
                 "%{}%",
                 nama_dosen_full.split(',').next().unwrap_or("").trim()
