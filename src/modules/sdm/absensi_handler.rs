@@ -1,9 +1,20 @@
 // src/modules/sdm/absensi_handler.rs
 use super::{
     absensi_model::{
-        ClockPayload, ClockResponseFlat, LaporanAbsensiResponse, LaporanAbsensiRow,
-        LaporanBulananFilter, LaporanBulananResponse, LaporanHarianFilter, LogAbsensi,
-        LogDayFilter, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload, TipeAbsensi,
+        ClockPayload,
+        ClockResponseFlat,
+        LaporanAbsensiResponse,
+        LaporanAbsensiRow,
+        LaporanBulananFilter,
+        LaporanBulananResponse,
+        LaporanHarianFilter,
+        LogAbsensi,
+        LogDayFilter,
+        RekapAbsensiFilter,
+        RekapAbsensiHarian,
+        RekapManualPayload,
+        StatusAbsensi, // <-- TAMBAHAN: Untuk mapping status dinamis
+        TipeAbsensi,
     },
     absensi_repo as repo, repo as pegawai_repo,
 };
@@ -421,7 +432,98 @@ pub async fn get_my_rekap_absensi_handler(
 ) -> Result<Json<Vec<RekapAbsensiHarian>>, AppError> {
     let user_id = claims.sub;
     let pegawai_id = pegawai_repo::get_pegawai_id_from_user_id_repo(&pool, user_id).await?;
-    let list = repo::get_my_rekap_absensi_repo(&pool, pegawai_id, filter).await?;
+
+    let bulan = filter.bulan;
+    let tahun = filter.tahun;
+    let mut list = repo::get_my_rekap_absensi_repo(&pool, pegawai_id, filter).await?;
+
+    // --- INJECT DYNAMIC IJIN & CUTI ---
+    let bulan_u8: u8 = bulan.try_into().unwrap_or(1);
+    let bulan_enum = time::Month::try_from(bulan_u8).unwrap_or(time::Month::January);
+    let start_date = time::Date::from_calendar_date(tahun, bulan_enum, 1)
+        .map_err(|_| AppError::BadRequest("Tanggal tidak valid".to_string()))?;
+    let end_date = (start_date + time::Duration::days(32))
+        .replace_day(1)
+        .unwrap()
+        - time::Duration::days(1);
+
+    // 1. Fetch Ijin (Sakit, Urusan Keluarga, WFH, dll)
+    let ijins = sqlx::query!(
+        r#"
+        SELECT kategori::TEXT as "kategori!", tanggal_mulai, tanggal_selesai, alasan 
+        FROM pengajuan_ijin 
+        WHERE pegawai_id = $1 AND status = 'Disetujui' 
+          AND tanggal_mulai <= $3 AND tanggal_selesai >= $2
+        "#,
+        pegawai_id,
+        start_date,
+        end_date
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    for ijin in ijins {
+        let mut curr = ijin.tanggal_mulai;
+        while curr <= ijin.tanggal_selesai {
+            if curr >= start_date && curr <= end_date {
+                // Pastikan belum ada rekap di tanggal ini agar tidak double
+                if !list.iter().any(|r| r.tanggal == curr) {
+                    let status_absensi = match ijin.kategori.as_str() {
+                        "Sakit" => StatusAbsensi::Sakit,
+                        "WFH" | "Dinas Luar" => StatusAbsensi::Hadir,
+                        _ => StatusAbsensi::Ijin,
+                    };
+                    list.push(RekapAbsensiHarian {
+                        id: Uuid::new_v4(), // ID virtual untuk response
+                        pegawai_id,
+                        tanggal: curr,
+                        status: status_absensi,
+                        keterangan: Some(format!("{} - {}", ijin.kategori, ijin.alasan)),
+                    });
+                }
+            }
+            curr = curr + time::Duration::days(1);
+        }
+    }
+
+    // 2. Fetch Cuti
+    let cutis = sqlx::query!(
+        r#"
+        SELECT kategori::TEXT as "kategori!", tanggal_mulai, tanggal_selesai, alasan 
+        FROM pengajuan_cuti 
+        WHERE pegawai_id = $1 AND status = 'Disetujui' 
+          AND tanggal_mulai <= $3 AND tanggal_selesai >= $2
+        "#,
+        pegawai_id,
+        start_date,
+        end_date
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    for cuti in cutis {
+        let mut curr = cuti.tanggal_mulai;
+        while curr <= cuti.tanggal_selesai {
+            if curr >= start_date && curr <= end_date {
+                if !list.iter().any(|r| r.tanggal == curr) {
+                    list.push(RekapAbsensiHarian {
+                        id: Uuid::new_v4(),
+                        pegawai_id,
+                        tanggal: curr,
+                        status: StatusAbsensi::Cuti,
+                        keterangan: Some(format!("{} - {}", cuti.kategori, cuti.alasan)),
+                    });
+                }
+            }
+            curr = curr + time::Duration::days(1);
+        }
+    }
+
+    // Urutkan kembali berdasarkan tanggal karena data baru saja di-inject
+    list.sort_by(|a, b| a.tanggal.cmp(&b.tanggal));
+
     Ok(Json(list))
 }
 
@@ -440,7 +542,118 @@ pub async fn get_all_rekap_absensi_handler(
     State(pool): State<DbPool>,
     Query(filter): Query<RekapAbsensiFilter>,
 ) -> Result<Json<Vec<RekapAbsensiHarian>>, AppError> {
-    let list = repo::get_all_rekap_absensi_repo(&pool, filter).await?;
+    let bulan = filter.bulan;
+    let tahun = filter.tahun;
+    let pegawai_id_filter = filter.pegawai_id;
+
+    let mut list = repo::get_all_rekap_absensi_repo(&pool, filter).await?;
+
+    // --- INJECT DYNAMIC IJIN & CUTI UNTUK SEMUA PEGAWAI ---
+    let bulan_u8: u8 = bulan.try_into().unwrap_or(1);
+    let bulan_enum = time::Month::try_from(bulan_u8).unwrap_or(time::Month::January);
+    let start_date = time::Date::from_calendar_date(tahun, bulan_enum, 1)
+        .map_err(|_| AppError::BadRequest("Tanggal tidak valid".to_string()))?;
+    let end_date = (start_date + time::Duration::days(32))
+        .replace_day(1)
+        .unwrap()
+        - time::Duration::days(1);
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct PengajuanRow {
+        pegawai_id: Uuid,
+        kategori: String,
+        tanggal_mulai: time::Date,
+        tanggal_selesai: time::Date,
+        alasan: String,
+    }
+
+    // 1. Query Ijin
+    let mut ijin_query = sqlx::QueryBuilder::new(
+        "SELECT pegawai_id, kategori::TEXT as kategori, tanggal_mulai, tanggal_selesai, alasan FROM pengajuan_ijin WHERE status = 'Disetujui' AND tanggal_mulai <= ",
+    );
+    ijin_query.push_bind(end_date);
+    ijin_query.push(" AND tanggal_selesai >= ");
+    ijin_query.push_bind(start_date);
+
+    if let Some(pid) = pegawai_id_filter {
+        ijin_query.push(" AND pegawai_id = ");
+        ijin_query.push_bind(pid);
+    }
+
+    let ijins: Vec<PengajuanRow> = ijin_query
+        .build_query_as()
+        .fetch_all(&pool)
+        .await
+        .unwrap_or_default();
+
+    for ijin in ijins {
+        let mut curr = ijin.tanggal_mulai;
+        while curr <= ijin.tanggal_selesai {
+            if curr >= start_date && curr <= end_date {
+                if !list
+                    .iter()
+                    .any(|r| r.tanggal == curr && r.pegawai_id == ijin.pegawai_id)
+                {
+                    let status_absensi = match ijin.kategori.as_str() {
+                        "Sakit" => StatusAbsensi::Sakit,
+                        "WFH" | "Dinas Luar" => StatusAbsensi::Hadir,
+                        _ => StatusAbsensi::Ijin,
+                    };
+                    list.push(RekapAbsensiHarian {
+                        id: Uuid::new_v4(), // ID virtual
+                        pegawai_id: ijin.pegawai_id,
+                        tanggal: curr,
+                        status: status_absensi,
+                        keterangan: Some(format!("{} - {}", ijin.kategori, ijin.alasan)),
+                    });
+                }
+            }
+            curr = curr + time::Duration::days(1);
+        }
+    }
+
+    // 2. Query Cuti
+    let mut cuti_query = sqlx::QueryBuilder::new(
+        "SELECT pegawai_id, kategori::TEXT as kategori, tanggal_mulai, tanggal_selesai, alasan FROM pengajuan_cuti WHERE status = 'Disetujui' AND tanggal_mulai <= ",
+    );
+    cuti_query.push_bind(end_date);
+    cuti_query.push(" AND tanggal_selesai >= ");
+    cuti_query.push_bind(start_date);
+
+    if let Some(pid) = pegawai_id_filter {
+        cuti_query.push(" AND pegawai_id = ");
+        cuti_query.push_bind(pid);
+    }
+
+    let cutis: Vec<PengajuanRow> = cuti_query
+        .build_query_as()
+        .fetch_all(&pool)
+        .await
+        .unwrap_or_default();
+
+    for cuti in cutis {
+        let mut curr = cuti.tanggal_mulai;
+        while curr <= cuti.tanggal_selesai {
+            if curr >= start_date && curr <= end_date {
+                if !list
+                    .iter()
+                    .any(|r| r.tanggal == curr && r.pegawai_id == cuti.pegawai_id)
+                {
+                    list.push(RekapAbsensiHarian {
+                        id: Uuid::new_v4(),
+                        pegawai_id: cuti.pegawai_id,
+                        tanggal: curr,
+                        status: StatusAbsensi::Cuti,
+                        keterangan: Some(format!("{} - {}", cuti.kategori, cuti.alasan)),
+                    });
+                }
+            }
+            curr = curr + time::Duration::days(1);
+        }
+    }
+
+    list.sort_by(|a, b| a.tanggal.cmp(&b.tanggal));
+
     Ok(Json(list))
 }
 
