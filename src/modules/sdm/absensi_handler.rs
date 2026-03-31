@@ -1,19 +1,9 @@
 // src/modules/sdm/absensi_handler.rs
 use super::{
     absensi_model::{
-        ClockPayload,
-        ClockResponseFlat, // <-- IMPORT WRAPPER FLATTEN
-        LaporanAbsensiResponse,
-        LaporanAbsensiRow,
-        LaporanBulananFilter,
-        LaporanBulananResponse,
-        LaporanHarianFilter,
-        LogAbsensi,
-        LogDayFilter,
-        RekapAbsensiFilter,
-        RekapAbsensiHarian,
-        RekapManualPayload,
-        TipeAbsensi,
+        ClockPayload, ClockResponseFlat, LaporanAbsensiResponse, LaporanAbsensiRow,
+        LaporanBulananFilter, LaporanBulananResponse, LaporanHarianFilter, LogAbsensi,
+        LogDayFilter, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload, TipeAbsensi,
     },
     absensi_repo as repo, repo as pegawai_repo,
 };
@@ -293,7 +283,6 @@ fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
 // CORE ABSENSI LOGIC
 // ==========================================
 
-// Perhatikan Tipe Return Sekarang Berubah ke ClockResponseFlat
 async fn proses_absensi(
     pool: &DbPool,
     pegawai_id: Uuid,
@@ -301,7 +290,6 @@ async fn proses_absensi(
     foto_bytes: Vec<u8>,
     tipe: TipeAbsensi,
 ) -> Result<ClockResponseFlat, AppError> {
-    // 1. --- GEOFENCE HARD BLOCK LOGIC ---
     let today = (time::OffsetDateTime::now_utc() + time::Duration::hours(7)).date();
     let ijin_lokasi = repo::cek_ijin_lokasi_aktif(pool, pegawai_id, today).await?;
 
@@ -338,7 +326,6 @@ async fn proses_absensi(
         }
     }
 
-    // 2. --- VALIDASI WAJAH (AI) ---
     let path_file_db = repo::get_foto_profil_pegawai(pool, pegawai_id).await?;
     let foto_ref_path = format!("./{}", path_file_db);
     let ref_bytes = fs::read(&foto_ref_path).await?;
@@ -352,7 +339,6 @@ async fn proses_absensi(
         )));
     }
 
-    // 3. --- SIMPAN DATA ---
     let ext = "jpg";
     let nama_file_selfie = format!("{}.{}", Uuid::new_v4(), ext);
     let folder_simpan = format!("./uploads/absensi/{}", pegawai_id);
@@ -368,14 +354,12 @@ async fn proses_absensi(
     payload.face_confidence_score = Some(confidence);
     payload.is_face_verified = Some(is_verified);
 
-    // Dapatkan data log dari database
     let log = if tipe == TipeAbsensi::ClockIn {
         repo::clock_in_repo(pool, pegawai_id, payload).await?
     } else {
         repo::clock_out_repo(pool, pegawai_id, payload).await?
     };
 
-    // Gabungkan pesan notifikasi dan log absensi dalam 1 format response datar
     Ok(ClockResponseFlat {
         pesan_notifikasi: Some(pesan_notifikasi),
         data: log,
@@ -462,7 +446,6 @@ pub async fn get_all_rekap_absensi_handler(
 
 /// HELPER FUNGSI: Mengonversi DB Row menjadi Response API + Menghitung Keterangan, Menit, & Lokasi
 fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
-    // 1. Ambil env Waktu
     let jam_masuk_str = env::var("JAM_MASUK_KERJA")
         .unwrap_or_else(|_| "07:30".to_string())
         .replace(".", ":");
@@ -472,7 +455,6 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
     let toleransi_str =
         env::var("TOLERANSI_KETERLAMBATAN_PERHARI").unwrap_or_else(|_| "30".to_string());
 
-    // 2. Ambil env Lokasi Kampus
     let kampus_lat: f64 = env::var("KAMPUS_LATITUDE")
         .unwrap_or_else(|_| "-7.336465677499996".to_string())
         .parse()
@@ -486,7 +468,6 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
         .parse()
         .unwrap_or(100.0);
 
-    // 3. Parsing text jadi struct Waktu & Angka
     let format = time::format_description::parse("[hour]:[minute]").unwrap();
     let jam_masuk = time::Time::parse(&jam_masuk_str, &format)
         .unwrap_or(time::Time::from_hms(7, 30, 0).unwrap());
@@ -494,7 +475,6 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
         .unwrap_or(time::Time::from_hms(16, 30, 0).unwrap());
     let toleransi_mnt: i32 = toleransi_str.parse().unwrap_or(30);
 
-    // Konversi jam ke satuan Menit
     let target_masuk_mnt = jam_masuk.hour() as i32 * 60 + jam_masuk.minute() as i32;
     let target_pulang_mnt = jam_pulang.hour() as i32 * 60 + jam_pulang.minute() as i32;
 
@@ -503,7 +483,6 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
     let mut actual_in = row.clock_in;
     let mut actual_out = row.clock_out;
 
-    // RULE KHUSUS 1 & 2 (Abaikan absen anomali)
     if actual_in.is_some() && actual_out.is_none() {
         let waktu_wib = actual_in.unwrap().to_offset(offset_wib).time();
         let mnt = waktu_wib.hour() as i32 * 60 + waktu_wib.minute() as i32;
@@ -524,26 +503,42 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
     let mut telat_toleransi = 0;
     let mut lembur_aktual = 0;
 
-    // --- CEK STATUS IJIN LOKASI (WFH / Dinas Luar) ---
-    let is_remote_allowed = row.ijin_lokasi.is_some();
-    let label_remote = row.ijin_lokasi.as_deref().unwrap_or("");
+    // --- PERBAIKAN LOGIKA REKAP MANUAL & IJIN OTOMATIS ---
+    let manual_status = row.status_harian.as_deref();
+    let ijin_kategori = row.ijin_kategori.as_deref();
+    let is_remote_allowed = matches!(ijin_kategori, Some("WFH") | Some("Dinas Luar"));
 
-    // LOGIKA PENENTUAN KETERANGAN
     if actual_in.is_none() && actual_out.is_none() {
-        let status_text = match row.status_harian.as_deref() {
-            Some("Hadir") => "Lupa Absen (Direkap Manual: Hadir)".to_string(),
-            Some(s) => format!("Keterangan: {}", s),
-            None => {
-                // Jika tidak absen mesin, tapi punya ijin WFH/Dinas luar hari itu
-                if is_remote_allowed {
-                    format!("Lupa Absen ({})", label_remote)
-                } else {
-                    "Tidak Absen (Alpa)".to_string()
-                }
+        // Karyawan tidak absen sama sekali hari ini
+        if let Some(manual) = manual_status {
+            if manual == "Hadir" {
+                ket.push("Lupa Absen (Direkap Manual: Hadir)".to_string());
+            } else {
+                ket.push(format!("Keterangan: {}", manual)); // Misal: Keterangan: Cuti
             }
-        };
-        ket.push(status_text);
+        } else if let Some(ijin) = ijin_kategori {
+            if is_remote_allowed {
+                ket.push(format!("Lupa Absen ({})", ijin)); // WFH tapi ga absen foto
+            } else {
+                ket.push(format!("Keterangan: {}", ijin)); // Otomatis terbaca: Keterangan: Sakit / Urusan Keluarga
+            }
+        } else {
+            ket.push("Tidak Absen (Alpa)".to_string());
+        }
     } else {
+        // Karyawan melakukan Absen Mesin (Ada data jam masuk/pulang)
+
+        // Beri Catatan jika mereka absen mesin tapi sebenarnya sedang Cuti/Sakit
+        if let Some(manual) = manual_status {
+            if manual != "Hadir" {
+                ket.push(format!("(Status Rekap: {})", manual));
+            }
+        } else if let Some(ijin) = ijin_kategori {
+            if !is_remote_allowed {
+                ket.push(format!("(Status Ijin: {})", ijin));
+            }
+        }
+
         // --- Cek Clock In ---
         if let Some(in_dt) = actual_in {
             let waktu_wib = in_dt.to_offset(offset_wib).time();
@@ -565,10 +560,9 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
                 ));
             }
 
-            // Cek Lokasi Clock In
             if let (Some(lat_dec), Some(lon_dec)) = (row.latitude_in, row.longitude_in) {
                 if is_remote_allowed {
-                    ket.push(format!("Clock In ({})", label_remote)); // Bypass Jarak!
+                    ket.push(format!("Clock In ({})", ijin_kategori.unwrap_or("Remote")));
                 } else {
                     let lat_f = lat_dec.to_string().parse::<f64>().unwrap_or(0.0);
                     let lon_f = lon_dec.to_string().parse::<f64>().unwrap_or(0.0);
@@ -601,10 +595,9 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
                 }
             }
 
-            // Cek Lokasi Clock Out
             if let (Some(lat_dec), Some(lon_dec)) = (row.latitude_out, row.longitude_out) {
                 if is_remote_allowed {
-                    ket.push(format!("Clock Out ({})", label_remote)); // Bypass Jarak!
+                    ket.push(format!("Clock Out ({})", ijin_kategori.unwrap_or("Remote")));
                 } else {
                     let lat_f = lat_dec.to_string().parse::<f64>().unwrap_or(0.0);
                     let lon_f = lon_dec.to_string().parse::<f64>().unwrap_or(0.0);
@@ -620,7 +613,7 @@ fn kalkulasi_keterangan(row: &LaporanAbsensiRow) -> LaporanAbsensiResponse {
 
     let keterangan_final = if ket.is_empty() {
         if is_remote_allowed {
-            format!("Hadir Tepat Waktu ({})", label_remote)
+            format!("Hadir Tepat Waktu ({})", ijin_kategori.unwrap_or("Remote"))
         } else {
             "Hadir Tepat Waktu".to_string()
         }
@@ -678,7 +671,6 @@ pub async fn laporan_absensi_bulanan_handler(
 
             let response = kalkulasi_keterangan(row);
 
-            // Akumulasi total
             total_terlambat += response.terlambat_menit;
             total_terlambat_toleransi += response.terlambat_toleransi_menit;
             total_lembur += response.lembur_menit;

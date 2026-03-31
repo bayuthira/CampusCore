@@ -10,7 +10,6 @@ use time::{Date, Duration, Month, OffsetDateTime};
 use uuid::Uuid;
 use sqlx::Executor;
 
-/// Fungsi baru: Mengambil nama/path file foto profil dari tabel dokumen_sdm
 pub async fn get_foto_profil_pegawai(pool: &DbPool, pegawai_id: Uuid) -> Result<String, AppError> {
     let foto = sqlx::query_scalar!(
         r#"
@@ -26,7 +25,6 @@ pub async fn get_foto_profil_pegawai(pool: &DbPool, pegawai_id: Uuid) -> Result<
 
     match foto {
         Some(path) => Ok(path),
-        // <-- Diubah dari NotFound menjadi Forbidden
         None => Err(AppError::Forbidden("Foto profil referensi tidak ditemukan. Harap upload foto profil terlebih dahulu sebelum menggunakan fitur absensi wajah.".to_string())),
     }
 }
@@ -200,7 +198,10 @@ pub async fn get_laporan_harian_repo(
             (SELECT latitude FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as latitude_out,
             (SELECT longitude FROM log_absensi WHERE pegawai_id = p.id AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1 AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as longitude_out,
             rah.status::TEXT as status_harian,
-            (SELECT kategori::TEXT FROM pengajuan_ijin WHERE pegawai_id = p.id AND status = 'Disetujui' AND $1 BETWEEN tanggal_mulai AND tanggal_selesai AND kategori IN ('WFH', 'Dinas Luar') LIMIT 1) as ijin_lokasi
+            
+            -- PERBAIKAN: Menarik SEMUA status Ijin yang aktif hari ini (Termasuk Sakit, Urusan Keluarga, WFH, Dinas Luar)
+            (SELECT kategori::TEXT FROM pengajuan_ijin WHERE pegawai_id = p.id AND status = 'Disetujui' AND $1 BETWEEN tanggal_mulai AND tanggal_selesai LIMIT 1) as ijin_kategori
+        
         FROM pegawai p
         LEFT JOIN log_absensi la ON p.id = la.pegawai_id AND DATE(la.waktu_absensi AT TIME ZONE 'Asia/Jakarta') = $1
         LEFT JOIN rekap_absensi_harian rah ON p.id = rah.pegawai_id AND rah.tanggal = $1
@@ -245,7 +246,10 @@ pub async fn get_laporan_bulanan_repo(
             (SELECT latitude FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as latitude_out,
             (SELECT longitude FROM log_absensi WHERE pegawai_id = $3 AND DATE(waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal AND tipe_absensi = 'ClockOut' ORDER BY waktu_absensi DESC LIMIT 1) as longitude_out,
             rah.status::TEXT as status_harian,
-            (SELECT kategori::TEXT FROM pengajuan_ijin WHERE pegawai_id = $3 AND status = 'Disetujui' AND d.tanggal BETWEEN tanggal_mulai AND tanggal_selesai AND kategori IN ('WFH', 'Dinas Luar') LIMIT 1) as ijin_lokasi
+            
+            -- PERBAIKAN: Menarik SEMUA status Ijin yang aktif hari ini
+            (SELECT kategori::TEXT FROM pengajuan_ijin WHERE pegawai_id = $3 AND status = 'Disetujui' AND d.tanggal BETWEEN tanggal_mulai AND tanggal_selesai LIMIT 1) as ijin_kategori
+            
         FROM days d
         LEFT JOIN log_absensi la ON la.pegawai_id = $3 AND DATE(la.waktu_absensi AT TIME ZONE 'Asia/Jakarta') = d.tanggal
         LEFT JOIN rekap_absensi_harian rah ON rah.pegawai_id = $3 AND rah.tanggal = d.tanggal
@@ -284,6 +288,5 @@ pub async fn cek_ijin_lokasi_aktif(
     .fetch_optional(pool)
     .await?;
 
-    // GUNAKAN .flatten() UNTUK MELEBUR Option<Option<String>> MENJADI Option<String>
     Ok(kategori.flatten())
 }

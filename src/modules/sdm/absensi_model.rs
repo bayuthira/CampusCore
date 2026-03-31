@@ -48,7 +48,6 @@ impl TipeAbsensi {
 
 // --- MODEL & DTO ---
 
-/// `struct` untuk payload saat Clock-In atau Clock-Out via GPS
 #[derive(Debug, Deserialize)]
 pub struct ClockPayload {
     pub latitude: Decimal,
@@ -59,7 +58,6 @@ pub struct ClockPayload {
     pub is_face_verified: Option<bool>,
 }
 
-/// `struct` untuk payload saat Admin membuat rekap manual
 #[derive(Debug, Deserialize)]
 pub struct RekapManualPayload {
     pub pegawai_id: Uuid,
@@ -68,7 +66,6 @@ pub struct RekapManualPayload {
     pub keterangan: Option<String>,
 }
 
-/// `struct` untuk menampilkan data Log Absensi (Respons API)
 #[derive(Debug, Serialize, FromRow)]
 pub struct LogAbsensi {
     pub id: Uuid,
@@ -82,12 +79,8 @@ pub struct LogAbsensi {
     pub foto_absensi_path: Option<String>,
     pub face_confidence_score: Option<f32>,
     pub is_face_verified: Option<bool>,
-    // FIELD `pesan_notifikasi` DIHAPUS DARI SINI AGAR SQLX MACRO TIDAK ERROR
 }
 
-/// --- TAMBAHAN BARU: WRAPPER BACKWARD COMPATIBLE ---
-/// Menggunakan #[serde(flatten)] agar saat dirender menjadi JSON,
-/// field `pesan_notifikasi` melebur sejajar ke dalam field `LogAbsensi`.
 #[derive(Debug, Serialize)]
 pub struct ClockResponseFlat {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -96,7 +89,6 @@ pub struct ClockResponseFlat {
     pub data: LogAbsensi,
 }
 
-/// `struct` untuk menampilkan data Rekap Absensi Harian (Respons API)
 #[derive(Debug, Serialize, FromRow)]
 pub struct RekapAbsensiHarian {
     pub id: Uuid,
@@ -106,10 +98,9 @@ pub struct RekapAbsensiHarian {
     pub keterangan: Option<String>,
 }
 
-/// `struct` untuk DTO filter rekap absensi
 #[derive(Debug, Deserialize)]
 pub struct RekapAbsensiFilter {
-    pub bulan: i32, // 1-12
+    pub bulan: i32,
     pub tahun: i32,
     pub pegawai_id: Option<Uuid>,
 }
@@ -146,7 +137,7 @@ pub struct LaporanAbsensiRow {
     pub latitude_out: Option<rust_decimal::Decimal>,
     pub longitude_out: Option<rust_decimal::Decimal>,
     pub status_harian: Option<String>,
-    pub ijin_lokasi: Option<String>,
+    pub ijin_kategori: Option<String>, // <-- PERBAIKAN: Berubah dari ijin_lokasi
 }
 
 // Struct hasil olahan Harian yang akan dikirim ke Frontend
@@ -160,9 +151,9 @@ pub struct LaporanAbsensiResponse {
     #[serde(with = "time::serde::rfc3339::option")]
     pub clock_out: Option<OffsetDateTime>,
     pub keterangan: String,
-    pub terlambat_menit: i32,           // <-- Data angka mentah
-    pub terlambat_toleransi_menit: i32, // <-- Data angka mentah
-    pub lembur_menit: i32,              // <-- Data angka mentah
+    pub terlambat_menit: i32,
+    pub terlambat_toleransi_menit: i32,
+    pub lembur_menit: i32,
     pub foto_absensi_path_in: Option<String>,
     pub foto_absensi_path_out: Option<String>,
     pub latitude_in: Option<rust_decimal::Decimal>,
@@ -171,15 +162,14 @@ pub struct LaporanAbsensiResponse {
     pub longitude_out: Option<rust_decimal::Decimal>,
 }
 
-// Struct Khusus Respons Laporan Bulanan (Dengan Total)
 #[derive(Debug, Serialize)]
 pub struct LaporanBulananResponse {
     pub pegawai_id: Uuid,
     pub nama_pegawai: String,
     pub bulan: i32,
     pub tahun: i32,
-    pub total_terlambat_menit: i32, // <-- Total Akumulasi Bulanan
-    pub total_terlambat_toleransi_menit: i32, // <-- Total Akumulasi Bulanan
-    pub total_lembur_menit: i32,    // <-- Total Akumulasi Bulanan
+    pub total_terlambat_menit: i32,
+    pub total_terlambat_toleransi_menit: i32,
+    pub total_lembur_menit: i32,
     pub rekap_harian: Vec<LaporanAbsensiResponse>,
 }
