@@ -530,9 +530,13 @@ pub async fn get_rombel_summary_repo(
             p.nama_prodi,
             rm.angkatan,
             rm.kode_rombel,
-            COUNT(rm.id) as jumlah_mahasiswa
+            COUNT(rm.id) as jumlah_mahasiswa,
+            rm.dosen_pa_id,
+            peg.nama_lengkap as nama_dosen_pa
         FROM registrasi_mahasiswa rm
         JOIN prodi p ON rm.prodi_id = p.id
+        LEFT JOIN dosen d ON rm.dosen_pa_id = d.id
+        LEFT JOIN pegawai peg ON d.pegawai_id = peg.id
         WHERE 1=1
         "#,
     );
@@ -546,7 +550,9 @@ pub async fn get_rombel_summary_repo(
         query.push_bind(angkatan);
     }
 
-    query.push(" GROUP BY rm.prodi_id, p.nama_prodi, rm.angkatan, rm.kode_rombel ORDER BY rm.angkatan DESC, p.nama_prodi ASC, rm.kode_rombel ASC");
+    // Ingat: Karena kita menambahkan dosen_pa_id dan nama_dosen_pa ke SELECT,
+    // kita juga harus menambahkannya ke dalam GROUP BY.
+    query.push(" GROUP BY rm.prodi_id, p.nama_prodi, rm.angkatan, rm.kode_rombel, rm.dosen_pa_id, peg.nama_lengkap ORDER BY rm.angkatan DESC, p.nama_prodi ASC, rm.kode_rombel ASC");
 
     let result = query
         .build_query_as::<RombelSummary>()

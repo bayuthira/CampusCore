@@ -31,11 +31,89 @@ pub async fn create_enrollment_repo(
         ));
     }
 
-    // Loop array dari Frontend dan Insert
-    // (Jika mau lebih advanced bisa pakai sqlx query builder untuk bulk insert,
-    // tapi loop di dalam transaksi sudah cukup cepat untuk puluhan baris)
+    if payload.jadwal_kuliah_ids.is_empty() {
+        return Ok(());
+    }
+
+    // ==========================================
+    // VALIDASI JADWAL BENTROK (HARD LOCK)
+    // ==========================================
+
+    // 1. Ambil detail jadwal yang ingin ditambahkan saat ini
+    let requested_schedules = sqlx::query!(
+        r#"
+        SELECT jk.id, jk.hari::TEXT as "hari!", jk.jam_mulai, jk.jam_selesai, mk.nama_mk, jk.kelas
+        FROM jadwal_kuliah jk
+        JOIN mata_kuliah mk ON jk.matakuliah_id = mk.id
+        WHERE jk.id = ANY($1)
+        "#,
+        &payload.jadwal_kuliah_ids
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+
+    // 2. Ambil detail jadwal yang SUDAH ADA di KRS mahasiswa ini (pada semester yang sama)
+    let existing_schedules = sqlx::query!(
+        r#"
+        SELECT jk.id, jk.hari::TEXT as "hari!", jk.jam_mulai, jk.jam_selesai, mk.nama_mk, jk.kelas
+        FROM enrollments e
+        JOIN jadwal_kuliah jk ON e.jadwal_kuliah_id = jk.id
+        JOIN mata_kuliah mk ON jk.matakuliah_id = mk.id
+        WHERE e.registrasi_id = $1 AND e.tahun_akademik_id = $2
+        "#,
+        registrasi_id,
+        payload.tahun_akademik_id
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+
+    // 3. Cek Bentrok Internal (Antara mata kuliah yang baru mau diinput secara bersamaan di payload)
+    for i in 0..requested_schedules.len() {
+        for j in (i + 1)..requested_schedules.len() {
+            let s1 = &requested_schedules[i];
+            let s2 = &requested_schedules[j];
+
+            // Logika Irisan Waktu: (Mulai A < Selesai B) DAN (Selesai A > Mulai B)
+            // PERBAIKAN: Gunakan .time untuk mengekstrak jam murninya
+            if s1.hari == s2.hari
+                && s1.jam_mulai.time < s2.jam_selesai.time
+                && s1.jam_selesai.time > s2.jam_mulai.time
+            {
+                return Err(AppError::Forbidden(format!(
+                    "Gagal menyimpan KRS. Terdapat jadwal yang bentrok pada pilihan Anda: {} (Kelas {}) bertabrakan dengan {} (Kelas {}) pada hari {}.",
+                    s1.nama_mk, s1.kelas, s2.nama_mk, s2.kelas, s1.hari
+                )));
+            }
+        }
+    }
+
+    // 4. Cek Bentrok Eksternal (Antara pilihan baru vs KRS yang sudah tersimpan sebelumnya)
+    for req in &requested_schedules {
+        for ext in &existing_schedules {
+            // Abaikan jika jadwal_id nya sama persis (Kasus mahasiswa klik/kirim ID MK yang sama 2x, akan ditangani oleh blok is_duplicate di bawah)
+            if req.id == ext.id {
+                continue;
+            }
+
+            // PERBAIKAN: Gunakan .time untuk mengekstrak jam murninya
+            if req.hari == ext.hari
+                && req.jam_mulai.time < ext.jam_selesai.time
+                && req.jam_selesai.time > ext.jam_mulai.time
+            {
+                return Err(AppError::Forbidden(format!(
+                    "Gagal menyimpan KRS. Pilihan {} (Kelas {}) bentrok dengan KRS Anda yang sudah ada: {} (Kelas {}) pada hari {}.",
+                    req.nama_mk, req.kelas, ext.nama_mk, ext.kelas, req.hari
+                )));
+            }
+        }
+    }
+
+    // ==========================================
+    // PROSES INSERT KRS (JIKA TIDAK BENTROK)
+    // ==========================================
+
     for jadwal_id in payload.jadwal_kuliah_ids {
-        // Validasi opsional: Cek apakah mahasiswa sudah ambil jadwal ini
+        // Validasi Duplikasi: Cek apakah mahasiswa sudah ambil jadwal ini
         let is_duplicate = sqlx::query_scalar!(
             "SELECT EXISTS(SELECT 1 FROM enrollments WHERE registrasi_id = $1 AND jadwal_kuliah_id = $2)",
             registrasi_id, jadwal_id

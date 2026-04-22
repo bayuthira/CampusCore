@@ -122,6 +122,8 @@ pub struct RombelSummary {
     pub angkatan: i32,
     pub kode_rombel: Option<String>,
     pub jumlah_mahasiswa: Option<i64>,
+    pub dosen_pa_id: Option<Uuid>,
+    pub nama_dosen_pa: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
