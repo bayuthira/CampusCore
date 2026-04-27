@@ -125,12 +125,20 @@ pub async fn get_mahasiswa_by_id_repo(
             rm.prodi_id as "prodi_id?", 
             rm.status_mahasiswa as "status_mahasiswa?",
             COALESCE(p.nama_prodi, 'Prodi Tidak Ada') as "nama_prodi!",
+            
+            -- AMBIL DATA DOSEN PA --
+            rm.dosen_pa_id as "dosen_pa_id?",
+            peg.nama_lengkap as "nama_dosen_pa?",
+            
             m.user_id, 
             COALESCE(u.username, 'Akun Tidak Terhubung') as "username!"
         FROM mahasiswa m
         LEFT JOIN registrasi_mahasiswa rm ON rm.mahasiswa_id = m.id
         LEFT JOIN prodi p ON rm.prodi_id = p.id
         LEFT JOIN users u ON m.user_id = u.id
+        -- TAMBAHAN JOIN DOSEN PA --
+        LEFT JOIN dosen d ON rm.dosen_pa_id = d.id
+        LEFT JOIN pegawai peg ON d.pegawai_id = peg.id
         WHERE m.id = $1
         ORDER BY rm.created_at DESC LIMIT 1
         "#,
@@ -138,6 +146,7 @@ pub async fn get_mahasiswa_by_id_repo(
     )
     .fetch_one(pool)
     .await?;
+
     Ok(mhs)
 }
 
@@ -156,17 +165,26 @@ pub async fn get_all_mahasiswa_repo(pool: &DbPool) -> Result<Vec<MahasiswaDetail
             rm.prodi_id as "prodi_id?", 
             rm.status_mahasiswa as "status_mahasiswa?",
             COALESCE(p.nama_prodi, 'Prodi Tidak Ada') as "nama_prodi!",
+            
+            -- AMBIL DATA DOSEN PA --
+            rm.dosen_pa_id as "dosen_pa_id?",
+            peg.nama_lengkap as "nama_dosen_pa?",
+            
             m.user_id, 
             COALESCE(u.username, 'Akun Tidak Terhubung') as "username!"
         FROM mahasiswa m
         LEFT JOIN registrasi_mahasiswa rm ON rm.mahasiswa_id = m.id
         LEFT JOIN prodi p ON rm.prodi_id = p.id
         LEFT JOIN users u ON m.user_id = u.id
+        -- TAMBAHAN JOIN DOSEN PA --
+        LEFT JOIN dosen d ON rm.dosen_pa_id = d.id
+        LEFT JOIN pegawai peg ON d.pegawai_id = peg.id
         ORDER BY m.nama_mahasiswa ASC
         "#
     )
     .fetch_all(pool)
     .await?;
+
     Ok(mahasiswa_list)
 }
 

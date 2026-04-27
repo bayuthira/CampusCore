@@ -42,6 +42,10 @@ pub struct MahasiswaDetail {
     pub nama_prodi: String,
     pub status_mahasiswa: Option<String>,
 
+    // DOSEN PA
+    pub dosen_pa_id: Option<Uuid>,
+    pub nama_dosen_pa: Option<String>,
+
     // Akun
     pub user_id: Option<Uuid>,
     pub username: String, // username dari tabel users

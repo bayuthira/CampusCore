@@ -55,4 +55,17 @@ pub struct MataKuliahDetail {
     pub sks_praktek_lapangan: i32,
     pub sks_simulasi: i32,
     pub jenis_mk: String,
+
+    // --- TAMBAHAN PRA-KBM ---
+    pub file_rps_path: Option<String>,
+    pub status_verifikasi_rps: Option<String>, // 'Belum Upload', 'Menunggu Verifikasi', 'Disetujui', 'Ditolak'
+    pub catatan_verifikasi_rps: Option<String>,
+}
+
+// --- TAMBAHAN BARU UNTUK VERIFIKASI RPS ---
+// Payload Khusus untuk Kaprodi / Admin memverifikasi RPS
+#[derive(Debug, Deserialize)]
+pub struct VerifikasiRpsPayload {
+    pub status_verifikasi: String, // "Disetujui" atau "Ditolak"
+    pub catatan: Option<String>,   // Opsional, biasanya diisi jika ditolak
 }

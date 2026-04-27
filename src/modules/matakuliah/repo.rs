@@ -1,5 +1,7 @@
 // src/modules/matakuliah/repo.rs
-use super::model::{CreateMataKuliahPayload, MataKuliahDetail, UpdateMataKuliahPayload};
+use super::model::{
+    CreateMataKuliahPayload, MataKuliahDetail, UpdateMataKuliahPayload, VerifikasiRpsPayload,
+};
 use crate::{db::DbPool, errors::AppError};
 use uuid::Uuid;
 
@@ -19,8 +21,9 @@ pub async fn create_matakuliah_repo(
         r#"
         INSERT INTO mata_kuliah (
             kode_mk, nama_mk, sks, semester_target, prodi_id,
-            id_matkul_feeder, sks_tatap_muka, sks_praktek, sks_praktek_lapangan, sks_simulasi, jenis_mk
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id
+            id_matkul_feeder, sks_tatap_muka, sks_praktek, sks_praktek_lapangan, sks_simulasi, jenis_mk,
+            status_verifikasi_rps
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Belum Upload') RETURNING id
         "#,
         payload.kode_mk, payload.nama_mk, total_sks, payload.semester_target, payload.prodi_id,
         payload.id_matkul_feeder, payload.sks_tatap_muka, payload.sks_praktek,
@@ -38,7 +41,8 @@ pub async fn get_all_matakuliah_repo(pool: &DbPool) -> Result<Vec<MataKuliahDeta
         MataKuliahDetail,
         r#"
         SELECT mk.id, mk.kode_mk, mk.nama_mk, mk.sks, mk.semester_target, mk.prodi_id, p.nama_prodi,
-               mk.id_matkul_feeder, mk.sks_tatap_muka, mk.sks_praktek, mk.sks_praktek_lapangan, mk.sks_simulasi, mk.jenis_mk
+               mk.id_matkul_feeder, mk.sks_tatap_muka, mk.sks_praktek, mk.sks_praktek_lapangan, mk.sks_simulasi, mk.jenis_mk,
+               mk.file_rps_path, mk.status_verifikasi_rps, mk.catatan_verifikasi_rps
         FROM mata_kuliah mk
         LEFT JOIN prodi p ON mk.prodi_id = p.id
         ORDER BY mk.kode_mk ASC
@@ -57,7 +61,8 @@ pub async fn get_matakuliah_by_id_repo(
         MataKuliahDetail,
         r#"
         SELECT mk.id, mk.kode_mk, mk.nama_mk, mk.sks, mk.semester_target, mk.prodi_id, p.nama_prodi,
-               mk.id_matkul_feeder, mk.sks_tatap_muka, mk.sks_praktek, mk.sks_praktek_lapangan, mk.sks_simulasi, mk.jenis_mk
+               mk.id_matkul_feeder, mk.sks_tatap_muka, mk.sks_praktek, mk.sks_praktek_lapangan, mk.sks_simulasi, mk.jenis_mk,
+               mk.file_rps_path, mk.status_verifikasi_rps, mk.catatan_verifikasi_rps
         FROM mata_kuliah mk
         LEFT JOIN prodi p ON mk.prodi_id = p.id
         WHERE mk.id = $1
@@ -141,4 +146,38 @@ pub async fn delete_matakuliah_repo(pool: &DbPool, id: Uuid) -> Result<(), AppEr
         return Err(sqlx::Error::RowNotFound.into());
     }
     Ok(())
+}
+
+// --- FUNGSI VERIFIKASI RPS ---
+pub async fn verifikasi_rps_repo(
+    pool: &DbPool,
+    id: Uuid,
+    payload: VerifikasiRpsPayload,
+) -> Result<MataKuliahDetail, AppError> {
+    if payload.status_verifikasi != "Disetujui" && payload.status_verifikasi != "Ditolak" {
+        return Err(AppError::BadRequest(
+            "Status verifikasi harus 'Disetujui' atau 'Ditolak'.".to_string(),
+        ));
+    }
+
+    let rows_affected = sqlx::query!(
+        r#"
+        UPDATE mata_kuliah 
+        SET status_verifikasi_rps = $1, catatan_verifikasi_rps = $2, updated_at = now()
+        WHERE id = $3
+        "#,
+        payload.status_verifikasi,
+        payload.catatan,
+        id
+    )
+    .execute(pool)
+    .await?
+    .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound.into());
+    }
+
+    let updated_mk = get_matakuliah_by_id_repo(pool, id).await?;
+    Ok(updated_mk)
 }

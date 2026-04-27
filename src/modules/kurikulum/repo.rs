@@ -147,24 +147,27 @@ pub async fn get_matakuliah_in_kurikulum_repo(
     pool: &DbPool,
     kurikulum_id: Uuid,
 ) -> Result<Vec<MataKuliahDetail>, AppError> {
-    // Memperbaiki error E0063 dengan menambahkan kolom Feeder Mata Kuliah yang kurang
     let mk_list = sqlx::query_as!(
         MataKuliahDetail,
         r#"
         SELECT 
-            mk.id, mk.kode_mk, mk.nama_mk, mk.sks, mk.semester_target, mk.prodi_id,
-            mk.id_matkul_feeder, mk.sks_tatap_muka, mk.sks_praktek, mk.sks_praktek_lapangan, mk.sks_simulasi, mk.jenis_mk,
-            COALESCE(p.nama_prodi, 'Prodi Tidak Ditemukan') as "nama_prodi!"
-        FROM mata_kuliah mk
-        INNER JOIN kurikulum_matakuliah km ON mk.id = km.matakuliah_id
+            mk.id, mk.kode_mk, mk.nama_mk, mk.sks, mk.semester_target, mk.prodi_id, 
+            p.nama_prodi,
+            mk.id_matkul_feeder, mk.sks_tatap_muka, mk.sks_praktek, 
+            mk.sks_praktek_lapangan, mk.sks_simulasi, mk.jenis_mk,
+            mk.file_rps_path,
+            mk.status_verifikasi_rps, mk.catatan_verifikasi_rps
+        FROM kurikulum_matakuliah km
+        JOIN mata_kuliah mk ON km.matakuliah_id = mk.id
         LEFT JOIN prodi p ON mk.prodi_id = p.id
         WHERE km.kurikulum_id = $1
-        ORDER BY mk.kode_mk
+        ORDER BY mk.semester_target ASC, mk.kode_mk ASC
         "#,
         kurikulum_id
     )
     .fetch_all(pool)
     .await?;
+
     Ok(mk_list)
 }
 
