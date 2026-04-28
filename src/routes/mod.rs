@@ -26,6 +26,7 @@ pub fn create_router(pool: DbPool) -> Router {
         .merge(modules::user_management::routes::user_management_router())
         .merge(modules::aset::routes::aset_router())
         .merge(modules::akademik::jadwal_kuliah_routes::jadwal_kuliah_router())
+        .merge(modules::akademik::rencana_penilaian_routes::rencana_penilaian_router())
         .merge(modules::fleet::routes::fleet_router())
         .merge(modules::fleet::servis_routes::servis_router())
         .merge(modules::sdm::routes::sdm_router())

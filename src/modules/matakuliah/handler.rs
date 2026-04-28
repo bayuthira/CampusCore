@@ -1,7 +1,9 @@
 // src/modules/matakuliah/handler.rs
 
 use super::{
-    model::{CreateMataKuliahPayload, MataKuliahDetail, UpdateMataKuliahPayload},
+    model::{
+        CreateMataKuliahPayload, MataKuliahDetail, UpdateMataKuliahPayload, VerifikasiRpsPayload,
+    },
     repo as matakuliah_repo,
 };
 
@@ -68,4 +70,13 @@ pub async fn delete_matakuliah_handler(
 ) -> Result<StatusCode, AppError> {
     matakuliah_repo::delete_matakuliah_repo(&pool, id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn verifikasi_rps_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<VerifikasiRpsPayload>,
+) -> Result<Json<MataKuliahDetail>, AppError> {
+    let updated_mk = matakuliah_repo::verifikasi_rps_repo(&pool, id, payload).await?;
+    Ok(Json(updated_mk))
 }
