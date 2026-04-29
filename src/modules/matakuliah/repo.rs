@@ -181,3 +181,28 @@ pub async fn verifikasi_rps_repo(
     let updated_mk = get_matakuliah_by_id_repo(pool, id).await?;
     Ok(updated_mk)
 }
+
+pub async fn update_file_rps_repo(
+    pool: &DbPool,
+    id: Uuid,
+    file_path: String,
+) -> Result<(), AppError> {
+    let rows_affected = sqlx::query!(
+        r#"
+        UPDATE mata_kuliah 
+        SET file_rps_path = $1, status_verifikasi_rps = 'Menunggu Verifikasi', updated_at = now()
+        WHERE id = $2
+        "#,
+        file_path,
+        id
+    )
+    .execute(pool)
+    .await?
+    .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound.into());
+    }
+
+    Ok(())
+}

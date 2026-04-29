@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPS - {{ mk.nama_mk }}</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 15mm;
+        }
+
+        body {
+            font-family: "Times New Roman", Times, serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+
+        .page {
+            width: 297mm;
+            min-height: 210mm;
+            padding: 2cm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+        }
+
+        @media print {
+            body {
+                background-color: white;
+            }
+
+            .page {
+                margin: 0;
+                box-shadow: none;
+                width: 100%;
+                padding: 0;
+            }
+
+            .no-print {
+                display: none;
+            }
+        }
+
+        h2,
+        h3 {
+            text-align: center;
+            margin: 5px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 10.5pt;
+        }
+
+        th,
+        td {
+            border: 1px solid black;
+            padding: 6px 8px;
+            vertical-align: top;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            text-align: center;
+        }
+
+        .table-info th,
+        .table-info td {
+            text-align: center;
+        }
+
+        .section-title {
+            font-weight: bold;
+            background-color: #f9f9f9;
+        }
+
+        /* Render konten wysiwyg (HTML tag dari db) secara aman */
+        .wysiwyg-content p {
+            margin-top: 0;
+            margin-bottom: 5px;
+        }
+
+        .wysiwyg-content ul,
+        .wysiwyg-content ol {
+            margin-top: 0;
+            padding-left: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="no-print" style="text-align: center; padding: 10px; background: #333; color: white;">
+        <button onclick="window.print()" style="padding: 8px 16px; cursor: pointer; font-weight: bold;">🖨️ Cetak /
+            Simpan PDF</button>
+    </div>
+
+    <div class="page">
+        <h2>RENCANA PEMBELAJARAN SEMESTER (RPS)</h2>
+        <h3>PROGRAM STUDI {{ mk.nama_prodi | upper }}</h3>
+        <br>
+
+        <table class="table-info">
+            <tr>
+                <th width="35%">MATA KULIAH (MK)</th>
+                <th width="15%">KODE</th>
+                <th width="20%">BOBOT (SKS)</th>
+                <th width="10%">SEMESTER</th>
+                <th width="20%">TANGGAL PENYUSUNAN</th>
+            </tr>
+            <tr>
+                <td><strong>{{ mk.nama_mk }}</strong></td>
+                <td>{{ mk.kode_mk }}</td>
+                <td>T : {{ mk.sks_tatap_muka }} &nbsp;&nbsp;&nbsp; P : {{ mk.sks_praktek }}</td>
+                <td>{{ mk.semester_target }}</td>
+                <td>
+                    {% if header and header.updated_at %}
+                    {{ header.updated_at | date(format="%d %B %Y") }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+
+        <table>
+            <tr>
+                <td width="20%" class="section-title">Capaian Pembelajaran Lulusan (CPL)</td>
+                <td class="wysiwyg-content">
+                    {% if header and header.capaian_pembelajaran %}
+                    {{ header.capaian_pembelajaran | safe }}
+                    {% else %}
+                    <i>(Belum diisi)</i>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td class="section-title">Deskripsi Singkat MK</td>
+                <td class="wysiwyg-content">
+                    {% if header and header.deskripsi_singkat %}
+                    {{ header.deskripsi_singkat | safe }}
+                    {% else %}
+                    <i>(Belum diisi)</i>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td class="section-title">Pustaka Utama</td>
+                <td class="wysiwyg-content">
+                    {% if header and header.pustaka_utama %}
+                    {{ header.pustaka_utama | safe }}
+                    {% else %}
+                    <i>(Belum diisi)</i>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td class="section-title">Pustaka Pendukung</td>
+                <td class="wysiwyg-content">
+                    {% if header and header.pustaka_pendukung %}
+                    {{ header.pustaka_pendukung | safe }}
+                    {% else %}
+                    <i>(Belum diisi)</i>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td class="section-title">Mata Kuliah Syarat</td>
+                <td>
+                    {% if header and header.matakuliah_syarat %}
+                    {{ header.matakuliah_syarat }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+
+        <h4 style="margin-bottom: 8px;">Matriks Pembelajaran Mingguan</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th width="5%">Mg Ke-</th>
+                    <th width="20%">Sub-CPMK (Kemampuan Akhir)</th>
+                    <th width="25%">Materi Pembelajaran / Bahan Kajian</th>
+                    <th width="15%">Metode & Bentuk Pembelajaran</th>
+                    <th width="10%">Waktu</th>
+                    <th width="15%">Indikator & Kriteria Penilaian</th>
+                    <th width="10%">Bobot (%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in mingguan %}
+                <tr>
+                    <td style="text-align: center;"><strong>{{ item.minggu_ke }}</strong></td>
+                    <td class="wysiwyg-content">{% if item.kemampuan_akhir_diharapkan %}{{
+                        item.kemampuan_akhir_diharapkan | safe }}{% endif %}</td>
+                    <td class="wysiwyg-content">{% if item.bahan_kajian %}{{ item.bahan_kajian | safe }}{% endif %}</td>
+                    <td class="wysiwyg-content">{% if item.metode_pembelajaran %}{{ item.metode_pembelajaran | safe }}{%
+                        endif %}</td>
+                    <td style="text-align: center;">{% if item.waktu_belajar %}{{ item.waktu_belajar }}{% endif %}</td>
+                    <td class="wysiwyg-content">{% if item.kriteria_penilaian %}{{ item.kriteria_penilaian | safe }}{%
+                        endif %}</td>
+                    <td style="text-align: center;">{% if item.bobot_penilaian %}{{ item.bobot_penilaian }}%{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 15px;"><i>Matriks mingguan belum diisi.</i></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+
+</body>
+
+</html>

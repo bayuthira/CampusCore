@@ -11,10 +11,12 @@ use crate::{db::DbPool, errors::AppError, modules::auth::middleware::TokenClaims
 
 use axum::{
     Extension,
-    extract::{Json, Path, State},
+    extract::{Json, Multipart, Path, State},
     http::StatusCode,
 };
-use uuid::Uuid;
+use std::ffi::OsStr;
+use std::path::Path as StdPath; // <-- TAMBAHKAN INI
+use uuid::Uuid; // <-- TAMBAHKAN INI
 
 /// Handler untuk membuat Mata Kuliah baru
 pub async fn create_matakuliah_handler(
@@ -79,4 +81,54 @@ pub async fn verifikasi_rps_handler(
 ) -> Result<Json<MataKuliahDetail>, AppError> {
     let updated_mk = matakuliah_repo::verifikasi_rps_repo(&pool, id, payload).await?;
     Ok(Json(updated_mk))
+}
+
+pub async fn upload_file_rps_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Result<
+    (
+        StatusCode,
+        Json<crate::modules::general::model::SuccessResponse>,
+    ),
+    AppError,
+> {
+    let mut file_data = None;
+    let mut original_name = None;
+
+    while let Some(field) = multipart.next_field().await? {
+        if field.name() == Some("file") {
+            original_name = field.file_name().map(|s| s.to_string());
+            file_data = Some(field.bytes().await?.to_vec());
+        }
+    }
+
+    let data =
+        file_data.ok_or_else(|| AppError::BadRequest("Field 'file' wajib diisi.".to_string()))?;
+    let file_name = original_name.unwrap_or_else(|| "rps.pdf".to_string());
+
+    // Ekstrak ekstensi file (.pdf, .doc, .docx)
+    let ext = StdPath::new(&file_name)
+        .extension()
+        .and_then(OsStr::to_str)
+        .unwrap_or("pdf");
+
+    // Simpan file secara rapi per UUID Mata Kuliah
+    let new_filename = format!("{}.{}", Uuid::new_v4(), ext);
+    let folder_path = format!("uploads/akademik/rps/{}", id);
+    let save_path = format!("{}/{}", folder_path, new_filename);
+
+    tokio::fs::create_dir_all(&folder_path).await?;
+    tokio::fs::write(&save_path, data).await?;
+
+    // Update kolom `file_rps_path` di tabel mata_kuliah (Otomatis merubah status ke Menunggu Verifikasi)
+    matakuliah_repo::update_file_rps_repo(&pool, id, save_path).await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(crate::modules::general::model::SuccessResponse {
+            message: "File RPS berhasil diunggah. Menunggu verifikasi Kaprodi.".to_string(),
+        }),
+    ))
 }

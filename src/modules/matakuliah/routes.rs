@@ -5,39 +5,48 @@ use axum::{
     Router,
     handler::Handler,
     middleware,
-    routing::{delete, get, put},
+    routing::{delete, get, post, put},
 };
 
 pub fn matakuliah_router() -> Router<DbPool> {
-    let base_routes =
-        Router::new()
-            .route(
-                "/matakuliah",
-                get(handler::get_all_matakuliah_handler).post(
-                    handler::create_matakuliah_handler.layer(middleware::from_fn(require_role(
-                        vec!["SUPER_ADMIN".to_string(), "KAPRODI".to_string()],
-                    ))),
-                ),
-            )
-            .route(
-                "/matakuliah/{id}",
-                get(handler::get_matakuliah_by_id_handler)
-                    .put(handler::update_matakuliah_handler)
-                    .delete(handler::delete_matakuliah_handler)
-                    .layer(middleware::from_fn(require_role(vec![
-                        "SUPER_ADMIN".to_string(),
-                        "KAPRODI".to_string(),
-                    ]))),
-            )
-            // --- RUTE VERIFIKASI RPS YANG KETINGGALAN ---
-            .route(
-                "/matakuliah/{id}/verifikasi-rps",
-                put(handler::verifikasi_rps_handler).layer(middleware::from_fn(require_role(
-                    vec!["SUPER_ADMIN".to_string(), "KAPRODI".to_string()],
-                ))),
-            );
+    let base_routes = Router::new()
+        // ... (Biarkan rute GET, POST, PUT, DELETE, dan verifikasi-rps tetap sama) ...
+        .route(
+            "/matakuliah",
+            get(handler::get_all_matakuliah_handler).post(
+                handler::create_matakuliah_handler.layer(middleware::from_fn(require_role(vec![
+                    "SUPER_ADMIN".to_string(),
+                    "KAPRODI".to_string(),
+                ]))),
+            ),
+        )
+        .route(
+            "/matakuliah/{id}",
+            get(handler::get_matakuliah_by_id_handler)
+                .put(handler::update_matakuliah_handler)
+                .delete(handler::delete_matakuliah_handler)
+                .layer(middleware::from_fn(require_role(vec![
+                    "SUPER_ADMIN".to_string(),
+                    "KAPRODI".to_string(),
+                ]))),
+        )
+        .route(
+            "/matakuliah/{id}/verifikasi-rps",
+            put(handler::verifikasi_rps_handler).layer(middleware::from_fn(require_role(vec![
+                "SUPER_ADMIN".to_string(),
+                "KAPRODI".to_string(),
+            ]))),
+        )
+        // --- TAMBAHAN RUTE UPLOAD FILE ---
+        .route(
+            "/matakuliah/{id}/upload-rps",
+            post(handler::upload_file_rps_handler).layer(middleware::from_fn(require_role(vec![
+                "SUPER_ADMIN".to_string(),
+                "KAPRODI".to_string(),
+                "DOSEN".to_string(),
+            ]))),
+        );
 
-    // Grup rute khusus RPS Terstruktur
     let rps_routes = Router::new()
         .route(
             "/matakuliah/{id}/rps-header",
@@ -55,8 +64,17 @@ pub fn matakuliah_router() -> Router<DbPool> {
         .layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),
             "KAPRODI".to_string(),
-            "DOSEN".to_string(), // Dosen diperbolehkan mengedit RPS jika mereka Koordinator
+            "DOSEN".to_string(),
         ])));
 
-    Router::new().merge(base_routes).merge(rps_routes)
+    // --- TAMBAHAN RUTE PREVIEW / CETAK RPS ---
+    let public_preview_routes = Router::new().route(
+        "/matakuliah/{id}/rps/print",
+        get(rps_handler::print_rps_handler),
+    );
+
+    Router::new()
+        .merge(base_routes)
+        .merge(rps_routes)
+        .merge(public_preview_routes)
 }
