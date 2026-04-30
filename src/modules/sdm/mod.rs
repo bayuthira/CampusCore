@@ -2,6 +2,8 @@ pub mod absensi_handler;
 pub mod absensi_model;
 pub mod absensi_repo;
 pub mod absensi_routes;
+pub mod absensi_wajah_handler;
+pub mod absensi_wajah_repo;
 pub mod cuti_handler;
 pub mod cuti_model;
 pub mod cuti_repo;

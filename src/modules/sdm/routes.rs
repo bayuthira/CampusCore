@@ -1,9 +1,9 @@
 // src/modules/sdm/routes.rs
 
 use super::{
-    cuti_routes, dokumen_handler, handler, riwayat_jad_handler, riwayat_pendidikan_handler,
-    riwayat_serdos_handler, riwayat_sertifikat_handler, riwayat_sk_handler, ijin_routes,absensi_routes, unit_kerja_routes,
-    penempatan_routes, surat_tugas_routes
+    absensi_routes, cuti_routes, dokumen_handler, handler, ijin_routes, penempatan_routes,
+    riwayat_jad_handler, riwayat_pendidikan_handler, riwayat_serdos_handler,
+    riwayat_sertifikat_handler, riwayat_sk_handler, surat_tugas_routes, unit_kerja_routes,
 };
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
@@ -74,6 +74,14 @@ pub fn sdm_router() -> Router<DbPool> {
             put(riwayat_serdos_handler::update_handler)
                 .delete(riwayat_serdos_handler::delete_handler),
         )
+        .route(
+            "/sdm/absensi/wajah/{pegawai_id}/audit",
+            put(crate::modules::sdm::absensi_wajah_handler::audit_wajah_handler),
+        )
+        .route(
+            "/sdm/absensi/wajah/{pegawai_id}",
+            delete(crate::modules::sdm::absensi_wajah_handler::delete_wajah_handler),
+        )
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),
             "STAF_BASDM".to_string(),
@@ -81,6 +89,10 @@ pub fn sdm_router() -> Router<DbPool> {
 
     // Grup 2: Aksi Khusus Dokumen Bersama (Bisa diakses Admin & Karyawan)
     let shared_dokumen_routes = Router::new()
+        .route(
+            "/sdm/absensi/wajah/{pegawai_id}",
+            get(crate::modules::sdm::absensi_wajah_handler::get_foto_wajah_handler),
+        )
         .route(
             "/sdm/{entity_type}/{entity_id}/dokumen",
             post(dokumen_handler::upload_dokumen_handler)
@@ -90,6 +102,10 @@ pub fn sdm_router() -> Router<DbPool> {
             "/sdm/dokumen/{id}",
             delete(dokumen_handler::delete_dokumen_handler),
         )
+        .route(
+            "/sdm/absensi/enroll-wajah",
+            post(crate::modules::sdm::absensi_wajah_handler::enroll_wajah_handler),
+        )
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),
             "STAF_BASDM".to_string(),
@@ -98,10 +114,7 @@ pub fn sdm_router() -> Router<DbPool> {
 
     // Grup 3: Aksi khusus SUPER_ADMIN (Delete, Create User)
     let super_admin_routes = Router::new()
-        .route(
-            "/sdm/pegawai/{id}",
-            delete(handler::delete_pegawai_handler),
-        )
+        .route("/sdm/pegawai/{id}", delete(handler::delete_pegawai_handler))
         .route(
             "/sdm/pegawai/{id}/create-user",
             post(handler::create_user_for_pegawai_handler),

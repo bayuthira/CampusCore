@@ -11,21 +11,37 @@ use uuid::Uuid;
 use sqlx::Executor;
 
 pub async fn get_foto_profil_pegawai(pool: &DbPool, pegawai_id: Uuid) -> Result<String, AppError> {
-    let foto = sqlx::query_scalar!(
+    let record = sqlx::query!(
         r#"
-        SELECT path_file
-        FROM dokumen_sdm
-        WHERE pegawai_id = $1 AND kategori = 'FotoProfil'
-        LIMIT 1
+        SELECT foto_wajah_path, status_audit_wajah
+        FROM pegawai
+        WHERE id = $1
         "#,
         pegawai_id
     )
     .fetch_optional(pool)
     .await?;
 
-    match foto {
-        Some(path) => Ok(path),
-        None => Err(AppError::Forbidden("Foto profil referensi tidak ditemukan. Harap upload foto profil terlebih dahulu sebelum menggunakan fitur absensi wajah.".to_string())),
+    match record {
+        Some(row) => {
+            // 1. Blokir jika wajah ditolak oleh HR/Admin
+            if let Some(status) = &row.status_audit_wajah {
+                if status == "Ditolak" {
+                    return Err(AppError::Forbidden(
+                        "Foto referensi wajah Anda ditolak oleh Admin. Silakan hubungi Admin SDM untuk mereset dan mendaftar ulang.".to_string()
+                    ));
+                }
+            }
+            
+            // 2. Kembalikan path foto jika ada
+            match row.foto_wajah_path {
+                Some(path) => Ok(path),
+                None => Err(AppError::Forbidden(
+                    "Foto referensi wajah belum terdaftar. Silakan gunakan menu 'Pendaftaran Wajah' terlebih dahulu sebelum melakukan absensi.".to_string()
+                )),
+            }
+        }
+        None => Err(AppError::Forbidden("Data pegawai tidak ditemukan.".to_string())),
     }
 }
 
