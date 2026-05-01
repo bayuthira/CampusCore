@@ -23,7 +23,7 @@ pub async fn enroll_wajah_repo(
     .rows_affected();
 
     if rows_affected == 0 {
-        return Err(sqlx::Error::RowNotFound.into());
+        return Err(AppError::BadRequest("Pegawai tidak ditemukan.".to_string()));
     }
     Ok(())
 }
@@ -42,12 +42,13 @@ pub async fn get_status_wajah_repo(
     )
     .fetch_optional(pool)
     .await?
-    .ok_or(sqlx::Error::RowNotFound)?;
+    // --- INILAH SUMBER ERROR 500 SEBELUMNYA ---
+    // Kita ubah error SQL mentah menjadi pesan Bad Request yang cantik:
+    .ok_or_else(|| AppError::BadRequest("Data pegawai tidak ditemukan (Pastikan UUID yang dimasukkan adalah ID Pegawai, bukan ID User!).".to_string()))?;
 
     Ok((record.foto_wajah_path, record.status_audit_wajah))
 }
 
-// --- FUNGSI BARU: AUDIT WAJAH ---
 pub async fn audit_wajah_repo(
     pool: &DbPool,
     pegawai_id: Uuid,
@@ -67,12 +68,11 @@ pub async fn audit_wajah_repo(
     .rows_affected();
 
     if rows_affected == 0 {
-        return Err(sqlx::Error::RowNotFound.into());
+        return Err(AppError::BadRequest("Pegawai tidak ditemukan.".to_string()));
     }
     Ok(())
 }
 
-// --- FUNGSI BARU: HAPUS WAJAH ---
 pub async fn delete_wajah_repo(pool: &DbPool, pegawai_id: Uuid) -> Result<(), AppError> {
     let rows_affected = sqlx::query!(
         r#"
@@ -87,7 +87,7 @@ pub async fn delete_wajah_repo(pool: &DbPool, pegawai_id: Uuid) -> Result<(), Ap
     .rows_affected();
 
     if rows_affected == 0 {
-        return Err(sqlx::Error::RowNotFound.into());
+        return Err(AppError::BadRequest("Pegawai tidak ditemukan.".to_string()));
     }
     Ok(())
 }

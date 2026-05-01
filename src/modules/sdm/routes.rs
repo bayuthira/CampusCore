@@ -90,6 +90,10 @@ pub fn sdm_router() -> Router<DbPool> {
     // Grup 2: Aksi Khusus Dokumen Bersama (Bisa diakses Admin & Karyawan)
     let shared_dokumen_routes = Router::new()
         .route(
+            "/sdm/absensi/wajah-saya",
+            get(crate::modules::sdm::absensi_wajah_handler::get_my_foto_wajah_handler),
+        )
+        .route(
             "/sdm/absensi/wajah/{pegawai_id}",
             get(crate::modules::sdm::absensi_wajah_handler::get_foto_wajah_handler),
         )
