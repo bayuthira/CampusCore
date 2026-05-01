@@ -42,6 +42,10 @@ pub fn absensi_router() -> Router<DbPool> {
             "/sdm/absensi/laporan-bulanan",
             get(handler::laporan_absensi_bulanan_handler),
         )
+        .route(
+            "/sdm/absensi/biometrik-status",
+            get(handler::get_all_biometrik_status_handler),
+        )
         .route_layer(middleware::from_fn(require_role(vec![
             "SUPER_ADMIN".to_string(),
             "STAF_BASDM".to_string(),

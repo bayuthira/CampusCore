@@ -1,20 +1,10 @@
 // src/modules/sdm/absensi_handler.rs
 use super::{
     absensi_model::{
-        ClockPayload,
-        ClockResponseFlat,
-        LaporanAbsensiResponse,
-        LaporanAbsensiRow,
-        LaporanBulananFilter,
-        LaporanBulananResponse,
-        LaporanHarianFilter,
-        LogAbsensi,
-        LogDayFilter,
-        RekapAbsensiFilter,
-        RekapAbsensiHarian,
-        RekapManualPayload,
-        StatusAbsensi, // <-- TAMBAHAN: Untuk mapping status dinamis
-        TipeAbsensi,
+        BiometrikStatusDetail, ClockPayload, ClockResponseFlat, LaporanAbsensiResponse,
+        LaporanAbsensiRow, LaporanBulananFilter, LaporanBulananResponse, LaporanHarianFilter,
+        LogAbsensi, LogDayFilter, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload,
+        StatusAbsensi, TipeAbsensi,
     },
     absensi_repo as repo, repo as pegawai_repo,
 };
@@ -904,4 +894,11 @@ pub async fn laporan_absensi_bulanan_handler(
     };
 
     Ok(Json(result))
+}
+
+pub async fn get_all_biometrik_status_handler(
+    State(pool): State<DbPool>,
+) -> Result<Json<Vec<BiometrikStatusDetail>>, AppError> {
+    let list = repo::get_all_biometrik_status_repo(&pool).await?;
+    Ok(Json(list))
 }

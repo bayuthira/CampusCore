@@ -2,7 +2,7 @@
 use super::{
     absensi_model::{
         ClockPayload, LogAbsensi, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload,
-        StatusAbsensi, TipeAbsensi, LaporanAbsensiRow
+        StatusAbsensi, TipeAbsensi, LaporanAbsensiRow, BiometrikStatusDetail
     },
 };
 use crate::{db::DbPool, errors::AppError};
@@ -305,4 +305,33 @@ pub async fn cek_ijin_lokasi_aktif(
     .await?;
 
     Ok(kategori.flatten())
+}
+
+pub async fn get_all_biometrik_status_repo(pool: &DbPool) -> Result<Vec<BiometrikStatusDetail>, AppError> {
+    let list = sqlx::query_as!(
+        BiometrikStatusDetail,
+        r#"
+        SELECT 
+            id as "pegawai_id!",
+            nik as "nik!",
+            nama_lengkap as "nama_pegawai!",
+            foto_wajah_path,
+            COALESCE(status_audit_wajah, 'Belum Ada') as "status_audit_wajah!"
+        FROM pegawai
+        WHERE is_active = true
+        ORDER BY 
+            CASE COALESCE(status_audit_wajah, 'Belum Ada')
+                WHEN 'Menunggu Audit' THEN 1  -- Prioritaskan yang butuh diaudit di paling atas
+                WHEN 'Belum Ada' THEN 2
+                WHEN 'Ditolak' THEN 3
+                WHEN 'Valid' THEN 4
+                ELSE 5
+            END ASC,
+            nama_lengkap ASC
+        "#
+    )
+    .fetch_all(pool)
+    .await?;
+    
+    Ok(list)
 }

@@ -173,3 +173,13 @@ pub struct LaporanBulananResponse {
     pub total_lembur_menit: i32,
     pub rekap_harian: Vec<LaporanAbsensiResponse>,
 }
+
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct BiometrikStatusDetail {
+    pub pegawai_id: Uuid,
+    pub nik: String,
+    pub nama_pegawai: String,
+    pub foto_wajah_path: Option<String>,
+    pub status_audit_wajah: String,
+}
