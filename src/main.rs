@@ -39,6 +39,10 @@ async fn main() {
             "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(), // <-- TAMBAHKAN INI UNTUK VITE
             "http://localhost:8081".parse::<HeaderValue>().unwrap(),
             "http://127.0.0.1:8081".parse::<HeaderValue>().unwrap(),
+            "https://sikt.maxtion.co.id".parse::<HeaderValue>().unwrap(),
+            "https://satria.respati-tasikmalaya.ac.id"
+                .parse::<HeaderValue>()
+                .unwrap(),
         ])
         // Gunakan Any untuk allow_methods selama development agar tidak pusing
         .allow_methods(Any)
