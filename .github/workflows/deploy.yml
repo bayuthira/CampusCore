@@ -18,8 +18,8 @@ jobs:
           script_stop: true
           command_timeout: 30m
           script: |
-            echo "1. Pindah ke direktori repository di /opt..."
-            cd /opt/sikt-api
+            echo "1. Pindah ke direktori repository..."
+            cd "${{ vars.APP_DIR }}"
             
             echo "2. Menarik kode terbaru dari GitHub..."
             git pull origin main
@@ -31,10 +31,10 @@ jobs:
             echo "4. Mengganti file binary..."
             # Trik Linux: Hapus file lama terlebih dahulu untuk menghindari error "Text file busy"
             # Aplikasi yang sedang berjalan tidak akan terganggu sampai di-restart
-            rm -f /home/server5/satria/sikt-be-deploy/sik_terpadu_api
-            cp target/release/sik_terpadu_api /home/server5/satria/sikt-be-deploy/sik_terpadu_api
+            rm -f "${{ vars.DEPLOY_BINARY_PATH }}"
+            cp target/release/sik_terpadu_api "${{ vars.DEPLOY_BINARY_PATH }}"
             
             echo "5. Me-restart systemd service..."
-            sudo systemctl restart sikt-api.service
+            sudo systemctl restart "${{ vars.SYSTEMD_SERVICE }}"
             
             echo "✅ Deployment Berhasil!"
