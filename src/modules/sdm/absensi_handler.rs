@@ -29,13 +29,16 @@ use std::time::Duration;
 use tokio::sync::{Mutex, mpsc, oneshot};
 
 // ==========================================
-// SISTEM ANTREAN (QUEUE) FACE++
+// SISTEM ANTREAN (QUEUE) FACE COMPARE
 // ==========================================
 
 struct FaceQueueMessage {
-    ref_bytes: Vec<u8>,
+    pool: DbPool,
+    pegawai_id: Uuid,
+    reference_bytes: Vec<u8>,
+    reference_embedding: Option<Value>,
     selfie_bytes: Vec<u8>,
-    reply_tx: oneshot::Sender<Result<(bool, f32), AppError>>,
+    reply_tx: oneshot::Sender<Result<(bool, f32, Option<Value>), AppError>>,
 }
 
 fn env_usize(key: &str, default: usize) -> usize {
@@ -74,7 +77,14 @@ static FACE_QUEUE: Lazy<mpsc::Sender<FaceQueueMessage>> = Lazy::new(|| {
                     break;
                 };
 
-                let res = verify_face_faceplusplus_direct(msg.ref_bytes, msg.selfie_bytes).await;
+                let res = verify_face_for_attendance_direct(
+                    &msg.pool,
+                    msg.pegawai_id,
+                    msg.reference_bytes,
+                    msg.reference_embedding,
+                    msg.selfie_bytes,
+                )
+                .await;
                 let _ = msg.reply_tx.send(res);
                 tokio::time::sleep(Duration::from_millis(queue_break_ms)).await;
             }
@@ -236,11 +246,24 @@ async fn verify_face_faceplusplus(
     ref_bytes: Vec<u8>,
     selfie_bytes: Vec<u8>,
 ) -> Result<(bool, f32), AppError> {
+    verify_face_faceplusplus_direct(ref_bytes, selfie_bytes).await
+}
+
+async fn verify_face_for_attendance(
+    pool: &DbPool,
+    pegawai_id: Uuid,
+    reference_bytes: Vec<u8>,
+    reference_embedding: Option<Value>,
+    selfie_bytes: Vec<u8>,
+) -> Result<(bool, f32, Option<Value>), AppError> {
     let use_queue = env::var("USE_FACE_QUEUE").unwrap_or_else(|_| "false".to_string());
     if use_queue == "true" || use_queue == "1" {
         let (reply_tx, reply_rx) = oneshot::channel();
         let msg = FaceQueueMessage {
-            ref_bytes,
+            pool: pool.clone(),
+            pegawai_id,
+            reference_bytes,
+            reference_embedding,
             selfie_bytes,
             reply_tx,
         };
@@ -255,11 +278,18 @@ async fn verify_face_faceplusplus(
             )))
         })
     } else {
-        verify_face_faceplusplus_direct(ref_bytes, selfie_bytes).await
+        verify_face_for_attendance_direct(
+            pool,
+            pegawai_id,
+            reference_bytes,
+            reference_embedding,
+            selfie_bytes,
+        )
+        .await
     }
 }
 
-async fn verify_face_for_attendance(
+async fn verify_face_for_attendance_direct(
     pool: &DbPool,
     pegawai_id: Uuid,
     reference_bytes: Vec<u8>,
