@@ -24,8 +24,9 @@ use tokio::fs;
 use uuid::Uuid;
 
 use once_cell::sync::Lazy;
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 
 // ==========================================
 // SISTEM ANTREAN (QUEUE) FACE++
@@ -37,16 +38,48 @@ struct FaceQueueMessage {
     reply_tx: oneshot::Sender<Result<(bool, f32), AppError>>,
 }
 
-static FACE_QUEUE: Lazy<mpsc::Sender<FaceQueueMessage>> = Lazy::new(|| {
-    let (tx, mut rx) = mpsc::channel::<FaceQueueMessage>(100);
+fn env_usize(key: &str, default: usize) -> usize {
+    env::var(key)
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default)
+}
 
-    tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            let res = verify_face_faceplusplus_direct(msg.ref_bytes, msg.selfie_bytes).await;
-            let _ = msg.reply_tx.send(res);
-            tokio::time::sleep(Duration::from_millis(1100)).await;
-        }
-    });
+fn env_u64(key: &str, default: u64) -> u64 {
+    env::var(key)
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(default)
+}
+
+static FACE_QUEUE: Lazy<mpsc::Sender<FaceQueueMessage>> = Lazy::new(|| {
+    let queue_capacity = env_usize("FACE_QUEUE_CAPACITY", 100);
+    let queue_workers = env_usize("FACE_QUEUE_WORKERS", 1);
+    let queue_break_ms = env_u64("FACE_QUEUE_BREAK_MS", 1100);
+
+    let (tx, rx) = mpsc::channel::<FaceQueueMessage>(queue_capacity);
+    let shared_rx = Arc::new(Mutex::new(rx));
+
+    for _ in 0..queue_workers {
+        let rx = Arc::clone(&shared_rx);
+        tokio::spawn(async move {
+            loop {
+                let msg = {
+                    let mut locked_rx = rx.lock().await;
+                    locked_rx.recv().await
+                };
+
+                let Some(msg) = msg else {
+                    break;
+                };
+
+                let res = verify_face_faceplusplus_direct(msg.ref_bytes, msg.selfie_bytes).await;
+                let _ = msg.reply_tx.send(res);
+                tokio::time::sleep(Duration::from_millis(queue_break_ms)).await;
+            }
+        });
+    }
 
     tx
 });
