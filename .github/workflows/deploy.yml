@@ -23,18 +23,21 @@ jobs:
             
             echo "2. Menarik kode terbaru dari GitHub..."
             git pull origin main
+
+            echo "3. Menjalankan migrasi database (sqlx migrate run)..."
+            ~/.cargo/bin/sqlx migrate run
             
-            echo "3. Mulai kompilasi Rust (cargo build --release)..."
+            echo "4. Mulai kompilasi Rust (cargo build --release)..."
             # Path penuh ke cargo digunakan untuk mencegah error command not found di sesi SSH non-interaktif
             ~/.cargo/bin/cargo build --release
             
-            echo "4. Mengganti file binary..."
+            echo "5. Mengganti file binary..."
             # Trik Linux: Hapus file lama terlebih dahulu untuk menghindari error "Text file busy"
             # Aplikasi yang sedang berjalan tidak akan terganggu sampai di-restart
             rm -f "${{ vars.DEPLOY_BINARY_PATH }}"
             cp target/release/sik_terpadu_api "${{ vars.DEPLOY_BINARY_PATH }}"
             
-            echo "5. Me-restart systemd service..."
+            echo "6. Me-restart systemd service..."
             sudo systemctl restart "${{ vars.SYSTEMD_SERVICE }}"
             
             echo "✅ Deployment Berhasil!"
