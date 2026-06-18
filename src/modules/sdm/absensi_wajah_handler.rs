@@ -1,4 +1,5 @@
 // src/modules/sdm/absensi_wajah_handler.rs
+use super::face_compare_client::{self, FaceCompareProvider};
 use super::{absensi_wajah_repo, repo as pegawai_repo};
 use crate::{
     db::DbPool, errors::AppError, modules::auth::middleware::TokenClaims,
@@ -72,7 +73,15 @@ pub async fn enroll_wajah_handler(
     }
     tokio::fs::write(&file_path_str, &data).await?;
 
-    absensi_wajah_repo::enroll_wajah_repo(&pool, pegawai_id, file_path_str).await?;
+    let reference_embedding =
+        if face_compare_client::provider_from_env() == FaceCompareProvider::OpenCvSFace {
+            Some(face_compare_client::extract_embedding(data.clone()).await?)
+        } else {
+            None
+        };
+
+    absensi_wajah_repo::enroll_wajah_repo(&pool, pegawai_id, file_path_str, reference_embedding)
+        .await?;
 
     Ok((
         StatusCode::OK,

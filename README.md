@@ -1,9 +1,9 @@
-# SIKT - Sistem Informasi Kampus Terpadu (API Documentation)
+# Campus Core - Sistem Informasi Kampus Terpadu (API Documentation)
 
 Backend API untuk Sistem Informasi Kampus Terpadu, dibangun dengan **Rust + Axum + PostgreSQL**.
 
 **Base URL:** `http://localhost:8080/api`  
-**Production:** `https://sikt.maxtion.co.id/api`
+**Production:** `https://satria.respati-tasikmalaya.ac.id/api`
 
 ---
 

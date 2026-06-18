@@ -1,6 +1,7 @@
 // src/modules/sdm/absensi_model.rs
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::{FromRow, Type};
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
@@ -56,6 +57,7 @@ pub struct ClockPayload {
     pub foto_absensi_path: Option<String>,
     pub face_confidence_score: Option<f32>,
     pub is_face_verified: Option<bool>,
+    pub face_absensi_embedding: Option<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -173,7 +175,6 @@ pub struct LaporanBulananResponse {
     pub total_lembur_menit: i32,
     pub rekap_harian: Vec<LaporanAbsensiResponse>,
 }
-
 
 #[derive(Debug, Serialize, FromRow)]
 pub struct BiometrikStatusDetail {

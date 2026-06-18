@@ -11,6 +11,7 @@ pub mod cuti_routes;
 pub mod dokumen_handler;
 pub mod dokumen_model;
 pub mod dokumen_repo;
+pub mod face_compare_client;
 pub mod handler;
 pub mod ijin_handler;
 pub mod ijin_model;

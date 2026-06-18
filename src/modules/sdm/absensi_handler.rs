@@ -6,7 +6,9 @@ use super::{
         LogAbsensi, LogDayFilter, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload,
         StatusAbsensi, TipeAbsensi,
     },
-    absensi_repo as repo, repo as pegawai_repo,
+    absensi_repo as repo, absensi_wajah_repo, face_compare_client,
+    face_compare_client::FaceCompareProvider,
+    repo as pegawai_repo,
 };
 use crate::{db::DbPool, errors::AppError, modules::auth::middleware::TokenClaims};
 use axum::{
@@ -224,6 +226,42 @@ async fn verify_face_faceplusplus(
     }
 }
 
+async fn verify_face_for_attendance(
+    pool: &DbPool,
+    pegawai_id: Uuid,
+    reference_bytes: Vec<u8>,
+    reference_embedding: Option<Value>,
+    selfie_bytes: Vec<u8>,
+) -> Result<(bool, f32, Option<Value>), AppError> {
+    match face_compare_client::provider_from_env() {
+        FaceCompareProvider::OpenCvSFace => {
+            let embedding = match reference_embedding {
+                Some(embedding) => embedding,
+                None => {
+                    let embedding =
+                        face_compare_client::extract_embedding(reference_bytes.clone()).await?;
+                    absensi_wajah_repo::update_reference_embedding_repo(
+                        pool,
+                        pegawai_id,
+                        embedding.clone(),
+                    )
+                    .await?;
+                    embedding
+                }
+            };
+
+            let result = face_compare_client::verify_embedding(&embedding, selfie_bytes).await?;
+            Ok((result.is_match, result.similarity, result.probe_embedding))
+        }
+        FaceCompareProvider::Disabled => Ok((true, 0.99, None)),
+        FaceCompareProvider::FacePlusPlus => {
+            let (is_verified, confidence) =
+                verify_face_faceplusplus(reference_bytes, selfie_bytes).await?;
+            Ok((is_verified, confidence, None))
+        }
+    }
+}
+
 // ==========================================
 // HELPER JARINGAN & LOKASI
 // ==========================================
@@ -265,6 +303,7 @@ async fn parse_clock_multipart(
             foto_absensi_path: None,
             face_confidence_score: None,
             is_face_verified: None,
+            face_absensi_embedding: None,
         },
         foto_bytes.unwrap(),
     ))
@@ -327,11 +366,18 @@ async fn proses_absensi(
         }
     }
 
-    let path_file_db = repo::get_foto_profil_pegawai(pool, pegawai_id).await?;
-    let foto_ref_path = format!("./{}", path_file_db);
+    let foto_profil = repo::get_foto_profil_pegawai(pool, pegawai_id).await?;
+    let foto_ref_path = format!("./{}", foto_profil.path);
     let ref_bytes = fs::read(&foto_ref_path).await?;
 
-    let (is_verified, confidence) = verify_face_faceplusplus(ref_bytes, foto_bytes.clone()).await?;
+    let (is_verified, confidence, absensi_embedding) = verify_face_for_attendance(
+        pool,
+        pegawai_id,
+        ref_bytes,
+        foto_profil.reference_embedding,
+        foto_bytes.clone(),
+    )
+    .await?;
 
     if !is_verified || confidence < 0.70 {
         return Err(AppError::Forbidden(format!(
@@ -354,6 +400,7 @@ async fn proses_absensi(
     ));
     payload.face_confidence_score = Some(confidence);
     payload.is_face_verified = Some(is_verified);
+    payload.face_absensi_embedding = absensi_embedding;
 
     let log = if tipe == TipeAbsensi::ClockIn {
         repo::clock_in_repo(pool, pegawai_id, payload).await?

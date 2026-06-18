@@ -1,47 +1,61 @@
 // src/modules/sdm/absensi_repo.rs
-use super::{
-    absensi_model::{
-        ClockPayload, LogAbsensi, RekapAbsensiFilter, RekapAbsensiHarian, RekapManualPayload,
-        StatusAbsensi, TipeAbsensi, LaporanAbsensiRow, BiometrikStatusDetail
-    },
+use super::absensi_model::{
+    BiometrikStatusDetail, ClockPayload, LaporanAbsensiRow, LogAbsensi, RekapAbsensiFilter,
+    RekapAbsensiHarian, RekapManualPayload, StatusAbsensi, TipeAbsensi,
 };
 use crate::{db::DbPool, errors::AppError};
-use time::{Date, Duration, Month, OffsetDateTime}; 
+use serde_json::Value;
+use sqlx::{Executor, Row};
+use time::{Date, Duration, Month, OffsetDateTime};
 use uuid::Uuid;
-use sqlx::Executor;
 
-pub async fn get_foto_profil_pegawai(pool: &DbPool, pegawai_id: Uuid) -> Result<String, AppError> {
-    let record = sqlx::query!(
+pub struct FotoProfilWajah {
+    pub path: String,
+    pub reference_embedding: Option<Value>,
+}
+
+pub async fn get_foto_profil_pegawai(
+    pool: &DbPool,
+    pegawai_id: Uuid,
+) -> Result<FotoProfilWajah, AppError> {
+    let record = sqlx::query(
         r#"
-        SELECT foto_wajah_path, status_audit_wajah
+        SELECT foto_wajah_path, status_audit_wajah, face_reference_embedding
         FROM pegawai
         WHERE id = $1
         "#,
-        pegawai_id
     )
+    .bind(pegawai_id)
     .fetch_optional(pool)
     .await?;
 
     match record {
         Some(row) => {
             // 1. Blokir jika wajah ditolak oleh HR/Admin
-            if let Some(status) = &row.status_audit_wajah {
+            let status_audit_wajah: Option<String> = row.try_get("status_audit_wajah")?;
+            if let Some(status) = &status_audit_wajah {
                 if status == "Ditolak" {
                     return Err(AppError::Forbidden(
                         "Foto referensi wajah Anda ditolak oleh Admin. Silakan hubungi Admin SDM untuk mereset dan mendaftar ulang.".to_string()
                     ));
                 }
             }
-            
+
             // 2. Kembalikan path foto jika ada
-            match row.foto_wajah_path {
-                Some(path) => Ok(path),
+            let foto_wajah_path: Option<String> = row.try_get("foto_wajah_path")?;
+            match foto_wajah_path {
+                Some(path) => Ok(FotoProfilWajah {
+                    path,
+                    reference_embedding: row.try_get("face_reference_embedding")?,
+                }),
                 None => Err(AppError::Forbidden(
                     "Foto referensi wajah belum terdaftar. Silakan gunakan menu 'Pendaftaran Wajah' terlebih dahulu sebelum melakukan absensi.".to_string()
                 )),
             }
         }
-        None => Err(AppError::Forbidden("Data pegawai tidak ditemukan.".to_string())),
+        None => Err(AppError::Forbidden(
+            "Data pegawai tidak ditemukan.".to_string(),
+        )),
     }
 }
 
@@ -76,7 +90,7 @@ pub async fn clock_in_repo(
     let existing_rekap = sqlx::query!(
         "SELECT status::TEXT FROM rekap_absensi_harian WHERE pegawai_id = $1 AND tanggal = $2",
         pegawai_id,
-        today 
+        today
     )
     .fetch_optional(&mut *tx)
     .await?;
@@ -95,7 +109,7 @@ pub async fn clock_in_repo(
             "INSERT INTO rekap_absensi_harian (pegawai_id, tanggal, status) VALUES ($1, $2, $3::\"StatusAbsensi\")"
         )
         .bind(pegawai_id)
-        .bind(today) 
+        .bind(today)
         .bind(status_str)
         .execute(&mut *tx)
         .await?;
@@ -106,9 +120,9 @@ pub async fn clock_in_repo(
         r#"
         INSERT INTO log_absensi (
             pegawai_id, waktu_absensi, tipe_absensi, latitude, longitude, alamat_absensi,
-            foto_absensi_path, face_confidence_score, is_face_verified
+            foto_absensi_path, face_confidence_score, is_face_verified, face_absensi_embedding
         )
-        VALUES ($1, now(), $2::"TipeAbsensi", $3, $4, $5, $6, $7, $8)
+        VALUES ($1, now(), $2::"TipeAbsensi", $3, $4, $5, $6, $7, $8, $9)
         RETURNING id
         "#,
     )
@@ -120,6 +134,7 @@ pub async fn clock_in_repo(
     .bind(payload.foto_absensi_path)
     .bind(payload.face_confidence_score)
     .bind(payload.is_face_verified)
+    .bind(payload.face_absensi_embedding)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -137,9 +152,9 @@ pub async fn clock_out_repo(
         r#"
         INSERT INTO log_absensi (
             pegawai_id, waktu_absensi, tipe_absensi, latitude, longitude, alamat_absensi,
-            foto_absensi_path, face_confidence_score, is_face_verified
+            foto_absensi_path, face_confidence_score, is_face_verified, face_absensi_embedding
         )
-        VALUES ($1, now(), $2::"TipeAbsensi", $3, $4, $5, $6, $7, $8)
+        VALUES ($1, now(), $2::"TipeAbsensi", $3, $4, $5, $6, $7, $8, $9)
         RETURNING id
         "#,
     )
@@ -151,20 +166,31 @@ pub async fn clock_out_repo(
     .bind(payload.foto_absensi_path)
     .bind(payload.face_confidence_score)
     .bind(payload.is_face_verified)
+    .bind(payload.face_absensi_embedding)
     .fetch_one(pool)
     .await?;
 
     get_log_by_id_repo(pool, new_log_id).await
 }
 
-pub async fn create_rekap_manual_repo(pool: &DbPool, payload: RekapManualPayload) -> Result<RekapAbsensiHarian, AppError> {
+pub async fn create_rekap_manual_repo(
+    pool: &DbPool,
+    payload: RekapManualPayload,
+) -> Result<RekapAbsensiHarian, AppError> {
     let status_str = payload.status.as_str();
     let rekap = sqlx::query_as(r#"INSERT INTO rekap_absensi_harian (pegawai_id, tanggal, status, keterangan) VALUES ($1, $2, $3::"StatusAbsensi", $4) ON CONFLICT (pegawai_id, tanggal) DO UPDATE SET status = EXCLUDED.status, keterangan = EXCLUDED.keterangan RETURNING id, pegawai_id, tanggal, status, keterangan"#).bind(payload.pegawai_id).bind(payload.tanggal).bind(status_str).bind(payload.keterangan).fetch_one(pool).await?;
     Ok(rekap)
 }
 
-pub async fn get_my_rekap_absensi_repo(pool: &DbPool, pegawai_id: Uuid, filter: RekapAbsensiFilter) -> Result<Vec<RekapAbsensiHarian>, AppError> {
-    let bulan_u8: u8 = filter.bulan.try_into().map_err(|_| AppError::Forbidden("Bulan tidak valid".to_string()))?;
+pub async fn get_my_rekap_absensi_repo(
+    pool: &DbPool,
+    pegawai_id: Uuid,
+    filter: RekapAbsensiFilter,
+) -> Result<Vec<RekapAbsensiHarian>, AppError> {
+    let bulan_u8: u8 = filter
+        .bulan
+        .try_into()
+        .map_err(|_| AppError::Forbidden("Bulan tidak valid".to_string()))?;
     let bulan_enum = Month::try_from(bulan_u8)?;
     let start_date = Date::from_calendar_date(filter.tahun.into(), bulan_enum, 1)?;
     let end_date = (start_date + Duration::days(32)).replace_day(1)? - Duration::days(1);
@@ -172,31 +198,49 @@ pub async fn get_my_rekap_absensi_repo(pool: &DbPool, pegawai_id: Uuid, filter: 
     Ok(list)
 }
 
-pub async fn get_my_logs_for_day_repo(pool: &DbPool, pegawai_id: Uuid, tanggal: Date) -> Result<Vec<LogAbsensi>, AppError> {
+pub async fn get_my_logs_for_day_repo(
+    pool: &DbPool,
+    pegawai_id: Uuid,
+    tanggal: Date,
+) -> Result<Vec<LogAbsensi>, AppError> {
     let start_of_day = tanggal.midnight().assume_utc();
     let end_of_day = (tanggal + Duration::days(1)).midnight().assume_utc();
     let list = sqlx::query_as!(LogAbsensi, r#"SELECT id, pegawai_id, waktu_absensi, tipe_absensi as "tipe_absensi: _", latitude, longitude, alamat_absensi, foto_absensi_path, face_confidence_score, is_face_verified FROM log_absensi WHERE pegawai_id = $1 AND waktu_absensi >= $2 AND waktu_absensi < $3 ORDER BY waktu_absensi ASC"#, pegawai_id, start_of_day, end_of_day).fetch_all(pool).await?;
     Ok(list)
 }
 
-pub async fn get_all_rekap_absensi_repo(pool: &DbPool, filter: RekapAbsensiFilter) -> Result<Vec<RekapAbsensiHarian>, AppError> {
-    let bulan_u8: u8 = filter.bulan.try_into().map_err(|_| AppError::Forbidden("Bulan tidak valid".to_string()))?;
+pub async fn get_all_rekap_absensi_repo(
+    pool: &DbPool,
+    filter: RekapAbsensiFilter,
+) -> Result<Vec<RekapAbsensiHarian>, AppError> {
+    let bulan_u8: u8 = filter
+        .bulan
+        .try_into()
+        .map_err(|_| AppError::Forbidden("Bulan tidak valid".to_string()))?;
     let bulan_enum = Month::try_from(bulan_u8)?;
     let start_date = Date::from_calendar_date(filter.tahun.into(), bulan_enum, 1)?;
     let end_date = (start_date + Duration::days(32)).replace_day(1)? - Duration::days(1);
-    let mut query = sqlx::QueryBuilder::new(r#"SELECT id, pegawai_id, tanggal, status, keterangan FROM rekap_absensi_harian WHERE tanggal BETWEEN "#);
+    let mut query = sqlx::QueryBuilder::new(
+        r#"SELECT id, pegawai_id, tanggal, status, keterangan FROM rekap_absensi_harian WHERE tanggal BETWEEN "#,
+    );
     query.push_bind(start_date);
     query.push(" AND ");
     query.push_bind(end_date);
-    if let Some(pegawai_id) = filter.pegawai_id { query.push(" AND pegawai_id = "); query.push_bind(pegawai_id); }
+    if let Some(pegawai_id) = filter.pegawai_id {
+        query.push(" AND pegawai_id = ");
+        query.push_bind(pegawai_id);
+    }
     query.push(" ORDER BY tanggal ASC");
-    query.build_query_as().fetch_all(pool).await.map_err(Into::into)
+    query
+        .build_query_as()
+        .fetch_all(pool)
+        .await
+        .map_err(Into::into)
 }
 
-
 pub async fn get_laporan_harian_repo(
-    pool: &DbPool, 
-    tanggal: Date
+    pool: &DbPool,
+    tanggal: Date,
 ) -> Result<Vec<LaporanAbsensiRow>, AppError> {
     let rows = sqlx::query_as!(
         LaporanAbsensiRow,
@@ -229,15 +273,15 @@ pub async fn get_laporan_harian_repo(
     )
     .fetch_all(pool)
     .await?;
-    
+
     Ok(rows)
 }
 
 pub async fn get_laporan_bulanan_repo(
-    pool: &DbPool, 
-    pegawai_id: Uuid, 
-    bulan: i32, 
-    tahun: i32
+    pool: &DbPool,
+    pegawai_id: Uuid,
+    bulan: i32,
+    tahun: i32,
 ) -> Result<Vec<LaporanAbsensiRow>, AppError> {
     let rows = sqlx::query_as!(
         LaporanAbsensiRow,
@@ -278,10 +322,9 @@ pub async fn get_laporan_bulanan_repo(
     )
     .fetch_all(pool)
     .await?;
-    
+
     Ok(rows)
 }
-
 
 /// Fungsi mengecek apakah pegawai memiliki ijin lokasi (WFH/Dinas Luar) pada tanggal tertentu
 pub async fn cek_ijin_lokasi_aktif(
@@ -307,7 +350,9 @@ pub async fn cek_ijin_lokasi_aktif(
     Ok(kategori.flatten())
 }
 
-pub async fn get_all_biometrik_status_repo(pool: &DbPool) -> Result<Vec<BiometrikStatusDetail>, AppError> {
+pub async fn get_all_biometrik_status_repo(
+    pool: &DbPool,
+) -> Result<Vec<BiometrikStatusDetail>, AppError> {
     let list = sqlx::query_as!(
         BiometrikStatusDetail,
         r#"
@@ -332,6 +377,6 @@ pub async fn get_all_biometrik_status_repo(pool: &DbPool) -> Result<Vec<Biometri
     )
     .fetch_all(pool)
     .await?;
-    
+
     Ok(list)
 }
