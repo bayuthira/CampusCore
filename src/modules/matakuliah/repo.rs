@@ -160,6 +160,26 @@ pub async fn verifikasi_rps_repo(
         ));
     }
 
+    let (file_rps_path, current_status) = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+        "SELECT file_rps_path, status_verifikasi_rps FROM mata_kuliah WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or(sqlx::Error::RowNotFound)?;
+
+    if file_rps_path.is_none() {
+        return Err(AppError::BadRequest(
+            "Dokumen RPS harus diunggah sebelum diverifikasi.".to_string(),
+        ));
+    }
+
+    if current_status.as_deref() != Some("Menunggu Verifikasi") {
+        return Err(AppError::BadRequest(
+            "Hanya RPS berstatus 'Menunggu Verifikasi' yang dapat diverifikasi.".to_string(),
+        ));
+    }
+
     let rows_affected = sqlx::query!(
         r#"
         UPDATE mata_kuliah 
@@ -186,11 +206,20 @@ pub async fn update_file_rps_repo(
     pool: &DbPool,
     id: Uuid,
     file_path: String,
-) -> Result<(), AppError> {
+) -> Result<Option<String>, AppError> {
+    let old_path = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT file_rps_path FROM mata_kuliah WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or(sqlx::Error::RowNotFound)?;
+
     let rows_affected = sqlx::query!(
         r#"
         UPDATE mata_kuliah 
-        SET file_rps_path = $1, status_verifikasi_rps = 'Menunggu Verifikasi', updated_at = now()
+        SET file_rps_path = $1, status_verifikasi_rps = 'Menunggu Verifikasi',
+            catatan_verifikasi_rps = NULL, updated_at = now()
         WHERE id = $2
         "#,
         file_path,
@@ -204,5 +233,5 @@ pub async fn update_file_rps_repo(
         return Err(sqlx::Error::RowNotFound.into());
     }
 
-    Ok(())
+    Ok(old_path)
 }

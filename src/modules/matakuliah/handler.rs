@@ -11,8 +11,9 @@ use crate::{db::DbPool, errors::AppError, modules::auth::middleware::TokenClaims
 
 use axum::{
     Extension,
+    body::Body,
     extract::{Json, Multipart, Path, State},
-    http::StatusCode,
+    http::{Response, StatusCode, header},
 };
 use std::ffi::OsStr;
 use std::path::Path as StdPath; // <-- TAMBAHKAN INI
@@ -108,11 +109,39 @@ pub async fn upload_file_rps_handler(
         file_data.ok_or_else(|| AppError::BadRequest("Field 'file' wajib diisi.".to_string()))?;
     let file_name = original_name.unwrap_or_else(|| "rps.pdf".to_string());
 
+    const MAX_FILE_SIZE: usize = 5 * 1024 * 1024;
+    if data.len() > MAX_FILE_SIZE {
+        return Err(AppError::BadRequest(
+            "Ukuran file RPS maksimal 5 MB.".to_string(),
+        ));
+    }
+
     // Ekstrak ekstensi file (.pdf, .doc, .docx)
     let ext = StdPath::new(&file_name)
         .extension()
         .and_then(OsStr::to_str)
-        .unwrap_or("pdf");
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    let detected_mime = infer::get(&data).map(|kind| kind.mime_type()).unwrap_or("");
+    let valid_type = match ext.as_str() {
+        "pdf" => detected_mime == "application/pdf",
+        "doc" => {
+            detected_mime == "application/x-ole-storage" || detected_mime == "application/msword"
+        }
+        "docx" => {
+            detected_mime == "application/zip"
+                || detected_mime
+                    == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        }
+        _ => false,
+    };
+
+    if !valid_type {
+        return Err(AppError::BadRequest(
+            "File RPS harus berupa PDF, DOC, atau DOCX yang valid.".to_string(),
+        ));
+    }
 
     // Simpan file secara rapi per UUID Mata Kuliah
     let new_filename = format!("{}.{}", Uuid::new_v4(), ext);
@@ -123,7 +152,19 @@ pub async fn upload_file_rps_handler(
     tokio::fs::write(&save_path, data).await?;
 
     // Update kolom `file_rps_path` di tabel mata_kuliah (Otomatis merubah status ke Menunggu Verifikasi)
-    matakuliah_repo::update_file_rps_repo(&pool, id, save_path).await?;
+    let old_path = match matakuliah_repo::update_file_rps_repo(&pool, id, save_path.clone()).await {
+        Ok(path) => path,
+        Err(error) => {
+            let _ = tokio::fs::remove_file(&save_path).await;
+            return Err(error);
+        }
+    };
+
+    if let Some(old_path) = old_path {
+        if old_path != save_path {
+            let _ = tokio::fs::remove_file(old_path).await;
+        }
+    }
 
     Ok((
         StatusCode::OK,
@@ -131,4 +172,49 @@ pub async fn upload_file_rps_handler(
             message: "File RPS berhasil diunggah. Menunggu verifikasi Kaprodi.".to_string(),
         }),
     ))
+}
+
+pub async fn get_file_rps_handler(
+    State(pool): State<DbPool>,
+    Path(id): Path<Uuid>,
+) -> Result<Response<Body>, AppError> {
+    let mata_kuliah = matakuliah_repo::get_matakuliah_by_id_repo(&pool, id).await?;
+    let file_path = mata_kuliah
+        .file_rps_path
+        .ok_or_else(|| AppError::BadRequest("Dokumen RPS belum diunggah.".to_string()))?;
+
+    let canonical_uploads = tokio::fs::canonicalize("./uploads").await?;
+    let canonical_file = tokio::fs::canonicalize(&file_path).await?;
+    if !canonical_file.starts_with(canonical_uploads) || !canonical_file.is_file() {
+        return Err(AppError::Forbidden(
+            "Path dokumen RPS tidak valid.".to_string(),
+        ));
+    }
+
+    let file_contents = tokio::fs::read(&canonical_file).await?;
+    let mime_type = mime_guess::from_path(&canonical_file)
+        .first_or_octet_stream()
+        .to_string();
+    let extension = canonical_file
+        .extension()
+        .and_then(OsStr::to_str)
+        .unwrap_or("bin");
+    let safe_code: String = mata_kuliah
+        .kode_mk
+        .chars()
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || *character == '-' || *character == '_'
+        })
+        .collect();
+    let download_name = format!("RPS-{}.{}", safe_code, extension);
+
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime_type)
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("inline; filename=\"{}\"", download_name),
+        )
+        .body(Body::from(file_contents))
+        .map_err(|error| AppError::InternalServerError(error.to_string()))?)
 }

@@ -45,6 +45,14 @@ pub fn matakuliah_router() -> Router<DbPool> {
                 "KAPRODI".to_string(),
                 "DOSEN".to_string(),
             ]))),
+        )
+        .route(
+            "/matakuliah/{id}/rps/file",
+            get(handler::get_file_rps_handler).layer(middleware::from_fn(require_role(vec![
+                "SUPER_ADMIN".to_string(),
+                "KAPRODI".to_string(),
+                "DOSEN".to_string(),
+            ]))),
         );
 
     let rps_routes = Router::new()
