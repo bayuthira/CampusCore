@@ -97,6 +97,9 @@ pub struct MahasiswaBimbingan {
     pub angkatan: i32,
     pub email: Option<String>,
     pub nama_prodi: String,
+    pub status_krs: String,
+    pub jumlah_mata_kuliah: i64,
+    pub total_sks: i64,
 }
 
 // --- PAYLOAD UNTUK ASSIGN DOSEN PA ---

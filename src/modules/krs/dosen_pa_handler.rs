@@ -15,14 +15,15 @@ use crate::{
     },
 };
 use axum::{
-    Extension, Json,
     extract::{Path, Query, State},
+    Extension, Json,
 };
 use uuid::Uuid;
 
 pub async fn get_my_advisees_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
+    Query(query): Query<KrsQuery>,
 ) -> Result<Json<Vec<MahasiswaBimbingan>>, AppError> {
     let logged_in_user_id = claims.sub;
 
@@ -35,7 +36,8 @@ pub async fn get_my_advisees_handler(
     .await?
     .ok_or_else(|| AppError::Forbidden("Hanya dosen yang dapat mengakses data ini.".to_string()))?;
 
-    let advisees = dosen_pa_repo::get_my_advisees_repo(&pool, dosen.id).await?;
+    let advisees =
+        dosen_pa_repo::get_my_advisees_repo(&pool, dosen.id, query.tahun_akademik_id).await?;
 
     Ok(Json(advisees))
 }

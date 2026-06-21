@@ -69,8 +69,10 @@ pub async fn get_kelas_saya(
         r#"
         SELECT jk.id AS jadwal_kuliah_id, mk.id AS mata_kuliah_id, mk.kode_mk,
                mk.nama_mk, jk.kelas, ta.nama AS nama_tahun_akademik,
-               jk.hari::TEXT AS hari, to_char(jk.jam_mulai, 'HH24:MI') AS jam_mulai,
-               to_char(jk.jam_selesai, 'HH24:MI') AS jam_selesai, r.nama_ruangan,
+               jk.hari::TEXT AS hari,
+               to_char(jk.jam_mulai::TIME, 'HH24:MI') AS jam_mulai,
+               to_char(jk.jam_selesai::TIME, 'HH24:MI') AS jam_selesai,
+               r.nama_ruangan,
                COALESCE(mk.status_verifikasi_rps, 'Belum Upload') AS status_rps,
                COALESCE(mk.status_verifikasi_rps = 'Disetujui', false) AS pembelajaran_aktif,
                COUNT(pk.id) AS jumlah_pertemuan
@@ -149,7 +151,7 @@ pub async fn get_detail_pertemuan(
     let pertemuan = get_pertemuan_by_id(pool, pertemuan_id).await?;
     let presensi_mahasiswa = sqlx::query_as::<_, PresensiMahasiswaRow>(
         r#"
-        SELECT e.id AS enrollment_id, rm.nim, m.nama_lengkap AS nama_mahasiswa,
+        SELECT e.id AS enrollment_id, rm.nim, m.nama_mahasiswa,
                COALESCE(pmk.status::TEXT, 'Alpa') AS status,
                pmk.check_in_at, pmk.sumber::TEXT AS sumber, pmk.catatan
         FROM enrollments e
