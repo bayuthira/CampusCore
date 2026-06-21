@@ -32,7 +32,9 @@ pub struct PertemuanKuliah {
     pub metode_pembelajaran: Option<String>,
     pub bap: Option<String>,
     pub status: String,
+    #[serde(with = "time::serde::rfc3339::option")]
     pub dibuka_pada: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
     pub ditutup_pada: Option<OffsetDateTime>,
 }
 
@@ -55,6 +57,7 @@ pub struct UpdateBapPayload {
 #[derive(Debug, Serialize)]
 pub struct SesiPresensiResponse {
     pub kode: String,
+    #[serde(with = "time::serde::rfc3339")]
     pub berlaku_sampai: OffsetDateTime,
 }
 
@@ -64,6 +67,7 @@ pub struct PresensiMahasiswaRow {
     pub nim: String,
     pub nama_mahasiswa: String,
     pub status: String,
+    #[serde(with = "time::serde::rfc3339::option")]
     pub check_in_at: Option<OffsetDateTime>,
     pub sumber: Option<String>,
     pub catatan: Option<String>,
