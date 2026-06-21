@@ -411,12 +411,19 @@ pub async fn check_in_mahasiswa(
     .await?
     .ok_or_else(|| AppError::Forbidden("Anda tidak terdaftar pada kelas ini.".to_string()))?;
 
-    sqlx::query(
+    let result = sqlx::query(
         r#"
         INSERT INTO presensi_mahasiswa_kuliah
             (pertemuan_id, enrollment_id, status, check_in_at, sumber, dicatat_oleh)
         VALUES ($1, $2, 'Hadir', now(), 'KodeDinamis', $3)
-        ON CONFLICT (pertemuan_id, enrollment_id) DO NOTHING
+        ON CONFLICT (pertemuan_id, enrollment_id) DO UPDATE SET
+            status = 'Hadir',
+            check_in_at = now(),
+            sumber = 'KodeDinamis',
+            catatan = NULL,
+            dicatat_oleh = EXCLUDED.dicatat_oleh,
+            updated_at = now()
+        WHERE presensi_mahasiswa_kuliah.status = 'Alpa'
         "#,
     )
     .bind(session.1)
@@ -424,6 +431,25 @@ pub async fn check_in_mahasiswa(
     .bind(user_id)
     .execute(&mut *tx)
     .await?;
+
+    if result.rows_affected() == 0 {
+        let current_status = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT status::TEXT FROM presensi_mahasiswa_kuliah
+            WHERE pertemuan_id = $1 AND enrollment_id = $2
+            "#,
+        )
+        .bind(session.1)
+        .bind(enrollment_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        if !matches!(current_status.as_str(), "Hadir" | "Terlambat") {
+            return Err(AppError::BadRequest(format!(
+                "Presensi sudah ditetapkan dosen dengan status {current_status}. Hubungi dosen untuk melakukan perubahan."
+            )));
+        }
+    }
     tx.commit().await?;
     Ok(())
 }
