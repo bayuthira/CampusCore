@@ -1,4 +1,4 @@
-use super::handler;
+use super::{handler, report_handler};
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
     middleware,
@@ -7,6 +7,22 @@ use axum::{
 };
 
 pub fn pembelajaran_router() -> Router<DbPool> {
+    let report_routes = Router::new()
+        .route(
+            "/pembelajaran/report",
+            get(report_handler::list_report_handler),
+        )
+        .route(
+            "/pembelajaran/report/{jadwal_id}",
+            get(report_handler::detail_report_handler),
+        )
+        .route_layer(middleware::from_fn(require_role(vec![
+            "DOSEN".to_string(),
+            "KAPRODI".to_string(),
+            "SUPER_ADMIN".to_string(),
+            "STAF_AKADEMIK".to_string(),
+        ])));
+
     let dosen_routes = Router::new()
         .route(
             "/pembelajaran/kelas-saya",
@@ -43,5 +59,8 @@ pub fn pembelajaran_router() -> Router<DbPool> {
             "MAHASISWA".to_string()
         ])));
 
-    Router::new().merge(dosen_routes).merge(mahasiswa_routes)
+    Router::new()
+        .merge(dosen_routes)
+        .merge(mahasiswa_routes)
+        .merge(report_routes)
 }
