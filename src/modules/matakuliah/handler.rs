@@ -4,16 +4,16 @@ use super::{
     model::{
         CreateMataKuliahPayload, MataKuliahDetail, UpdateMataKuliahPayload, VerifikasiRpsPayload,
     },
-    repo as matakuliah_repo,
+    repo as matakuliah_repo, rps_access,
 };
 
 use crate::{db::DbPool, errors::AppError, modules::auth::middleware::TokenClaims};
 
 use axum::{
-    Extension,
     body::Body,
     extract::{Json, Multipart, Path, State},
-    http::{Response, StatusCode, header},
+    http::{header, Response, StatusCode},
+    Extension,
 };
 use std::ffi::OsStr;
 use std::path::Path as StdPath; // <-- TAMBAHKAN INI
@@ -78,8 +78,10 @@ pub async fn delete_matakuliah_handler(
 pub async fn verifikasi_rps_handler(
     State(pool): State<DbPool>,
     Path(id): Path<Uuid>,
+    Extension(claims): Extension<TokenClaims>,
     Json(payload): Json<VerifikasiRpsPayload>,
 ) -> Result<Json<MataKuliahDetail>, AppError> {
+    rps_access::assert_can_verify(&pool, &claims, id).await?;
     let updated_mk = matakuliah_repo::verifikasi_rps_repo(&pool, id, payload).await?;
     Ok(Json(updated_mk))
 }
@@ -87,6 +89,7 @@ pub async fn verifikasi_rps_handler(
 pub async fn upload_file_rps_handler(
     State(pool): State<DbPool>,
     Path(id): Path<Uuid>,
+    Extension(claims): Extension<TokenClaims>,
     mut multipart: Multipart,
 ) -> Result<
     (
@@ -95,6 +98,7 @@ pub async fn upload_file_rps_handler(
     ),
     AppError,
 > {
+    rps_access::assert_can_edit(&pool, &claims, id).await?;
     let mut file_data = None;
     let mut original_name = None;
 
@@ -177,7 +181,9 @@ pub async fn upload_file_rps_handler(
 pub async fn get_file_rps_handler(
     State(pool): State<DbPool>,
     Path(id): Path<Uuid>,
+    Extension(claims): Extension<TokenClaims>,
 ) -> Result<Response<Body>, AppError> {
+    rps_access::assert_can_view(&pool, &claims, id).await?;
     let mata_kuliah = matakuliah_repo::get_matakuliah_by_id_repo(&pool, id).await?;
     let file_path = mata_kuliah
         .file_rps_path

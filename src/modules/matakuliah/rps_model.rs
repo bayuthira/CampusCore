@@ -5,6 +5,21 @@ use sqlx::FromRow;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+#[derive(Debug, Serialize, FromRow)]
+pub struct RpsMataKuliahAccess {
+    pub id: Uuid,
+    pub kode_mk: String,
+    pub nama_mk: String,
+    pub prodi_id: Uuid,
+    pub nama_prodi: String,
+    pub file_rps_path: Option<String>,
+    pub status_verifikasi_rps: Option<String>,
+    pub catatan_verifikasi_rps: Option<String>,
+    pub peran_pengampu: Option<String>,
+    pub can_edit: bool,
+    pub can_verify: bool,
+}
+
 // ==========================================
 // 1. MODEL UNTUK HEADER RPS (1-to-1)
 // ==========================================

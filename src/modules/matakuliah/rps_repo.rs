@@ -32,6 +32,7 @@ pub async fn upsert_rps_header_repo(
     mata_kuliah_id: Uuid,
     payload: UpsertRpsHeaderPayload,
 ) -> Result<RpsHeaderDetail, AppError> {
+    let mut tx = pool.begin().await?;
     let header = sqlx::query_as!(
         RpsHeaderDetail,
         r#"
@@ -58,8 +59,11 @@ pub async fn upsert_rps_header_repo(
         payload.pustaka_pendukung,
         payload.matakuliah_syarat
     )
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+
+    mark_rps_for_review(&mut tx, mata_kuliah_id).await?;
+    tx.commit().await?;
 
     Ok(header)
 }
@@ -92,6 +96,7 @@ pub async fn upsert_rps_mingguan_repo(
     mata_kuliah_id: Uuid,
     payload: UpsertRpsMingguanPayload,
 ) -> Result<RpsMingguanDetail, AppError> {
+    let mut tx = pool.begin().await?;
     // Upsert berdasarkan kombinasi unique (mata_kuliah_id + minggu_ke)
     let mingguan = sqlx::query_as!(
         RpsMingguanDetail,
@@ -123,21 +128,46 @@ pub async fn upsert_rps_mingguan_repo(
         payload.kriteria_penilaian,
         payload.bobot_penilaian
     )
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+
+    mark_rps_for_review(&mut tx, mata_kuliah_id).await?;
+    tx.commit().await?;
 
     Ok(mingguan)
 }
 
 pub async fn delete_rps_mingguan_repo(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
-    let rows_affected = sqlx::query!("DELETE FROM mata_kuliah_rps_mingguan WHERE id = $1", id)
-        .execute(pool)
-        .await?
-        .rows_affected();
+    let mut tx = pool.begin().await?;
+    let mata_kuliah_id = sqlx::query_scalar!(
+        "DELETE FROM mata_kuliah_rps_mingguan WHERE id = $1 RETURNING mata_kuliah_id",
+        id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(sqlx::Error::RowNotFound)?;
+    mark_rps_for_review(&mut tx, mata_kuliah_id).await?;
+    tx.commit().await?;
 
-    if rows_affected == 0 {
-        return Err(sqlx::Error::RowNotFound.into());
-    }
+    Ok(())
+}
 
+async fn mark_rps_for_review(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    mata_kuliah_id: Uuid,
+) -> Result<(), AppError> {
+    sqlx::query!(
+        r#"
+        UPDATE mata_kuliah
+        SET status_verifikasi_rps = 'Menunggu Verifikasi',
+            catatan_verifikasi_rps = NULL,
+            updated_at = now()
+        WHERE id = $1 AND file_rps_path IS NOT NULL
+          AND status_verifikasi_rps IN ('Disetujui', 'Ditolak')
+        "#,
+        mata_kuliah_id
+    )
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }

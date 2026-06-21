@@ -2,10 +2,10 @@
 use super::{handler, rps_handler};
 use crate::{db::DbPool, modules::auth::middleware::require_role};
 use axum::{
-    Router,
     handler::Handler,
     middleware,
     routing::{delete, get, post, put},
+    Router,
 };
 
 pub fn matakuliah_router() -> Router<DbPool> {
@@ -56,6 +56,10 @@ pub fn matakuliah_router() -> Router<DbPool> {
         );
 
     let rps_routes = Router::new()
+        .route(
+            "/matakuliah/rps-saya",
+            get(rps_handler::get_rps_mata_kuliah_handler),
+        )
         .route(
             "/matakuliah/{id}/rps-header",
             get(rps_handler::get_rps_header_handler).put(rps_handler::upsert_rps_header_handler),

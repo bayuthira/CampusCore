@@ -13,6 +13,7 @@ pub mod kurikulum;
 pub mod lookup;
 pub mod mahasiswa;
 pub mod matakuliah;
+pub mod pembelajaran;
 pub mod prodi;
 pub mod sdm;
 pub mod tahun_akademik;

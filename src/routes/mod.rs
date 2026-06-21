@@ -19,6 +19,7 @@ pub fn create_router(pool: DbPool) -> Router {
         .merge(modules::dosen::routes::dosen_router())
         .merge(modules::mahasiswa::routes::mahasiswa_router())
         .merge(modules::matakuliah::routes::matakuliah_router())
+        .merge(modules::pembelajaran::routes::pembelajaran_router())
         .merge(modules::tahun_akademik::routes::tahun_akademik_router())
         .merge(modules::kurikulum::routes::kurikulum_router())
         .merge(modules::krs::dosen_pa_routes::dosen_pa_router())
