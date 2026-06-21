@@ -1,6 +1,7 @@
 // src/modules/mod.rs
 // "Umumkan" semua folder fitur sebagai modul
 pub mod akademik;
+pub mod asesmen;
 pub mod aset;
 pub mod auth;
 pub mod dosen;

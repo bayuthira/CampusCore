@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS nilai_asesmen;
+DROP TABLE IF EXISTS presensi_asesmen;
+DROP TABLE IF EXISTS sesi_presensi_asesmen;
+DROP TABLE IF EXISTS pelaksanaan_asesmen;
+DROP TABLE IF EXISTS penggandaan_asesmen;
+DROP TABLE IF EXISTS review_asesmen;
+DROP TABLE IF EXISTS audit_dokumen_asesmen;
+DROP TABLE IF EXISTS dokumen_asesmen;
+DROP TABLE IF EXISTS asesmen_kuliah;
+DROP TYPE IF EXISTS "JenisDokumenAsesmen";
+DROP TYPE IF EXISTS "StatusAsesmenKuliah";
+DROP TYPE IF EXISTS "ModeAsesmenKuliah";
+DROP TYPE IF EXISTS "JenisAsesmenKuliah";
