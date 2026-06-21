@@ -29,7 +29,7 @@ pub async fn schedule_options(
     Ok(sqlx::query_as::<_, JadwalAsesmenOption>(
         r#"
         SELECT jk.id, mk.kode_mk, mk.nama_mk, jk.kelas, p.nama_prodi,
-               ($1 OR $6 OR EXISTS(
+               ($1 OR EXISTS(
                    SELECT 1 FROM jadwal_dosen_pengampu jdp
                    WHERE jdp.jadwal_kuliah_id = jk.id AND jdp.dosen_id = $2
                      AND jdp.peran::TEXT = 'Koordinator'
