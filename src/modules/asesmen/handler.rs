@@ -498,3 +498,13 @@ pub async fn scale_save_handler(
         nilai_akhir_repo::save_scales(&pool, &claims, prodi_id, payload).await?,
     ))
 }
+
+pub async fn student_grades_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Query(query): Query<AsesmenQuery>,
+) -> Result<Json<Vec<NilaiMataKuliahMahasiswa>>, AppError> {
+    Ok(Json(
+        nilai_akhir_repo::student_grades(&pool, claims.sub, query.tahun_akademik_id).await?,
+    ))
+}

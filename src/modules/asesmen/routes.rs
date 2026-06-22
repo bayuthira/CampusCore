@@ -80,6 +80,7 @@ pub fn asesmen_router() -> Router<DbPool> {
 
     let student = Router::new()
         .route("/asesmen-saya", get(handler::student_list_handler))
+        .route("/nilai-saya", get(handler::student_grades_handler))
         .route(
             "/asesmen-saya/check-in",
             post(handler::student_check_in_handler),

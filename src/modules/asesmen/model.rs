@@ -322,3 +322,27 @@ pub struct UpsertSkalaNilaiItem {
 pub struct UpsertSkalaNilaiPayload {
     pub items: Vec<UpsertSkalaNilaiItem>,
 }
+
+#[derive(Debug, Serialize)]
+pub struct KomponenNilaiMahasiswa {
+    pub asesmen_id: Uuid,
+    pub jenis: String,
+    pub judul: String,
+    pub bobot: Decimal,
+    pub nilai: Decimal,
+    pub kontribusi: Decimal,
+}
+
+#[derive(Debug, Serialize)]
+pub struct NilaiMataKuliahMahasiswa {
+    pub enrollment_id: Uuid,
+    pub kode_mk: String,
+    pub nama_mk: String,
+    pub kelas: String,
+    pub nama_prodi: String,
+    pub sks: i32,
+    pub nilai_angka: Option<Decimal>,
+    pub nilai_huruf: Option<String>,
+    pub nilai_indeks: Option<Decimal>,
+    pub komponen: Vec<KomponenNilaiMahasiswa>,
+}

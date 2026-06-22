@@ -1,8 +1,9 @@
 use super::{
     access,
     model::{
-        AsesmenQuery, KelasNilaiAkhir, KomponenNilaiAkhir, MahasiswaNilaiAkhir, NilaiAkhirDetail,
-        NilaiKomponenMahasiswa, RiwayatNilaiAkhir, SkalaNilaiRow, UpsertSkalaNilaiPayload,
+        AsesmenQuery, KelasNilaiAkhir, KomponenNilaiAkhir, KomponenNilaiMahasiswa,
+        MahasiswaNilaiAkhir, NilaiAkhirDetail, NilaiKomponenMahasiswa, NilaiMataKuliahMahasiswa,
+        RiwayatNilaiAkhir, SkalaNilaiRow, UpsertSkalaNilaiPayload,
     },
 };
 use crate::{db::DbPool, errors::AppError, modules::auth::middleware::TokenClaims};
@@ -31,6 +32,29 @@ struct ScaleRow {
     nilai_indeks: Decimal,
     bobot_minimum: Decimal,
     bobot_maksimum: Decimal,
+}
+
+#[derive(Debug, FromRow)]
+struct StudentCourseGradeRow {
+    enrollment_id: Uuid,
+    kode_mk: String,
+    nama_mk: String,
+    kelas: String,
+    nama_prodi: String,
+    sks: i32,
+    nilai_angka: Option<Decimal>,
+    nilai_huruf: Option<String>,
+    nilai_indeks: Option<Decimal>,
+}
+
+#[derive(Debug, FromRow)]
+struct StudentComponentGradeRow {
+    enrollment_id: Uuid,
+    asesmen_id: Uuid,
+    jenis: String,
+    judul: String,
+    bobot: Decimal,
+    nilai: Decimal,
 }
 
 struct Calculation {
@@ -614,4 +638,84 @@ pub async fn save_scales(
     }
     tx.commit().await?;
     list_scales(pool, claims, prodi_id).await
+}
+
+pub async fn student_grades(
+    pool: &DbPool,
+    user_id: Uuid,
+    tahun_akademik_id: Uuid,
+) -> Result<Vec<NilaiMataKuliahMahasiswa>, AppError> {
+    let courses = sqlx::query_as::<_, StudentCourseGradeRow>(
+        r#"
+        SELECT e.id AS enrollment_id, mk.kode_mk, mk.nama_mk, jk.kelas,
+               p.nama_prodi, mk.sks, e.nilai_angka, e.nilai_huruf, e.nilai_indeks
+        FROM enrollments e
+        JOIN registrasi_mahasiswa rm ON rm.id = e.registrasi_id
+        JOIN mahasiswa m ON m.id = rm.mahasiswa_id
+        JOIN jadwal_kuliah jk ON jk.id = e.jadwal_kuliah_id
+        JOIN mata_kuliah mk ON mk.id = jk.matakuliah_id
+        JOIN prodi p ON p.id = mk.prodi_id
+        JOIN nilai_akhir_kuliah na ON na.jadwal_kuliah_id = jk.id
+        WHERE m.user_id = $1 AND e.tahun_akademik_id = $2
+          AND e.status_approval::TEXT = 'Disetujui'
+          AND na.status::TEXT = 'Dipublikasikan'
+        ORDER BY mk.kode_mk, jk.kelas
+        "#,
+    )
+    .bind(user_id)
+    .bind(tahun_akademik_id)
+    .fetch_all(pool)
+    .await?;
+    let components = sqlx::query_as::<_, StudentComponentGradeRow>(
+        r#"
+        SELECT DISTINCT ON (e.id, a.id)
+               e.id AS enrollment_id, a.id AS asesmen_id, a.jenis::TEXT AS jenis,
+               a.judul, a.bobot, n.nilai
+        FROM enrollments e
+        JOIN registrasi_mahasiswa rm ON rm.id = e.registrasi_id
+        JOIN mahasiswa m ON m.id = rm.mahasiswa_id
+        JOIN nilai_akhir_kuliah na ON na.jadwal_kuliah_id = e.jadwal_kuliah_id
+        JOIN asesmen_kuliah a ON a.jadwal_kuliah_id = e.jadwal_kuliah_id
+        JOIN nilai_asesmen n ON n.asesmen_id = a.id AND n.enrollment_id = e.id
+        WHERE m.user_id = $1 AND e.tahun_akademik_id = $2
+          AND e.status_approval::TEXT = 'Disetujui'
+          AND na.status::TEXT = 'Dipublikasikan' AND a.status::TEXT = 'Dikunci'
+        ORDER BY e.id, a.id, n.attempt DESC
+        "#,
+    )
+    .bind(user_id)
+    .bind(tahun_akademik_id)
+    .fetch_all(pool)
+    .await?;
+    let mut component_map: HashMap<Uuid, Vec<KomponenNilaiMahasiswa>> = HashMap::new();
+    for item in components {
+        component_map
+            .entry(item.enrollment_id)
+            .or_default()
+            .push(KomponenNilaiMahasiswa {
+                asesmen_id: item.asesmen_id,
+                jenis: item.jenis,
+                judul: item.judul,
+                bobot: item.bobot,
+                nilai: item.nilai,
+                kontribusi: (item.nilai * item.bobot / Decimal::from(100)).round_dp(2),
+            });
+    }
+    Ok(courses
+        .into_iter()
+        .map(|course| NilaiMataKuliahMahasiswa {
+            enrollment_id: course.enrollment_id,
+            kode_mk: course.kode_mk,
+            nama_mk: course.nama_mk,
+            kelas: course.kelas,
+            nama_prodi: course.nama_prodi,
+            sks: course.sks,
+            nilai_angka: course.nilai_angka,
+            nilai_huruf: course.nilai_huruf,
+            nilai_indeks: course.nilai_indeks,
+            komponen: component_map
+                .remove(&course.enrollment_id)
+                .unwrap_or_default(),
+        })
+        .collect())
 }

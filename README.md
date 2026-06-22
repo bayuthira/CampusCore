@@ -2538,6 +2538,11 @@ pada `enrollments` diperbarui sehingga dapat ditampilkan pada KHS mahasiswa.
 | --- | --- | --- |
 | `GET` | `/api/asesmen-saya?tahun_akademik_id={uuid}` | Jadwal dan hasil asesmen mahasiswa. |
 | `POST` | `/api/asesmen-saya/check-in` | Check-in ujian menggunakan kode aktif. |
+| `GET` | `/api/nilai-saya?tahun_akademik_id={uuid}` | Nilai akhir terpublikasi beserta rincian komponen milik mahasiswa login. |
+
+Endpoint `nilai-saya` hanya mengembalikan enrollment yang dimiliki user JWT,
+berstatus KRS `Disetujui`, dan rekap nilai akhirnya sudah `Dipublikasikan`.
+Attempt terbaru setiap komponen dikembalikan bersama bobot dan kontribusinya.
 
 Migration yang diperlukan:
 
