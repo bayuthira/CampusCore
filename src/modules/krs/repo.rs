@@ -1,5 +1,5 @@
 // src/modules/krs/repo.rs
-use crate::{db::DbPool, errors::AppError, modules::tahun_akademik::model::TahunAkademik};
+use crate::{db::DbPool, errors::AppError};
 
 use super::model::{
     AvailableJadwalDetail, CreateEnrollmentPayload, EnrollmentDetail, EnrollmentFromDb,
@@ -16,16 +16,15 @@ pub async fn create_enrollment_repo(
     let mut tx = pool.begin().await?;
 
     let today = OffsetDateTime::now_utc().date();
-    let ta = sqlx::query_as!(
-        TahunAkademik,
-        "SELECT * FROM tahun_akademik WHERE id = $1",
+    let ta = sqlx::query!(
+        "SELECT krs_mulai, krs_selesai, status_penutupan FROM tahun_akademik WHERE id = $1",
         payload.tahun_akademik_id
     )
     .fetch_one(&mut *tx)
     .await?;
 
     // Validasi Tanggal KRS
-    if !(today >= ta.krs_mulai && today <= ta.krs_selesai) {
+    if ta.status_penutupan == "Ditutup" || !(today >= ta.krs_mulai && today <= ta.krs_selesai) {
         return Err(AppError::Forbidden(
             "Periode pengisian KRS sudah ditutup.".to_string(),
         ));
