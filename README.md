@@ -2524,7 +2524,8 @@ Workflow asesmen:
 | `POST` | `/api/asesmen/nilai-akhir/{jadwal_id}/ajukan` | Koordinator mengajukan nilai akhir. |
 | `POST` | `/api/asesmen/nilai-akhir/{jadwal_id}/review` | Kaprodi menyetujui atau meminta revisi. |
 | `POST` | `/api/asesmen/nilai-akhir/{jadwal_id}/publikasikan` | Staf Akademik mempublikasikan nilai ke enrollment/KHS. |
-| `GET` | `/api/asesmen/skala-nilai/{prodi_id}` | Daftar skala nilai Prodi. |
+| `GET/PUT` | `/api/asesmen/skala-nilai/global` | Daftar atau versi baru skala global institusi. |
+| `GET` | `/api/asesmen/skala-nilai/{prodi_id}` | Daftar override skala nilai Prodi. |
 | `PUT` | `/api/asesmen/skala-nilai/{prodi_id}` | Menyimpan skala nilai oleh Kaprodi/Super Admin. |
 
 Pengajuan nilai akhir ditolak jika total bobot bukan 100%, terdapat asesmen
@@ -2532,6 +2533,13 @@ yang belum `Dikunci`, nilai peserta belum lengkap, atau skala nilai Prodi tidak
 mencakup hasil perhitungan. Publikasi hanya dapat dilakukan setelah persetujuan
 Kaprodi. Saat dipublikasikan, `nilai_angka`, `nilai_huruf`, dan `nilai_indeks`
 pada `enrollments` diperbarui sehingga dapat ditampilkan pada KHS mahasiswa.
+
+Skala nilai menggunakan model versioning. Scope global menjadi default;
+override Prodi menang bila tersedia pada periode yang sama. Perubahan dibuat
+sebagai versi efektif baru dan periode lama otomatis ditutup satu hari
+sebelumnya. Versi yang pernah dipakai nilai terpublikasi dikunci. Nilai angka,
+huruf, dan indeks pada enrollment merupakan snapshot, sehingga versi baru tidak
+mengubah nilai historis.
 
 #### Akses mahasiswa
 
@@ -2549,6 +2557,7 @@ Migration yang diperlukan:
 
 - `20260621150000_create_asesmen_tables`
 - `20260621180000_create_nilai_akhir_tables`
+- `20260622150000_version_global_grade_scales`
 
 ### 4.35 Akhir Semester, KHS, Transkrip, dan Feeder
 
@@ -2576,6 +2585,10 @@ Outbox memisahkan transaksi akademik dari koneksi eksternal. Penutupan semester
 tidak bergantung pada ketersediaan Neo Feeder; worker/connector mengambil payload
 `Menunggu`, mengirimnya menggunakan kredensial deployment, lalu melaporkan hasil
 melalui endpoint callback. API inti tidak menyimpan username/password Feeder.
+
+Skala global dimaterialisasi per Prodi pada `skala_nilai_feeder_map`. Outbox
+`BOBOT_NILAI` membawa ID Prodi Feeder dan rentang efektif; callback menyimpan
+ID Bobot Nilai Feeder tanpa mengubah versi historis.
 
 Migration: `20260622100000_create_akhir_semester_tables`.
 

@@ -101,6 +101,52 @@ pub async fn close(pool: &DbPool, tahun_id: Uuid, user_id: Uuid) -> Result<(), A
     }
     let mut tx = pool.begin().await?;
     recalculate_akm(&mut tx, tahun_id).await?;
+    sqlx::query(r#"
+        WITH relevant_prodi AS (
+            SELECT DISTINCT mk.prodi_id FROM jadwal_kuliah jk
+            JOIN mata_kuliah mk ON mk.id=jk.matakuliah_id WHERE jk.tahun_akademik_id=$1
+        ), selected_scale AS (
+            SELECT sn.id AS skala_id,rp.prodi_id
+            FROM relevant_prodi rp CROSS JOIN tahun_akademik ta
+            JOIN skala_nilai sn ON sn.prodi_id=rp.prodi_id OR sn.prodi_id IS NULL
+            WHERE ta.id=$1 AND sn.tanggal_mulai_efektif<=ta.tanggal_selesai
+              AND (sn.tanggal_akhir_efektif IS NULL OR sn.tanggal_akhir_efektif>=ta.tanggal_mulai)
+              AND (sn.prodi_id=rp.prodi_id OR NOT EXISTS(
+                  SELECT 1 FROM skala_nilai specific
+                  WHERE specific.prodi_id=rp.prodi_id
+                    AND specific.tanggal_mulai_efektif<=ta.tanggal_selesai
+                    AND (specific.tanggal_akhir_efektif IS NULL OR specific.tanggal_akhir_efektif>=ta.tanggal_mulai)
+              ))
+        )
+        INSERT INTO skala_nilai_feeder_map(skala_nilai_id,prodi_id)
+        SELECT skala_id,prodi_id FROM selected_scale
+        ON CONFLICT(skala_nilai_id,prodi_id) DO NOTHING
+        "#).bind(tahun_id).execute(&mut *tx).await?;
+    sqlx::query(
+        r#"
+        UPDATE skala_nilai sn SET is_locked=true,updated_at=now()
+        WHERE EXISTS(SELECT 1 FROM skala_nilai_feeder_map fm WHERE fm.skala_nilai_id=sn.id)
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO feeder_sync_outbox(entity_type,entity_id,payload)
+        SELECT 'BOBOT_NILAI',fm.id,jsonb_build_object(
+            'id_prodi',p.id_prodi_feeder,'nilai_huruf',sn.nilai_huruf,
+            'nilai_indeks',sn.nilai_indeks,'bobot_minimum',sn.bobot_minimum,
+            'bobot_maksimum',sn.bobot_maksimum,'tanggal_mulai_efektif',sn.tanggal_mulai_efektif,
+            'tanggal_akhir_efektif',sn.tanggal_akhir_efektif)
+        FROM skala_nilai_feeder_map fm JOIN skala_nilai sn ON sn.id=fm.skala_nilai_id
+        JOIN prodi p ON p.id=fm.prodi_id
+        WHERE fm.id_bobot_nilai_feeder IS NULL
+        ON CONFLICT(entity_type,entity_id,operation) DO UPDATE SET
+            payload=EXCLUDED.payload,status='Menunggu',last_error=NULL,updated_at=now()
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
     sqlx::query(
         r#"
         INSERT INTO feeder_sync_outbox(entity_type,entity_id,payload)
@@ -259,6 +305,10 @@ pub async fn feeder_result(
                     .execute(&mut *tx)
                     .await?;
                 }
+                "BOBOT_NILAI" => {
+                    sqlx::query("UPDATE skala_nilai_feeder_map SET id_bobot_nilai_feeder=$1,updated_at=now() WHERE id=$2")
+                        .bind(feeder_id).bind(entity.1).execute(&mut *tx).await?;
+                }
                 _ => {}
             }
         }
@@ -346,12 +396,13 @@ pub async fn submit_correction(
     }
     let scale=sqlx::query_as::<_,(String,Decimal)>(r#"
         SELECT sn.nilai_huruf,sn.nilai_indeks FROM skala_nilai sn
-        JOIN mata_kuliah mk ON mk.prodi_id=sn.prodi_id JOIN jadwal_kuliah jk ON jk.matakuliah_id=mk.id
+        CROSS JOIN jadwal_kuliah jk JOIN mata_kuliah mk ON mk.id=jk.matakuliah_id
         JOIN enrollments e ON e.jadwal_kuliah_id=jk.id JOIN tahun_akademik ta ON ta.id=e.tahun_akademik_id
-        WHERE e.id=$1 AND $2 BETWEEN sn.bobot_minimum AND sn.bobot_maksimum
+        WHERE e.id=$1 AND (sn.prodi_id=mk.prodi_id OR sn.prodi_id IS NULL)
+          AND $2 BETWEEN sn.bobot_minimum AND sn.bobot_maksimum
           AND sn.tanggal_mulai_efektif<=ta.tanggal_selesai
           AND (sn.tanggal_akhir_efektif IS NULL OR sn.tanggal_akhir_efektif>=ta.tanggal_mulai)
-        ORDER BY sn.tanggal_mulai_efektif DESC LIMIT 1"#)
+        ORDER BY (sn.prodi_id IS NOT NULL) DESC,sn.tanggal_mulai_efektif DESC LIMIT 1"#)
         .bind(payload.enrollment_id).bind(payload.nilai_angka_baru).fetch_optional(pool).await?
         .ok_or_else(||AppError::BadRequest("Nilai baru tidak tercakup skala Prodi.".to_string()))?;
     sqlx::query(

@@ -190,13 +190,14 @@ async fn calculate(pool: &DbPool, jadwal_id: Uuid) -> Result<Calculation, AppErr
         r#"
         SELECT sn.nilai_huruf, sn.nilai_indeks, sn.bobot_minimum, sn.bobot_maksimum
         FROM skala_nilai sn
-        JOIN mata_kuliah mk ON mk.prodi_id = sn.prodi_id
-        JOIN jadwal_kuliah jk ON jk.matakuliah_id = mk.id
+        CROSS JOIN jadwal_kuliah jk
+        JOIN mata_kuliah mk ON mk.id = jk.matakuliah_id
         JOIN tahun_akademik ta ON ta.id = jk.tahun_akademik_id
-        WHERE jk.id = $1
+        WHERE jk.id = $1 AND (sn.prodi_id = mk.prodi_id OR sn.prodi_id IS NULL)
           AND sn.tanggal_mulai_efektif <= ta.tanggal_selesai
           AND (sn.tanggal_akhir_efektif IS NULL OR sn.tanggal_akhir_efektif >= ta.tanggal_mulai)
-        ORDER BY sn.tanggal_mulai_efektif DESC, sn.bobot_minimum DESC
+        ORDER BY (sn.prodi_id IS NOT NULL) DESC,
+                 sn.tanggal_mulai_efektif DESC, sn.bobot_minimum DESC
         "#,
     )
     .bind(jadwal_id)
@@ -453,6 +454,29 @@ pub async fn publish(pool: &DbPool, claims: &TokenClaims, jadwal_id: Uuid) -> Re
         .execute(&mut *tx)
         .await?;
     }
+    sqlx::query(
+        r#"
+        UPDATE skala_nilai sn SET is_locked=true,updated_at=now()
+        FROM jadwal_kuliah jk JOIN mata_kuliah mk ON mk.id=jk.matakuliah_id
+        JOIN tahun_akademik ta ON ta.id=jk.tahun_akademik_id
+        WHERE jk.id=$1
+          AND sn.tanggal_mulai_efektif<=ta.tanggal_selesai
+          AND (sn.tanggal_akhir_efektif IS NULL OR sn.tanggal_akhir_efektif>=ta.tanggal_mulai)
+          AND (
+              sn.prodi_id=mk.prodi_id OR (
+                  sn.prodi_id IS NULL AND NOT EXISTS(
+                      SELECT 1 FROM skala_nilai specific
+                      WHERE specific.prodi_id=mk.prodi_id
+                        AND specific.tanggal_mulai_efektif<=ta.tanggal_selesai
+                        AND (specific.tanggal_akhir_efektif IS NULL OR specific.tanggal_akhir_efektif>=ta.tanggal_mulai)
+                  )
+              )
+          )
+        "#,
+    )
+    .bind(jadwal_id)
+    .execute(&mut *tx)
+    .await?;
     let rekap_id = sqlx::query_scalar::<_, Uuid>(
         r#"
         UPDATE nilai_akhir_kuliah SET status = 'Dipublikasikan', dipublikasikan_oleh = $1,
@@ -472,35 +496,50 @@ pub async fn publish(pool: &DbPool, claims: &TokenClaims, jadwal_id: Uuid) -> Re
 async fn require_scale_manager(
     pool: &DbPool,
     claims: &TokenClaims,
-    prodi_id: Uuid,
+    prodi_id: Option<Uuid>,
 ) -> Result<(), AppError> {
     if access::has_role(claims, "SUPER_ADMIN")
+        || (prodi_id.is_none() && access::has_role(claims, "STAF_AKADEMIK"))
+        || (prodi_id.is_some() && access::has_role(claims, "STAF_AKADEMIK"))
         || (access::has_role(claims, "KAPRODI")
             && access::kaprodi_prodi_ids(pool, claims.sub)
                 .await?
-                .contains(&prodi_id))
+                .contains(&prodi_id.unwrap_or(Uuid::nil())))
     {
         Ok(())
     } else {
         Err(AppError::Forbidden(
-            "Hanya Kaprodi terkait atau Super Admin yang dapat mengatur skala nilai.".to_string(),
+            "Anda tidak berwenang mengatur skala nilai pada scope ini.".to_string(),
         ))
     }
 }
 
-pub async fn list_scales(
+async fn list_scale_scope(
     pool: &DbPool,
     claims: &TokenClaims,
-    prodi_id: Uuid,
+    prodi_id: Option<Uuid>,
 ) -> Result<Vec<SkalaNilaiRow>, AppError> {
-    require_scale_manager(pool, claims, prodi_id).await?;
+    if prodi_id.is_none() {
+        if !claims.roles.iter().any(|role| {
+            ["SUPER_ADMIN", "STAF_AKADEMIK", "KAPRODI", "DOSEN"].contains(&role.as_str())
+        }) {
+            return Err(AppError::Forbidden(
+                "Anda tidak dapat melihat skala global.".to_string(),
+            ));
+        }
+    } else {
+        require_scale_manager(pool, claims, prodi_id).await?;
+    }
     Ok(sqlx::query_as::<_, SkalaNilaiRow>(
         r#"
-        SELECT id, prodi_id, nilai_huruf, nilai_indeks, bobot_minimum, bobot_maksimum,
+        SELECT id, prodi_id, CASE WHEN prodi_id IS NULL THEN 'Global' ELSE 'Prodi' END AS scope,
+               nilai_huruf, nilai_indeks, bobot_minimum, bobot_maksimum,
                to_char(tanggal_mulai_efektif, 'YYYY-MM-DD') AS tanggal_mulai_efektif,
                to_char(tanggal_akhir_efektif, 'YYYY-MM-DD') AS tanggal_akhir_efektif,
-               (id_bobot_nilai_feeder IS NOT NULL) AS dari_feeder
-        FROM skala_nilai WHERE prodi_id = $1
+               (id_bobot_nilai_feeder IS NOT NULL OR EXISTS(
+                    SELECT 1 FROM skala_nilai_feeder_map fm WHERE fm.skala_nilai_id=skala_nilai.id
+               )) AS dari_feeder, is_locked
+        FROM skala_nilai WHERE prodi_id IS NOT DISTINCT FROM $1
         ORDER BY tanggal_mulai_efektif DESC, bobot_minimum DESC
         "#,
     )
@@ -509,10 +548,24 @@ pub async fn list_scales(
     .await?)
 }
 
-pub async fn save_scales(
+pub async fn list_scales(
     pool: &DbPool,
     claims: &TokenClaims,
     prodi_id: Uuid,
+) -> Result<Vec<SkalaNilaiRow>, AppError> {
+    list_scale_scope(pool, claims, Some(prodi_id)).await
+}
+pub async fn list_global_scales(
+    pool: &DbPool,
+    claims: &TokenClaims,
+) -> Result<Vec<SkalaNilaiRow>, AppError> {
+    list_scale_scope(pool, claims, None).await
+}
+
+async fn save_scale_scope(
+    pool: &DbPool,
+    claims: &TokenClaims,
+    prodi_id: Option<Uuid>,
     payload: UpsertSkalaNilaiPayload,
 ) -> Result<Vec<SkalaNilaiRow>, AppError> {
     require_scale_manager(pool, claims, prodi_id).await?;
@@ -574,21 +627,34 @@ pub async fn save_scales(
     }
 
     let mut tx = pool.begin().await?;
-    let old_local_ids = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM skala_nilai WHERE prodi_id = $1 AND id_bobot_nilai_feeder IS NULL",
-    )
-    .bind(prodi_id)
-    .fetch_all(&mut *tx)
-    .await?;
-    let mut retained_ids = Vec::new();
+    let mut new_starts: Vec<time::Date> = parsed
+        .iter()
+        .filter(|(item, _, _, _)| item.id.is_none())
+        .map(|(_, _, start, _)| *start)
+        .collect();
+    new_starts.sort();
+    new_starts.dedup();
+    for start in new_starts {
+        sqlx::query(
+            r#"UPDATE skala_nilai SET tanggal_akhir_efektif=$2-1,updated_at=now()
+            WHERE prodi_id IS NOT DISTINCT FROM $1 AND tanggal_mulai_efektif<$2
+              AND (tanggal_akhir_efektif IS NULL OR tanggal_akhir_efektif>=$2)"#,
+        )
+        .bind(prodi_id)
+        .bind(start)
+        .execute(&mut *tx)
+        .await?;
+    }
     for (item, letter, start, end) in parsed {
-        let id = if let Some(id) = item.id {
+        if let Some(id) = item.id {
             let affected = sqlx::query(
                 r#"
                 UPDATE skala_nilai SET nilai_huruf=$1, nilai_indeks=$2, bobot_minimum=$3,
                     bobot_maksimum=$4, tanggal_mulai_efektif=$5,
                     tanggal_akhir_efektif=$6, updated_at=now()
-                WHERE id=$7 AND prodi_id=$8 AND id_bobot_nilai_feeder IS NULL
+                WHERE id=$7 AND prodi_id IS NOT DISTINCT FROM $8 AND is_locked=false
+                  AND id_bobot_nilai_feeder IS NULL
+                  AND NOT EXISTS(SELECT 1 FROM skala_nilai_feeder_map fm WHERE fm.skala_nilai_id=skala_nilai.id)
                 "#,
             )
             .bind(letter)
@@ -604,11 +670,31 @@ pub async fn save_scales(
             .rows_affected();
             if affected == 0 {
                 return Err(AppError::BadRequest(
-                    "Skala Feeder tidak dapat diubah dari halaman ini.".to_string(),
+                    "Versi skala sudah dikunci/tersinkron. Buat versi efektif baru.".to_string(),
                 ));
             }
-            id
         } else {
+            let overlaps = sqlx::query_scalar::<_, bool>(
+                r#"SELECT EXISTS(
+                SELECT 1 FROM skala_nilai existing
+                WHERE existing.prodi_id IS NOT DISTINCT FROM $1
+                  AND existing.tanggal_mulai_efektif<=COALESCE($3::DATE,'infinity'::DATE)
+                  AND COALESCE(existing.tanggal_akhir_efektif,'infinity'::DATE)>=$2
+                  AND existing.bobot_minimum<=$5 AND existing.bobot_maksimum>=$4
+            )"#,
+            )
+            .bind(prodi_id)
+            .bind(start)
+            .bind(end)
+            .bind(item.bobot_minimum)
+            .bind(item.bobot_maksimum)
+            .fetch_one(&mut *tx)
+            .await?;
+            if overlaps {
+                return Err(AppError::BadRequest(
+                "Versi/rentang bertumpang tindih. Gunakan tanggal mulai efektif yang lebih baru.".to_string()
+            ));
+            }
             sqlx::query_scalar::<_, Uuid>(
                 r#"
                 INSERT INTO skala_nilai (prodi_id, nilai_huruf, nilai_indeks, bobot_minimum,
@@ -624,20 +710,27 @@ pub async fn save_scales(
             .bind(start)
             .bind(end)
             .fetch_one(&mut *tx)
-            .await?
-        };
-        retained_ids.push(id);
-    }
-    for id in old_local_ids {
-        if !retained_ids.contains(&id) {
-            sqlx::query("DELETE FROM skala_nilai WHERE id=$1")
-                .bind(id)
-                .execute(&mut *tx)
-                .await?;
+            .await?;
         }
     }
     tx.commit().await?;
-    list_scales(pool, claims, prodi_id).await
+    list_scale_scope(pool, claims, prodi_id).await
+}
+
+pub async fn save_scales(
+    pool: &DbPool,
+    claims: &TokenClaims,
+    prodi_id: Uuid,
+    payload: UpsertSkalaNilaiPayload,
+) -> Result<Vec<SkalaNilaiRow>, AppError> {
+    save_scale_scope(pool, claims, Some(prodi_id), payload).await
+}
+pub async fn save_global_scales(
+    pool: &DbPool,
+    claims: &TokenClaims,
+    payload: UpsertSkalaNilaiPayload,
+) -> Result<Vec<SkalaNilaiRow>, AppError> {
+    save_scale_scope(pool, claims, None, payload).await
 }
 
 pub async fn student_grades(

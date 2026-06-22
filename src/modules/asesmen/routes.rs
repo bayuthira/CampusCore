@@ -9,6 +9,10 @@ use axum::{
 pub fn asesmen_router() -> Router<DbPool> {
     let management = Router::new()
         .route(
+            "/asesmen/skala-nilai/global",
+            get(handler::global_scale_list_handler).put(handler::global_scale_save_handler),
+        )
+        .route(
             "/asesmen/skala-nilai/{prodi_id}",
             get(handler::scale_list_handler).put(handler::scale_save_handler),
         )

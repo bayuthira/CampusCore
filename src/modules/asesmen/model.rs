@@ -297,7 +297,8 @@ pub struct ReviewNilaiAkhirPayload {
 #[derive(Debug, Serialize, FromRow)]
 pub struct SkalaNilaiRow {
     pub id: Uuid,
-    pub prodi_id: Uuid,
+    pub prodi_id: Option<Uuid>,
+    pub scope: String,
     pub nilai_huruf: String,
     pub nilai_indeks: Decimal,
     pub bobot_minimum: Decimal,
@@ -305,6 +306,7 @@ pub struct SkalaNilaiRow {
     pub tanggal_mulai_efektif: String,
     pub tanggal_akhir_efektif: Option<String>,
     pub dari_feeder: bool,
+    pub is_locked: bool,
 }
 
 #[derive(Debug, Deserialize)]

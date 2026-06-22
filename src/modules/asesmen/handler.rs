@@ -499,6 +499,19 @@ pub async fn scale_save_handler(
     ))
 }
 
+pub async fn global_scale_list_handler(
+    State(pool): State<DbPool>, Extension(claims): Extension<TokenClaims>,
+) -> Result<Json<Vec<SkalaNilaiRow>>, AppError> {
+    Ok(Json(nilai_akhir_repo::list_global_scales(&pool, &claims).await?))
+}
+
+pub async fn global_scale_save_handler(
+    State(pool): State<DbPool>, Extension(claims): Extension<TokenClaims>,
+    Json(payload): Json<UpsertSkalaNilaiPayload>,
+) -> Result<Json<Vec<SkalaNilaiRow>>, AppError> {
+    Ok(Json(nilai_akhir_repo::save_global_scales(&pool, &claims, payload).await?))
+}
+
 pub async fn student_grades_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
