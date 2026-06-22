@@ -1,4 +1,4 @@
-use super::{access, model::*, repo};
+use super::{access, model::*, nilai_akhir_repo, repo};
 use crate::{db::DbPool, errors::AppError, modules::auth::middleware::TokenClaims};
 use axum::{
     body::Body,
@@ -383,6 +383,19 @@ pub async fn lock_handler(
     }))
 }
 
+pub async fn reopen_grade_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<MessageResponse>, AppError> {
+    let permission = access::for_asesmen(&pool, &claims, id).await?;
+    access::require_grade(&permission)?;
+    repo::reopen_grade(&pool, id).await?;
+    Ok(Json(MessageResponse {
+        message: "Nilai asesmen dibuka kembali untuk revisi.".to_string(),
+    }))
+}
+
 pub async fn student_list_handler(
     State(pool): State<DbPool>,
     Extension(claims): Extension<TokenClaims>,
@@ -402,4 +415,86 @@ pub async fn student_check_in_handler(
     Ok(Json(MessageResponse {
         message: "Presensi ujian berhasil direkam.".to_string(),
     }))
+}
+
+pub async fn final_grade_classes_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Query(query): Query<AsesmenQuery>,
+) -> Result<Json<Vec<KelasNilaiAkhir>>, AppError> {
+    Ok(Json(
+        nilai_akhir_repo::list_classes(&pool, &claims, query).await?,
+    ))
+}
+
+pub async fn final_grade_detail_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Path(jadwal_id): Path<Uuid>,
+) -> Result<Json<NilaiAkhirDetail>, AppError> {
+    Ok(Json(
+        nilai_akhir_repo::detail(&pool, &claims, jadwal_id).await?,
+    ))
+}
+
+pub async fn final_grade_submit_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Path(jadwal_id): Path<Uuid>,
+) -> Result<Json<MessageResponse>, AppError> {
+    nilai_akhir_repo::submit(&pool, &claims, jadwal_id).await?;
+    Ok(Json(MessageResponse {
+        message: "Nilai akhir diajukan kepada Kaprodi.".to_string(),
+    }))
+}
+
+pub async fn final_grade_review_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Path(jadwal_id): Path<Uuid>,
+    Json(payload): Json<ReviewNilaiAkhirPayload>,
+) -> Result<Json<MessageResponse>, AppError> {
+    nilai_akhir_repo::review(
+        &pool,
+        &claims,
+        jadwal_id,
+        &payload.aksi,
+        payload.catatan.as_deref(),
+    )
+    .await?;
+    Ok(Json(MessageResponse {
+        message: "Review nilai akhir tersimpan.".to_string(),
+    }))
+}
+
+pub async fn final_grade_publish_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Path(jadwal_id): Path<Uuid>,
+) -> Result<Json<MessageResponse>, AppError> {
+    nilai_akhir_repo::publish(&pool, &claims, jadwal_id).await?;
+    Ok(Json(MessageResponse {
+        message: "Nilai akhir dipublikasikan ke KHS mahasiswa.".to_string(),
+    }))
+}
+
+pub async fn scale_list_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Path(prodi_id): Path<Uuid>,
+) -> Result<Json<Vec<SkalaNilaiRow>>, AppError> {
+    Ok(Json(
+        nilai_akhir_repo::list_scales(&pool, &claims, prodi_id).await?,
+    ))
+}
+
+pub async fn scale_save_handler(
+    State(pool): State<DbPool>,
+    Extension(claims): Extension<TokenClaims>,
+    Path(prodi_id): Path<Uuid>,
+    Json(payload): Json<UpsertSkalaNilaiPayload>,
+) -> Result<Json<Vec<SkalaNilaiRow>>, AppError> {
+    Ok(Json(
+        nilai_akhir_repo::save_scales(&pool, &claims, prodi_id, payload).await?,
+    ))
 }

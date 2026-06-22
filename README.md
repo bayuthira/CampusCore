@@ -46,6 +46,7 @@ Backend API untuk Sistem Informasi Kampus Terpadu, dibangun dengan **Rust + Axum
    - [Lookup](#431-lookup)
    - [Files](#432-files)
    - [Rombel (Rombongan Belajar)](#433-rombel)
+   - [Ujian, Asesmen, dan Nilai Akhir](#434-ujian-asesmen-dan-nilai-akhir)
 5. [Alur Penggunaan Sistem](#5-alur-penggunaan-sistem)
 
 ---
@@ -2478,6 +2479,72 @@ Mengubah nama kode rombel.
 
 ---
 
+
+### 4.34 Ujian, Asesmen, dan Nilai Akhir
+
+> **Roles:** `DOSEN`, `KAPRODI`, `STAF_AKADEMIK`, `STAF_BAUM`,
+> `MAHASISWA`, dan `SUPER_ADMIN` sesuai kewenangan endpoint.
+
+Modul asesmen menggunakan `jadwal_kuliah` sebagai kelas dan `enrollments`
+berstatus `Disetujui` sebagai peserta. Nilai akhir dihitung dari attempt terbaru
+setiap asesmen dengan rumus `Σ(nilai × bobot) / 100`.
+
+#### Manajemen asesmen
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/api/asesmen?tahun_akademik_id={uuid}` | Daftar asesmen sesuai lingkup akses. |
+| `GET` | `/api/asesmen/jadwal?tahun_akademik_id={uuid}` | Pilihan kelas untuk membuat asesmen. |
+| `POST` | `/api/asesmen` | Membuat asesmen. |
+| `GET` | `/api/asesmen/{id}` | Detail, dokumen, pelaksanaan, presensi, dan nilai peserta. |
+| `PUT` | `/api/asesmen/{id}` | Mengubah asesmen yang masih dapat diedit. |
+| `POST` | `/api/asesmen/{id}/submit` | Mengajukan asesmen kepada Kaprodi. |
+| `POST` | `/api/asesmen/{id}/review` | Review `Disetujui` atau `PerluRevisi` oleh Kaprodi. |
+| `POST` | `/api/asesmen/{id}/dokumen/{jenis}` | Unggah `Soal`, `Lampiran`, atau `KunciJawaban`. |
+| `GET` | `/api/asesmen/{id}/dokumen/{document_id}/download` | Mengunduh dokumen sesuai hak akses. |
+| `PUT` | `/api/asesmen/{id}/penggandaan` | Memperbarui proses penggandaan ujian manual. |
+| `POST` | `/api/asesmen/{id}/mulai` | Memulai pelaksanaan dan membuat kode presensi. |
+| `POST` | `/api/asesmen/{id}/selesai` | Menutup pelaksanaan dan menyimpan BAP. |
+| `PUT` | `/api/asesmen/{id}/presensi/{enrollment_id}` | Koreksi presensi peserta oleh dosen. |
+| `PUT` | `/api/asesmen/{id}/nilai/{enrollment_id}` | Menyimpan nilai attempt peserta. |
+| `POST` | `/api/asesmen/{id}/kunci` | Mengunci nilai setelah seluruh peserta dinilai. |
+| `POST` | `/api/asesmen/{id}/buka-nilai` | Membuka nilai untuk revisi jika workflow nilai akhir mengizinkan. |
+
+Workflow asesmen:
+
+`Draft → Diajukan → Disetujui/PerluRevisi → SiapDilaksanakan → Berlangsung → Selesai → Dinilai → Dikunci`
+
+#### Nilai akhir mata kuliah
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/api/asesmen/nilai-akhir?tahun_akademik_id={uuid}` | Daftar rekap nilai kelas. |
+| `GET` | `/api/asesmen/nilai-akhir/{jadwal_id}` | Komponen, nilai peserta, konversi huruf, dan riwayat. |
+| `POST` | `/api/asesmen/nilai-akhir/{jadwal_id}/ajukan` | Koordinator mengajukan nilai akhir. |
+| `POST` | `/api/asesmen/nilai-akhir/{jadwal_id}/review` | Kaprodi menyetujui atau meminta revisi. |
+| `POST` | `/api/asesmen/nilai-akhir/{jadwal_id}/publikasikan` | Staf Akademik mempublikasikan nilai ke enrollment/KHS. |
+| `GET` | `/api/asesmen/skala-nilai/{prodi_id}` | Daftar skala nilai Prodi. |
+| `PUT` | `/api/asesmen/skala-nilai/{prodi_id}` | Menyimpan skala nilai oleh Kaprodi/Super Admin. |
+
+Pengajuan nilai akhir ditolak jika total bobot bukan 100%, terdapat asesmen
+yang belum `Dikunci`, nilai peserta belum lengkap, atau skala nilai Prodi tidak
+mencakup hasil perhitungan. Publikasi hanya dapat dilakukan setelah persetujuan
+Kaprodi. Saat dipublikasikan, `nilai_angka`, `nilai_huruf`, dan `nilai_indeks`
+pada `enrollments` diperbarui sehingga dapat ditampilkan pada KHS mahasiswa.
+
+#### Akses mahasiswa
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/api/asesmen-saya?tahun_akademik_id={uuid}` | Jadwal dan hasil asesmen mahasiswa. |
+| `POST` | `/api/asesmen-saya/check-in` | Check-in ujian menggunakan kode aktif. |
+
+Migration yang diperlukan:
+
+- `20260621150000_create_asesmen_tables`
+- `20260621180000_create_nilai_akhir_tables`
+
+---
 
 ## 5. Alur Penggunaan Sistem
 

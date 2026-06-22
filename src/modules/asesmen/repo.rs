@@ -813,6 +813,30 @@ pub async fn lock(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
     Ok(())
 }
 
+pub async fn reopen_grade(pool: &DbPool, id: Uuid) -> Result<(), AppError> {
+    let affected = sqlx::query(
+        r#"
+        UPDATE asesmen_kuliah a SET status = 'Dinilai', updated_at = now()
+        WHERE a.id = $1 AND a.status = 'Dikunci'
+          AND COALESCE((
+              SELECT n.status::TEXT FROM nilai_akhir_kuliah n
+              WHERE n.jadwal_kuliah_id = a.jadwal_kuliah_id
+          ), 'Draft') IN ('Draft', 'PerluRevisi')
+        "#,
+    )
+    .bind(id)
+    .execute(pool)
+    .await?
+    .rows_affected();
+    if affected == 0 {
+        return Err(AppError::BadRequest(
+            "Nilai tidak dapat dibuka saat rekap sedang direview, disetujui, atau sudah dipublikasikan."
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
 pub async fn student_list(
     pool: &DbPool,
     user_id: Uuid,

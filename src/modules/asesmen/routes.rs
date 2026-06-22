@@ -9,6 +9,30 @@ use axum::{
 pub fn asesmen_router() -> Router<DbPool> {
     let management = Router::new()
         .route(
+            "/asesmen/skala-nilai/{prodi_id}",
+            get(handler::scale_list_handler).put(handler::scale_save_handler),
+        )
+        .route(
+            "/asesmen/nilai-akhir",
+            get(handler::final_grade_classes_handler),
+        )
+        .route(
+            "/asesmen/nilai-akhir/{jadwal_id}",
+            get(handler::final_grade_detail_handler),
+        )
+        .route(
+            "/asesmen/nilai-akhir/{jadwal_id}/ajukan",
+            post(handler::final_grade_submit_handler),
+        )
+        .route(
+            "/asesmen/nilai-akhir/{jadwal_id}/review",
+            post(handler::final_grade_review_handler),
+        )
+        .route(
+            "/asesmen/nilai-akhir/{jadwal_id}/publikasikan",
+            post(handler::final_grade_publish_handler),
+        )
+        .route(
             "/asesmen",
             get(handler::list_handler).post(handler::create_handler),
         )
@@ -42,6 +66,10 @@ pub fn asesmen_router() -> Router<DbPool> {
             put(handler::grade_handler),
         )
         .route("/asesmen/{id}/kunci", post(handler::lock_handler))
+        .route(
+            "/asesmen/{id}/buka-nilai",
+            post(handler::reopen_grade_handler),
+        )
         .route_layer(middleware::from_fn(require_role(vec![
             "DOSEN".to_string(),
             "KAPRODI".to_string(),

@@ -225,3 +225,100 @@ pub struct AsesmenMahasiswaRow {
 pub struct MessageResponse {
     pub message: String,
 }
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct KelasNilaiAkhir {
+    pub jadwal_kuliah_id: Uuid,
+    pub prodi_id: Uuid,
+    pub kode_mk: String,
+    pub nama_mk: String,
+    pub kelas: String,
+    pub nama_prodi: String,
+    pub status: String,
+    pub total_bobot: Decimal,
+    pub jumlah_asesmen: i64,
+    pub jumlah_asesmen_dikunci: i64,
+    pub can_submit: bool,
+    pub can_review: bool,
+    pub can_publish: bool,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct KomponenNilaiAkhir {
+    pub id: Uuid,
+    pub jenis: String,
+    pub judul: String,
+    pub bobot: Decimal,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct NilaiKomponenMahasiswa {
+    pub asesmen_id: Uuid,
+    pub nilai: Option<Decimal>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MahasiswaNilaiAkhir {
+    pub enrollment_id: Uuid,
+    pub nim: String,
+    pub nama_mahasiswa: String,
+    pub komponen: Vec<NilaiKomponenMahasiswa>,
+    pub lengkap: bool,
+    pub nilai_akhir: Option<Decimal>,
+    pub nilai_huruf: Option<String>,
+    pub nilai_indeks: Option<Decimal>,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct RiwayatNilaiAkhir {
+    pub aksi: String,
+    pub catatan: Option<String>,
+    pub dilakukan_oleh: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Serialize)]
+pub struct NilaiAkhirDetail {
+    pub kelas: KelasNilaiAkhir,
+    pub komponen: Vec<KomponenNilaiAkhir>,
+    pub mahasiswa: Vec<MahasiswaNilaiAkhir>,
+    pub riwayat: Vec<RiwayatNilaiAkhir>,
+    pub skala_tersedia: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReviewNilaiAkhirPayload {
+    pub aksi: String,
+    pub catatan: Option<String>,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct SkalaNilaiRow {
+    pub id: Uuid,
+    pub prodi_id: Uuid,
+    pub nilai_huruf: String,
+    pub nilai_indeks: Decimal,
+    pub bobot_minimum: Decimal,
+    pub bobot_maksimum: Decimal,
+    pub tanggal_mulai_efektif: String,
+    pub tanggal_akhir_efektif: Option<String>,
+    pub dari_feeder: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpsertSkalaNilaiItem {
+    pub id: Option<Uuid>,
+    pub nilai_huruf: String,
+    pub nilai_indeks: Decimal,
+    pub bobot_minimum: Decimal,
+    pub bobot_maksimum: Decimal,
+    pub tanggal_mulai_efektif: String,
+    pub tanggal_akhir_efektif: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpsertSkalaNilaiPayload {
+    pub items: Vec<UpsertSkalaNilaiItem>,
+}
