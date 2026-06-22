@@ -47,6 +47,7 @@ Backend API untuk Sistem Informasi Kampus Terpadu, dibangun dengan **Rust + Axum
    - [Files](#432-files)
    - [Rombel (Rombongan Belajar)](#433-rombel)
    - [Ujian, Asesmen, dan Nilai Akhir](#434-ujian-asesmen-dan-nilai-akhir)
+   - [Akhir Semester, KHS, Transkrip, dan Feeder](#435-akhir-semester-khs-transkrip-dan-feeder)
 5. [Alur Penggunaan Sistem](#5-alur-penggunaan-sistem)
 
 ---
@@ -2548,6 +2549,35 @@ Migration yang diperlukan:
 
 - `20260621150000_create_asesmen_tables`
 - `20260621180000_create_nilai_akhir_tables`
+
+### 4.35 Akhir Semester, KHS, Transkrip, dan Feeder
+
+Penutupan semester hanya dapat dilakukan `SUPER_ADMIN` atau `STAF_AKADEMIK`
+setelah seluruh kelas yang memiliki peserta menerbitkan nilai akhir.
+
+| Method | Endpoint | Keterangan |
+| --- | --- | --- |
+| `GET` | `/api/akademik/akhir-semester/{tahun_id}` | Status kesiapan dan jumlah kelas yang belum menerbitkan nilai. |
+| `POST` | `/api/akademik/akhir-semester/{tahun_id}/tutup` | Menghitung AKM/IPS/IPK, menutup periode, dan membuat outbox Feeder. |
+| `GET` | `/api/akademik/khs-saya?tahun_akademik_id={uuid}` | KHS mahasiswa login. |
+| `GET` | `/api/akademik/transkrip-saya` | Transkrip sementara dari attempt mata kuliah terbaru. |
+| `GET/POST` | `/api/akademik/koreksi-nilai` | Daftar atau pengajuan koreksi nilai oleh koordinator. |
+| `POST` | `/api/akademik/koreksi-nilai/{id}/review` | Persetujuan atau penolakan oleh Kaprodi. |
+| `POST` | `/api/akademik/koreksi-nilai/{id}/terapkan` | Penerapan oleh Staf Akademik dan kalkulasi ulang AKM. |
+| `GET` | `/api/akademik/feeder/outbox` | Daftar payload NILAI/AKM siap sinkron. |
+| `POST` | `/api/akademik/feeder/outbox/{id}/hasil` | Callback hasil connector Feeder serta penyimpanan ID Feeder. |
+
+IPS dihitung dari nilai semester yang dipublikasikan. IPK dan total SKS memakai
+attempt mata kuliah terbaru hingga semester terkait, sehingga mata kuliah yang
+diulang tidak dihitung ganda. Koreksi nilai semester lama menghitung ulang AKM
+semester tersebut dan seluruh periode sesudahnya.
+
+Outbox memisahkan transaksi akademik dari koneksi eksternal. Penutupan semester
+tidak bergantung pada ketersediaan Neo Feeder; worker/connector mengambil payload
+`Menunggu`, mengirimnya menggunakan kredensial deployment, lalu melaporkan hasil
+melalui endpoint callback. API inti tidak menyimpan username/password Feeder.
+
+Migration: `20260622100000_create_akhir_semester_tables`.
 
 ---
 

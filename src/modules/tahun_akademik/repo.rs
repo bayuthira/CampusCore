@@ -41,7 +41,8 @@ pub async fn create_tahun_akademik_repo(
         r#"
         INSERT INTO tahun_akademik (nama, tanggal_mulai, tanggal_selesai, krs_mulai, krs_selesai, is_active, id_semester_feeder) 
         VALUES ($1, $2, $3, $4, $5, $6, $7) 
-        RETURNING *
+        RETURNING id,nama,tanggal_mulai,tanggal_selesai,krs_mulai,krs_selesai,
+                  is_active,id_semester_feeder,created_at,updated_at
         "#,
         payload.nama,
         payload.tanggal_mulai,
@@ -58,7 +59,7 @@ pub async fn create_tahun_akademik_repo(
 }
 
 pub async fn get_all_tahun_akademik_repo(pool: &DbPool) -> Result<Vec<TahunAkademik>, AppError> {
-    let ta_list = sqlx::query_as!(TahunAkademik, "SELECT * FROM tahun_akademik ORDER BY tanggal_mulai DESC")
+    let ta_list = sqlx::query_as!(TahunAkademik, "SELECT id,nama,tanggal_mulai,tanggal_selesai,krs_mulai,krs_selesai,is_active,id_semester_feeder,created_at,updated_at FROM tahun_akademik ORDER BY tanggal_mulai DESC")
         .fetch_all(pool)
         .await?;
     Ok(ta_list)
@@ -68,7 +69,7 @@ pub async fn get_tahun_akademik_by_id_repo(
     pool: &DbPool,
     id: Uuid,
 ) -> Result<TahunAkademik, AppError> {
-    let ta = sqlx::query_as!(TahunAkademik, "SELECT * FROM tahun_akademik WHERE id = $1", id)
+    let ta = sqlx::query_as!(TahunAkademik, "SELECT id,nama,tanggal_mulai,tanggal_selesai,krs_mulai,krs_selesai,is_active,id_semester_feeder,created_at,updated_at FROM tahun_akademik WHERE id = $1", id)
         .fetch_one(pool)
         .await?;
     Ok(ta)
@@ -89,7 +90,8 @@ pub async fn update_tahun_akademik_repo(
         UPDATE tahun_akademik 
         SET nama = $1, tanggal_mulai = $2, tanggal_selesai = $3, krs_mulai = $4, krs_selesai = $5, is_active = $6, id_semester_feeder = $7, updated_at = now() 
         WHERE id = $8
-        RETURNING *
+        RETURNING id,nama,tanggal_mulai,tanggal_selesai,krs_mulai,krs_selesai,
+                  is_active,id_semester_feeder,created_at,updated_at
         "#,
         payload.nama, 
         payload.tanggal_mulai, 
